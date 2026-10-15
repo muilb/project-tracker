@@ -42,7 +42,14 @@ Resources:
               StringEquals:
                 'token.actions.githubusercontent.com:aud': sts.amazonaws.com
               StringLike:
-                'token.actions.githubusercontent.com:sub': !Sub repo:${GitHubRepo}:ref:refs/heads/main
+                # GitHub sends either the classic subject or, for newer repos/owners, one that
+                # embeds immutable ids: repo:<owner>@<ownerId>/<repo>@<repoId>:ref:refs/heads/main
+                'token.actions.githubusercontent.com:sub':
+                  - !Sub repo:${GitHubRepo}:ref:refs/heads/main
+                  - !Sub
+                    - repo:${Owner}@*/${Repo}@*:ref:refs/heads/main
+                    - Owner: !Select [0, !Split ['/', !Ref GitHubRepo]]
+                      Repo: !Select [1, !Split ['/', !Ref GitHubRepo]]
       Policies:
         # `cdk deploy` only needs to assume the roles created by `cdk bootstrap`.
         - PolicyName: assume-cdk-bootstrap-roles

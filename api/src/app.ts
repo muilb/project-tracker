@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
-import { requireUser, type AuthConfig } from './auth.js';
+import { MemoryAccounts, type Accounts } from './accounts.js';
+import { parseInitialRoles, requireUser, type AuthConfig } from './auth.js';
 import type { AppEnv } from './env.js';
+import type { Sender } from './notify/teams.js';
 import { admin } from './routes/admin.js';
+import { channels } from './routes/channels.js';
 import { projects } from './routes/projects.js';
 import type { Store } from './store/store.js';
 import { buildDashboard, buildPublic } from './views.js';
@@ -14,15 +17,34 @@ export interface AppDeps {
   clock?: () => Date;
   /** Seconds the public dashboard response is cached in memory. */
   publicCacheSeconds?: number;
+  /** Delivers Teams messages (tests pass a fake). */
+  send: Sender;
+  /** Web app base URL for links in Teams messages. */
+  webUrl?: string;
+  /** Pending sign-ups (Cognito in Lambda, in-memory elsewhere). */
+  accounts?: Accounts;
 }
 
-export function createApp({ store, auth, clock = () => new Date(), publicCacheSeconds = 30 }: AppDeps) {
+export function createApp({
+  store,
+  auth,
+  clock = () => new Date(),
+  publicCacheSeconds = 30,
+  send,
+  webUrl,
+  accounts = new MemoryAccounts(),
+}: AppDeps) {
+  const notify = { store, send, webUrl };
+  const initialRoles = parseInitialRoles(auth.adminEmails);
   const app = new Hono<AppEnv>();
 
   app.use('*', cors());
   app.use('*', async (c, next) => {
     c.set('store', store);
     c.set('now', clock());
+    c.set('notify', notify);
+    c.set('accounts', accounts);
+    c.set('initialRoles', initialRoles);
     await next();
   });
 
@@ -58,6 +80,7 @@ export function createApp({ store, auth, clock = () => new Date(), publicCacheSe
   });
   app.route('/', admin);
   app.route('/projects', projects);
+  app.route('/channels', channels);
 
   return app;
 }

@@ -4,6 +4,7 @@ import { api, setUnauthorizedHandler } from './api';
 import { auth } from './auth';
 import { ErrorBox } from './components/ui';
 import { ROLE_LABEL } from './labels';
+import { ChannelsPage } from './pages/Channels';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { ProjectDetailPage } from './pages/ProjectDetail';
@@ -63,6 +64,7 @@ function Authenticated() {
           <Route path="/projects/new" element={<ProjectForm />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
+          <Route path="/channels" element={<ChannelsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -72,9 +74,27 @@ function Authenticated() {
   );
 }
 
+/** Number of sign-ups waiting for approval (PMO / MNG only), refreshed when the Users page acts. */
+function usePendingCount(enabled: boolean) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const load = () =>
+      api
+        .get<{ pending: unknown[] }>('/users/pending')
+        .then((r) => setCount(r.pending.length))
+        .catch(() => {});
+    load();
+    window.addEventListener('pending-changed', load);
+    return () => window.removeEventListener('pending-changed', load);
+  }, [enabled]);
+  return count;
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const { me, isAdmin, canManageUsers } = useSession();
   const navigate = useNavigate();
+  const pendingCount = usePendingCount(canManageUsers);
   return (
     <>
       <header className="topbar">
@@ -87,7 +107,17 @@ function Layout({ children }: { children: React.ReactNode }) {
               Tổng quan
             </NavLink>
             <NavLink to="/projects">Dự án</NavLink>
-            {canManageUsers && <NavLink to="/users">Người dùng</NavLink>}
+            <NavLink to="/channels">Kênh Teams</NavLink>
+            {canManageUsers && (
+              <NavLink to="/users">
+                Người dùng
+                {pendingCount > 0 && (
+                  <span className="nav-count" title={`${pendingCount} tài khoản chờ duyệt`}>
+                    {pendingCount}
+                  </span>
+                )}
+              </NavLink>
+            )}
             {isAdmin && <NavLink to="/settings">Cài đặt</NavLink>}
             <a href="/public" target="_blank" rel="noreferrer">
               Trang public ↗

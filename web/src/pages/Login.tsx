@@ -105,6 +105,12 @@ export function Login() {
         ) : null}
 
         {info && <div className="info-box">{info}</div>}
+        {mode === 'confirm' && (
+          <p className="muted">
+            Không nhận được email (kể cả trong Spam)? Báo PMO duyệt tài khoản của bạn trên trang Người dùng, sau đó quay lại{' '}
+            <b>Đăng nhập</b> bằng email và mật khẩu vừa đặt.
+          </p>
+        )}
         <ErrorBox error={error} />
 
         <label>

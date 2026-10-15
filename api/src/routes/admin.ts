@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
-import { createUserSchema, parseBody, patchUserSchema, settingsSchema } from '../schemas.js';
+import { NotPendingError } from '../accounts.js';
+import { approveAccountSchema, createUserSchema, parseBody, patchUserSchema, settingsSchema } from '../schemas.js';
 import type { User } from '../types.js';
 
 export const admin = new Hono<AppEnv>();
@@ -12,6 +13,52 @@ admin.get('/me', (c) => c.json({ user: c.get('user') }));
 admin.get('/users', async (c) => {
   const users = (await c.get('store').listUsers()).sort((a, b) => a.name.localeCompare(b.name));
   return c.json({ users });
+});
+
+// --- Sign-ups waiting for approval (confirmation email did not arrive) ---
+
+admin.get('/users/pending', async (c) => {
+  ensure(can.manageUsers(c.get('user')), 'Chỉ PMO / MNG mới duyệt tài khoản');
+  return c.json({ pending: await c.get('accounts').listPending() });
+});
+
+admin.post('/users/pending/:email/approve', async (c) => {
+  ensure(can.manageUsers(c.get('user')), 'Chỉ PMO / MNG mới duyệt tài khoản');
+  const email = decodeURIComponent(c.req.param('email')).trim().toLowerCase();
+  const body = await parseBody(c.req, approveAccountSchema);
+  let account;
+  try {
+    account = await c.get('accounts').approve(email);
+  } catch (e) {
+    if (e instanceof NotPendingError) throw new HTTPException(404, { message: `${email} không có trong danh sách chờ duyệt` });
+    throw e;
+  }
+  // Keep a record PMO created beforehand; otherwise create it now with the chosen role,
+  // falling back to the ADMIN_EMAILS role (as on a normal first login), then PL.
+  const store = c.get('store');
+  const existing = await store.getUser(email);
+  const user: User = existing
+    ? { ...existing, ...(body.role ? { role: body.role } : {}) }
+    : {
+        id: email,
+        name: account.name || email.split('@')[0],
+        role: body.role ?? c.get('initialRoles').get(email) ?? 'PL',
+        createdAt: c.get('now').toISOString(),
+      };
+  await store.putUser(user);
+  return c.json({ user });
+});
+
+admin.post('/users/pending/:email/reject', async (c) => {
+  ensure(can.manageUsers(c.get('user')), 'Chỉ PMO / MNG mới duyệt tài khoản');
+  const email = decodeURIComponent(c.req.param('email')).trim().toLowerCase();
+  try {
+    await c.get('accounts').reject(email);
+  } catch (e) {
+    if (e instanceof NotPendingError) throw new HTTPException(404, { message: `${email} không có trong danh sách chờ duyệt` });
+    throw e;
+  }
+  return c.json({ ok: true });
 });
 
 /** Pre-create a user (e.g. a GL) before they log in for the first time. */

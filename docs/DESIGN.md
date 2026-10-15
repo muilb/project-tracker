@@ -14,13 +14,14 @@ Thay file Excel theo dõi dự án bằng một hệ thống web nhỏ trên AWS
 CloudFront ─ S3            web React; trang /public không cần đăng nhập
 API Gateway HTTP API ─ Lambda "api" (Hono) ─ DynamoDB (1 bảng)
    └ Cognito JWT authorizer (trừ GET /public, GET /health)
-EventBridge Scheduler ─ Lambda "cron" → Teams     (giai đoạn 3)
+EventBridge (mỗi giờ, phút 05) ─ Lambda "cron" → Teams
 Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 ```
 
 - Cognito **chỉ lo đăng nhập** (email và mật khẩu, cho tự đăng ký). Vai trò và nhóm lưu trong DynamoDB.
   - Người đăng nhập lần đầu mặc định có vai trò PL.
   - Email nằm trong `ADMIN_EMAILS` nhận vai trò ghi kèm (`email:MNG`), hoặc PMO nếu không ghi vai trò.
+  - Mail công ty hay chặn thư xác nhận của Cognito (`no-reply@verificationemail.com`). Vì vậy PMO / MNG có thể **duyệt** tài khoản chờ xác nhận ở trang Người dùng; menu hiện số tài khoản đang chờ. Lambda API được cấp các quyền `ListUsers`, `AdminGetUser`, `AdminConfirmSignUp`, `AdminUpdateUserAttributes`, `AdminDeleteUser`, chỉ trên user pool này.
 - Dữ liệu ít (vài chục dự án), nên dashboard đọc toàn bộ bảng rồi tính trong bộ nhớ.
 - `GET /public` không cần đăng nhập:
   - chỉ trả về các trường được phép công khai;
@@ -84,7 +85,13 @@ Mọi endpoint, trừ `/health` và `/public`, cần header `Authorization: <Cog
 | GET / POST | `/projects/:id/items` | Vấn đề / sự kiện / mốc: `type` = `issue` / `event` / `milestone` |
 | PATCH | `/projects/:id/items/:itemId` | Sửa, đóng mục (`status: done`) |
 | GET / POST | `/users`, PATCH `/users/:email` | Người dùng; PMO tạo trước người chưa đăng nhập |
+| GET | `/users/pending` | PMO / MNG: các tài khoản đã đăng ký nhưng chưa xác nhận email (đọc từ Cognito) |
+| POST | `/users/pending/:email/approve` | PMO / MNG: xác nhận tài khoản và đánh dấu email đã xác minh. Body `{ "role"?: … }`; nếu không truyền vai trò thì lấy theo `ADMIN_EMAILS`, không có thì PL |
+| POST | `/users/pending/:email/reject` | PMO / MNG: xoá đăng ký chưa xác nhận |
 | GET / PUT | `/settings` | Tần suất cập nhật và các ngưỡng |
+| GET / POST | `/channels` | Kênh Teams: mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được |
+| PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, bật / tắt, URL) hoặc xoá: người tạo, PMO / quản lý |
+| POST | `/channels/:id/test` | Gửi tin thử |
 
 Ví dụ tạo dự án:
 
@@ -100,7 +107,7 @@ POST /projects
 |---|---|---|
 | 1 | API, quy tắc, CDK, CI/CD, seed | Xong |
 | 2 | Web nội bộ (đăng nhập, dashboard, form) và trang public | Xong |
-| 3 | Teams: đăng ký kênh, cảnh báo, tóm tắt 8h sáng | |
+| 3 | Teams: đăng ký kênh, cảnh báo, tóm tắt 8h sáng | Xong |
 | 4 | Trang nhập bằng AI (Bedrock hoặc Claude API) | |
 
 ## Web
@@ -117,4 +124,31 @@ POST /projects
 | `/public` | Mọi người (internet) | Số dự án theo mức khẩn cấp, dự án khẩn cấp / cần chú ý, mốc và sự kiện sắp tới; tự làm mới mỗi phút |
 
 Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.
+
+## Thông báo Teams — `api/src/notify/`
+
+**Kết nối:**
+- Mỗi kênh Teams tạo một Workflow từ mẫu *"Post to a channel when a webhook request is received"*, rồi dán URL vào trang **Kênh Teams**.
+- Hệ thống chỉ chấp nhận URL `https` thuộc `*.logic.azure.com`, `*.powerplatform.com` hoặc `*.webhook.office.com`.
+- URL này có tác dụng như mật khẩu: API không bao giờ trả về đầy đủ, chỉ trả về tên máy chủ và đầu đường dẫn.
+
+**Phạm vi** của mỗi kênh: tất cả dự án, một nhóm GL, hoặc danh sách dự án chọn sẵn.
+
+| Loại | Khi nào gửi | Chống trùng |
+|---|---|---|
+| `became_red` | Ngay khi trạng thái tổng hợp chuyển sang Đỏ, sau một lần cập nhật | Chỉ khi trạng thái thay đổi |
+| `high_issue` | Ngay khi có vấn đề ưu tiên Cao mới | Mỗi vấn đề một lần |
+| `late_update` | Job mỗi giờ | Một lần cho mỗi hạn bị trễ, nhắc lại sau mỗi 24 giờ còn trễ |
+| `overdue` | Job mỗi giờ | Mỗi mục một lần mỗi ngày |
+| `milestone_soon` | Job mỗi giờ, cho mốc / sự kiện diễn ra ngày mai | Mỗi mục một lần |
+| `daily_digest` | 08:00 giờ Việt Nam | Mỗi kênh một lần mỗi ngày |
+
+**Cách gửi của job mỗi giờ:**
+- Các cảnh báo của cùng một lượt chạy được gộp thành **một tin** cho mỗi kênh, tối đa 15 dòng.
+- Một cảnh báo chỉ được đánh dấu "đã gửi" khi Teams nhận thành công. Nếu gửi lỗi thì giờ sau gửi lại, và lỗi được hiện trên trang kênh.
+- Bản ghi chống trùng tự hết hạn nhờ TTL của DynamoDB.
+
+**Giờ yên lặng** (22h–7h, tuỳ chọn cho từng kênh) chỉ chặn các tin của job mỗi giờ. Cảnh báo Đỏ và vấn đề Cao vẫn gửi ngay.
+
+Teams lỗi không làm thất bại thao tác của người dùng, ví dụ lưu cập nhật vẫn thành công.
 

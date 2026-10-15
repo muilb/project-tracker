@@ -12,7 +12,12 @@ let app: ReturnType<typeof createApp>;
 beforeEach(async () => {
   store = new MemoryStore();
   await loadSample(store, now);
-  app = createApp({ store, auth: { mode: 'dev', adminEmails: ['boss@example.com', ' Sep@Example.com : MNG ', 'sub@example.com:submng'] }, clock: () => now });
+  app = createApp({
+    store,
+    auth: { mode: 'dev', adminEmails: ['boss@example.com', ' Sep@Example.com : MNG ', 'sub@example.com:submng'] },
+    clock: () => now,
+    send: async () => {},
+  });
 });
 
 function call(method: string, path: string, as?: string, body?: unknown) {

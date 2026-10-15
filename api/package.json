@@ -9,6 +9,7 @@
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1152.0",
     "@aws-sdk/client-dynamodb": "^3.1152.0",
     "@aws-sdk/lib-dynamodb": "^3.1152.0",
     "hono": "^4.13.13",

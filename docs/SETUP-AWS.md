@@ -85,3 +85,12 @@ npx --yes aws-cdk@2 destroy ProjectTracker-prod
 ```
 
 Bảng DynamoDB và User Pool được giữ lại (`RETAIN`) để tránh mất dữ liệu. Muốn xoá hẳn thì xoá tay trong Console.
+
+## Người dùng không nhận được email xác nhận
+
+Mail công ty, nhất là Microsoft 365, hay chặn hoặc cách ly thư của Cognito gửi từ `no-reply@verificationemail.com`.
+
+- **Cách thường dùng:** PMO / MNG vào trang **Người dùng → Chờ duyệt** và bấm **Duyệt**. Người đó đăng nhập được ngay bằng mật khẩu đã đặt lúc đăng ký.
+- **Nếu muốn email tới được:** nhờ IT kiểm tra quarantine / message trace, rồi cho phép người gửi `verificationemail.com`.
+- **Kiểm tra Cognito đã gửi thư chưa:** vào CloudTrail → Event history, lọc theo nguồn `cognito-idp.amazonaws.com`. Sự kiện `SignUp` hoặc `ResendConfirmationCode` báo thành công nghĩa là Cognito đã gửi thư đi.
+

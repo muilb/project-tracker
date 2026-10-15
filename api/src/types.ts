@@ -87,3 +87,32 @@ export const DEFAULT_SETTINGS: Settings = {
   nearEventFrequencyHours: 24,
   upcomingDays: 7,
 };
+
+// --- Notifications (Teams) ---
+
+export const ALERT_EVENTS = ['became_red', 'high_issue', 'overdue', 'late_update', 'milestone_soon', 'daily_digest'] as const;
+export type AlertEvent = (typeof ALERT_EVENTS)[number];
+
+export const SCOPE_TYPES = ['all', 'gl', 'projects'] as const;
+export interface ChannelScope {
+  type: (typeof SCOPE_TYPES)[number];
+  gl?: string; // GL user id when type = gl
+  projects?: string[]; // project ids when type = projects
+}
+
+/** A Teams channel registered through a Workflows "post to channel" webhook. */
+export interface Channel {
+  id: string;
+  name: string;
+  kind: 'teams';
+  webhookUrl: string; // never returned by the API in full
+  scope: ChannelScope;
+  events: AlertEvent[];
+  quietHours: boolean; // no hourly alerts 22:00–07:00 (Vietnam time)
+  enabled: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  lastSentAt?: string;
+  lastError?: string;
+}

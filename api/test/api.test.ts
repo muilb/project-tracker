@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
+import { parseInitialRoles } from '../src/auth.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';
 import { vnToIso } from '../src/time.js';
@@ -11,7 +12,7 @@ let app: ReturnType<typeof createApp>;
 beforeEach(async () => {
   store = new MemoryStore();
   await loadSample(store, now);
-  app = createApp({ store, auth: { mode: 'dev', adminEmails: ['boss@example.com'] }, clock: () => now });
+  app = createApp({ store, auth: { mode: 'dev', adminEmails: ['boss@example.com', ' Sep@Example.com : MNG ', 'sub@example.com:submng'] }, clock: () => now });
 });
 
 function call(method: string, path: string, as?: string, body?: unknown) {
@@ -29,9 +30,16 @@ describe('auth', () => {
     expect((await call('GET', '/dashboard')).status).toBe(401);
   });
 
-  it('creates unknown users on first login as PL, admin emails as PMO', async () => {
+  it('creates unknown users on first login as PL, or with the role given in ADMIN_EMAILS', async () => {
     expect((await (await call('GET', '/me', 'newbie')).json()).user).toMatchObject({ id: 'newbie@example.com', role: 'PL' });
     expect((await (await call('GET', '/me', 'boss')).json()).user.role).toBe('PMO');
+    expect((await (await call('GET', '/me', 'sep')).json()).user.role).toBe('MNG');
+    expect((await (await call('GET', '/me', 'sub')).json()).user.role).toBe('SUBMNG');
+  });
+
+  it('rejects unknown roles in ADMIN_EMAILS', () => {
+    expect(() => parseInitialRoles(['a@example.com:BOSS'])).toThrow(/unknown role/);
+    expect(parseInitialRoles(['', 'a@example.com']).get('a@example.com')).toBe('PMO');
   });
 });
 

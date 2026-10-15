@@ -38,9 +38,20 @@ Vào repo → **Settings → Secrets and variables → Actions → tab Variables
 |---|---|
 | `AWS_ROLE_ARN` | Role ARN ở bước 2 |
 | `AWS_REGION` | `ap-southeast-1` |
-| `ADMIN_EMAILS` | Email những người được làm **PMO** khi đăng nhập lần đầu, cách nhau bằng dấu phẩy |
+| `ADMIN_EMAILS` | Vai trò cấp khi **đăng nhập lần đầu**, cách nhau bằng dấu phẩy: `email` (mặc định PMO) hoặc `email:VAI_TRÒ` |
 
 Đây là **variables**, không phải secrets: không có giá trị nào là bí mật.
+
+Ví dụ `ADMIN_EMAILS`:
+
+```
+lan@cty.vn,sep@cty.vn:MNG,minh@cty.vn:SUBMNG,hung@cty.vn:GL
+```
+
+Các vai trò hợp lệ: `PL`, `GL`, `PMO`, `SUBMNG`, `MNG`, `OTHER`.
+- Ai không có trong danh sách sẽ là `PL` khi đăng nhập lần đầu.
+- Biến này chỉ áp dụng lúc **tạo tài khoản**. Người đã đăng nhập rồi thì PMO hoặc MNG đổi vai trò bằng `PATCH /users/<email>`, hoặc trên màn hình Người dùng từ giai đoạn 2.
+- Ghi sai tên vai trò thì **deploy sẽ thất bại** và báo lỗi trong log. Bản đang chạy không bị ảnh hưởng.
 
 ## 4. Deploy
 

@@ -19,7 +19,7 @@ import type { Construct } from 'constructs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 export interface TrackerStackProps extends StackProps {
-  /** Emails that become PMO on first login. */
+  /** Roles granted on first login: `email` (PMO) or `email:ROLE`. */
   adminEmails: string[];
 }
 

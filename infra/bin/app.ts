@@ -1,4 +1,5 @@
 import { App } from 'aws-cdk-lib';
+import { parseInitialRoles } from '../../api/src/auth.js';
 import { TrackerStack } from '../lib/stack.js';
 
 const app = new App();
@@ -7,6 +8,8 @@ const adminEmails = String(process.env.ADMIN_EMAILS ?? app.node.tryGetContext('a
   .split(',')
   .map((e) => e.trim())
   .filter(Boolean);
+// Fail the deploy (not the running API) when ADMIN_EMAILS has a typo in a role.
+parseInitialRoles(adminEmails);
 
 new TrackerStack(app, `ProjectTracker-${stage}`, {
   adminEmails,

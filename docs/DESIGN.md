@@ -20,7 +20,7 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 
 - Cognito **chỉ lo đăng nhập** (email và mật khẩu, cho tự đăng ký). Vai trò và nhóm lưu trong DynamoDB.
   - Người đăng nhập lần đầu mặc định có vai trò PL.
-  - Email nằm trong `ADMIN_EMAILS` có vai trò PMO.
+  - Email nằm trong `ADMIN_EMAILS` nhận vai trò ghi kèm (`email:MNG`), hoặc PMO nếu không ghi vai trò.
 - Dữ liệu ít (vài chục dự án), nên dashboard đọc toàn bộ bảng rồi tính trong bộ nhớ.
 - `GET /public` không cần đăng nhập:
   - chỉ trả về các trường được phép công khai;

@@ -11,7 +11,7 @@ Thay file Excel theo dõi dự án bằng một hệ thống web nhỏ trên AWS
 ## Kiến trúc
 
 ```
-CloudFront ─ S3            web React (giai đoạn 2), /public không cần đăng nhập
+CloudFront ─ S3            web React; trang /public không cần đăng nhập
 API Gateway HTTP API ─ Lambda "api" (Hono) ─ DynamoDB (1 bảng)
    └ Cognito JWT authorizer (trừ GET /public, GET /health)
 EventBridge Scheduler ─ Lambda "cron" → Teams     (giai đoạn 3)
@@ -99,6 +99,22 @@ POST /projects
 | Giai đoạn | Nội dung | Trạng thái |
 |---|---|---|
 | 1 | API, quy tắc, CDK, CI/CD, seed | Xong |
-| 2 | Web nội bộ (đăng nhập, dashboard, form) và trang public | |
+| 2 | Web nội bộ (đăng nhập, dashboard, form) và trang public | Xong |
 | 3 | Teams: đăng ký kênh, cảnh báo, tóm tắt 8h sáng | |
 | 4 | Trang nhập bằng AI (Bedrock hoặc Claude API) | |
+
+## Web
+
+| Trang | Ai thấy | Nội dung |
+|---|---|---|
+| `/login` | Mọi người | Đăng nhập, đăng ký, xác nhận email, quên mật khẩu (gọi thẳng Cognito) |
+| `/` Tổng quan | Đã đăng nhập | Ô số liệu, dự án cần chú ý, mốc / sự kiện sắp tới, vấn đề cần xử lý, trễ cập nhật, theo GL. PL / GL / người hỗ trợ mặc định xem "Dự án của tôi", PMO / quản lý xem "Tất cả" |
+| `/projects` | Đã đăng nhập | Danh sách, lọc theo tình trạng / phạm vi, tìm kiếm |
+| `/projects/new`, `/projects/:id/edit` | PL trở lên / người có quyền sửa | Form dự án |
+| `/projects/:id` | Đã đăng nhập | Thông tin, form cập nhật nhanh, lịch sử, vấn đề / sự kiện / mốc (thêm, đổi trạng thái) |
+| `/users` | PMO / MNG | Thêm người dùng trước, đổi vai trò |
+| `/settings` | PMO / SUBMNG / MNG | Tần suất, ngưỡng |
+| `/public` | Mọi người (internet) | Số dự án theo mức khẩn cấp, dự án khẩn cấp / cần chú ý, mốc và sự kiện sắp tới; tự làm mới mỗi phút |
+
+Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.
+

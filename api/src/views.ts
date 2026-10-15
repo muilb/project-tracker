@@ -95,12 +95,15 @@ export function buildDashboard(snap: Snapshot, now: Date, me: User, filter: Dash
       .filter((v) => v.lateHours > 0)
       .sort((a, b) => b.lateHours - a.lateHours)
       .map((v) => ({ ...summary(v), supporters: v.supporters, frequencyHours: v.frequencyHours })),
+    // Issues to act on: overdue, high priority, or due soon.
     priorityItems: openItems
-      .filter((i) => i.type === 'issue' && (i.overdue || i.priority === 'high'))
+      .filter((i) => i.type === 'issue' && (i.overdue || i.priority === 'high' || i.soon))
       .sort(compareItems)
       .map((i) => ({ ...pickItem(i), projectName: names[i.projectId] })),
+    // Events and milestones coming up (issues are listed in priorityItems).
+    upcomingDays: snap.settings.upcomingDays,
     upcoming: openItems
-      .filter((i) => i.daysLeft >= 0 && i.daysLeft <= snap.settings.upcomingDays)
+      .filter((i) => i.type !== 'issue' && i.daysLeft >= 0 && i.daysLeft <= snap.settings.upcomingDays)
       .sort((a, b) => a.date.localeCompare(b.date) || compareItems(a, b))
       .map((i) => ({ ...pickItem(i), projectName: names[i.projectId] })),
     byGl: [...byGl.values()].sort((a, b) => a.gl.localeCompare(b.gl)),

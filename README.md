@@ -16,7 +16,7 @@ Chạy serverless trên AWS, chi phí khoảng vài USD/tháng.
 ```
 api/     Lambda API (TypeScript, Hono) + quy tắc nghiệp vụ + test
 infra/   AWS CDK: DynamoDB, Cognito, API Gateway, Lambda, S3 + CloudFront
-web/     React app (giai đoạn 2)
+web/     React app (Vite): dashboard, dự án, người dùng, cài đặt, trang public
 ```
 
 ## Chạy trên máy
@@ -27,8 +27,9 @@ Cần Node.js 22.
 npm install
 npm test          # test quy tắc và API
 npm run dev       # API ở http://localhost:3001, dữ liệu mẫu từ file Excel
-curl localhost:3001/public
-curl -H 'x-dev-user: lan@example.com' localhost:3001/dashboard
+npm run dev:web   # (terminal khác) web ở http://localhost:5173
 ```
 
-Khi chạy trên máy, dữ liệu nằm trong bộ nhớ và đăng nhập bằng header `x-dev-user`.
+Khi chạy trên máy:
+- Dữ liệu nằm trong bộ nhớ, tắt server là mất.
+- Không cần Cognito: màn hình đăng nhập cho chọn người dùng mẫu (Lan · PMO, Hùng · GL, An · PL…).

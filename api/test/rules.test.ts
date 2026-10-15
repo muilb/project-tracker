@@ -76,6 +76,14 @@ describe('dashboards', () => {
     expect(d.byGl.find((r) => r.gl === 'son@example.com')).toMatchObject({ red: 1, yellow: 1, green: 0 });
   });
 
+  it('lists events/milestones as upcoming and actionable issues separately', async () => {
+    const d = buildDashboard(await store.snapshot(), now, lan, { scope: 'all' });
+    expect(d.upcoming.every((i) => i.type !== 'issue')).toBe(true);
+    // medium priority, but due today
+    expect(d.priorityItems.map((i) => i.title)).toContain('Spec màn hình thanh toán chưa chốt');
+    expect(d.upcomingDays).toBe(7);
+  });
+
   it('filters to the projects of the logged-in user', async () => {
     const d = buildDashboard(await store.snapshot(), now, hung, { scope: 'mine' });
     expect(d.kpis.active).toBe(3); // P01, P02, P07

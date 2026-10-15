@@ -1,14 +1,22 @@
 {
   "name": "project-tracker",
   "private": true,
-  "workspaces": ["api", "infra"],
+  "workspaces": [
+    "api",
+    "web",
+    "infra"
+  ],
   "scripts": {
     "dev": "npm run dev -w api",
+    "dev:web": "npm run dev -w web",
     "test": "npm test -w api",
     "typecheck": "npm run typecheck --workspaces",
+    "build": "npm run build -w web",
     "seed": "npm run seed -w api --",
     "synth": "npm run synth -w infra",
     "deploy": "npm run deploy -w infra"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

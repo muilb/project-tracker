@@ -1,0 +1,96 @@
+import type { ReactNode } from 'react';
+import type { Health, ItemType, Urgency } from '../../../api/src/types';
+import { fmtHours } from '../format';
+import { HEALTH_LABEL, TYPE_ICON, TYPE_LABEL, URGENCY_LABEL } from '../labels';
+
+// Status colors always come with a symbol and a text label, never color alone.
+const HEALTH_ICON: Record<Health, string> = { green: '●', yellow: '▲', red: '■' };
+const URGENCY_ICON: Record<Urgency, string> = { critical: '■', attention: '▲', normal: '●' };
+const URGENCY_TONE: Record<Urgency, Health> = { critical: 'red', attention: 'yellow', normal: 'green' };
+
+export function HealthBadge({ health }: { health: Health }) {
+  return (
+    <span className={`badge tone-${health}`}>
+      <span aria-hidden>{HEALTH_ICON[health]}</span> {HEALTH_LABEL[health]}
+    </span>
+  );
+}
+
+export function UrgencyBadge({ urgency }: { urgency: Urgency }) {
+  return (
+    <span className={`badge tone-${URGENCY_TONE[urgency]}`}>
+      <span aria-hidden>{URGENCY_ICON[urgency]}</span> {URGENCY_LABEL[urgency]}
+    </span>
+  );
+}
+
+export function TypeIcon({ type }: { type: ItemType }) {
+  return (
+    <span className={`type-icon type-${type}`} title={TYPE_LABEL[type]} aria-label={TYPE_LABEL[type]}>
+      {TYPE_ICON[type]}
+    </span>
+  );
+}
+
+export function Warnings({ lateHours, overdueItems, highIssues }: { lateHours: number; overdueItems: number; highIssues: number }) {
+  if (!lateHours && !overdueItems && !highIssues) return null;
+  return (
+    <span className="warnings">
+      {lateHours > 0 && <span className="warn">⏰ Trễ cập nhật {fmtHours(lateHours)}</span>}
+      {overdueItems > 0 && <span className="warn">⚠ {overdueItems} mục quá hạn</span>}
+      {highIssues > 0 && <span className="warn">▲ {highIssues} vấn đề ưu tiên cao</span>}
+    </span>
+  );
+}
+
+export function Kpi({ label, value, tone, hint }: { label: string; value: number; tone?: Health; hint?: string }) {
+  return (
+    <div className={`kpi ${tone ? `kpi-${tone}` : ''}`} title={hint}>
+      <div className="kpi-label">
+        {tone && <span className={`dot tone-${tone}`} aria-hidden />}
+        {label}
+      </div>
+      <div className="kpi-value">{value}</div>
+    </div>
+  );
+}
+
+export function Section({ title, extra, children }: { title: string; extra?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="card">
+      <header className="card-head">
+        <h2>{title}</h2>
+        {extra}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return <p className="empty">{children}</p>;
+}
+
+export function ErrorBox({ error }: { error?: string }) {
+  return error ? <div className="error-box">⚠ {error}</div> : null;
+}
+
+/** Stacked red / yellow / green bar with a hover tooltip per segment. */
+export function HealthBar({ red, yellow, green }: Record<Health, number>) {
+  const total = red + yellow + green;
+  if (!total) return <div className="hbar" />;
+  const segs: [Health, number][] = [
+    ['red', red],
+    ['yellow', yellow],
+    ['green', green],
+  ];
+  return (
+    <div className="hbar" role="img" aria-label={`Đỏ ${red}, Vàng ${yellow}, Xanh ${green}`}>
+      {segs
+        .filter(([, n]) => n > 0)
+        .map(([h, n]) => (
+          <div key={h} className={`hbar-seg fill-${h}`} style={{ flexGrow: n }} title={`${HEALTH_LABEL[h]}: ${n} dự án`} />
+        ))}
+    </div>
+  );
+}

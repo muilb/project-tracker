@@ -4,7 +4,8 @@ import { HTTPException } from 'hono/http-exception';
 import { MemoryAccounts, type Accounts } from './accounts.js';
 import { parseInitialRoles, requireUser, type AuthConfig } from './auth.js';
 import type { AppEnv } from './env.js';
-import type { Sender } from './notify/teams.js';
+import type { Sender } from './notify/sender.js';
+import { telegramClient, type TelegramClient } from './notify/telegram.js';
 import { admin } from './routes/admin.js';
 import { channels } from './routes/channels.js';
 import { projects } from './routes/projects.js';
@@ -17,8 +18,10 @@ export interface AppDeps {
   clock?: () => Date;
   /** Seconds the public dashboard response is cached in memory. */
   publicCacheSeconds?: number;
-  /** Delivers Teams messages (tests pass a fake). */
+  /** Delivers alerts to Teams / Telegram (tests pass a fake). */
   send: Sender;
+  /** Telegram API for bot setup and chat discovery (tests pass a fake). */
+  telegram?: TelegramClient;
   /** Web app base URL for links in Teams messages. */
   webUrl?: string;
   /** Pending sign-ups (Cognito in Lambda, in-memory elsewhere). */
@@ -33,6 +36,7 @@ export function createApp({
   send,
   webUrl,
   accounts = new MemoryAccounts(),
+  telegram = telegramClient,
 }: AppDeps) {
   const notify = { store, send, webUrl };
   const initialRoles = parseInitialRoles(auth.adminEmails);
@@ -45,6 +49,7 @@ export function createApp({
     c.set('notify', notify);
     c.set('accounts', accounts);
     c.set('initialRoles', initialRoles);
+    c.set('telegram', telegram);
     await next();
   });
 

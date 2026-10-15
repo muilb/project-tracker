@@ -766,3 +766,15 @@ code {
   text-align: center;
   line-height: 1.4;
 }
+.copy-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+}
+.copy-line code {
+  font-size: 0.95rem;
+  padding: 0.3rem 0.5rem;
+  user-select: all;
+}

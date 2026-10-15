@@ -89,7 +89,8 @@ Mọi endpoint, trừ `/health` và `/public`, cần header `Authorization: <Cog
 | POST | `/users/pending/:email/approve` | PMO / MNG: xác nhận tài khoản và đánh dấu email đã xác minh. Body `{ "role"?: … }`; nếu không truyền vai trò thì lấy theo `ADMIN_EMAILS`, không có thì PL |
 | POST | `/users/pending/:email/reject` | PMO / MNG: xoá đăng ký chưa xác nhận |
 | GET / PUT | `/settings` | Tần suất cập nhật và các ngưỡng |
-| GET / POST | `/channels` | Kênh Teams: mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được |
+| GET / POST | `/channels` | Kênh thông báo `kind: teams` (`webhookUrl`) hoặc `kind: telegram` (`connectCode`). Mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được |
+| GET / PUT / DELETE | `/settings/telegram` | Trạng thái bot (`configured`, `username`; ai đăng nhập cũng xem được). Cài token (`PUT { token }`) hoặc gỡ bot: PMO / quản lý |
 | PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, bật / tắt, URL) hoặc xoá: người tạo, PMO / quản lý |
 | POST | `/channels/:id/test` | Gửi tin thử |
 
@@ -125,12 +126,17 @@ POST /projects
 
 Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.
 
-## Thông báo Teams — `api/src/notify/`
+## Thông báo Teams / Telegram — `api/src/notify/`
 
-**Kết nối:**
-- Mỗi kênh Teams tạo một Workflow từ mẫu *"Post to a channel when a webhook request is received"*, rồi dán URL vào trang **Kênh Teams**.
+**Kết nối Teams:**
+- Mỗi kênh Teams tạo một Workflow từ mẫu *"Send webhook alerts to a channel"* (tên cũ: *"Post to a channel when a webhook request is received"*), rồi dán URL vào trang **Kênh thông báo**. Việc tạo Workflow cần quyền Power Automate (có môi trường Default).
 - Hệ thống chỉ chấp nhận URL `https` thuộc `*.logic.azure.com`, `*.powerplatform.com` hoặc `*.webhook.office.com`.
 - URL này có tác dụng như mật khẩu: API không bao giờ trả về đầy đủ, chỉ trả về tên máy chủ và đầu đường dẫn.
+
+**Telegram** (dùng khi tài khoản không có quyền Power Automate để tạo Workflows trong Teams):
+- PMO / quản lý cài **một bot** cho cả hệ thống: tạo bot bằng @BotFather, rồi dán token vào **Cài đặt → Bot Telegram**. Hệ thống kiểm tra token bằng `getMe`. Token lưu ở `CONFIG/TELEGRAM` trong DynamoDB và không bao giờ được trả về.
+- Đăng ký nhóm: thêm bot vào nhóm và gửi dòng `/connect@<bot> PT-XXXXX` (web tạo sẵn mã). Hệ thống đọc `getUpdates` của bot để tìm `chat.id` theo mã, gửi tin thử, gửi được thì mới lưu kênh. Không cần endpoint nhận webhook từ Telegram.
+- Nội dung cảnh báo dùng chung với Teams (`notify/message.ts`). Teams nhận Adaptive Card, Telegram nhận HTML (`parse_mode: HTML`).
 
 **Phạm vi** của mỗi kênh: tất cả dự án, một nhóm GL, hoặc danh sách dự án chọn sẵn.
 

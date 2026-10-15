@@ -1,6 +1,5 @@
 // Microsoft Teams delivery through a Workflows "post to a channel when a webhook request is received" URL.
-
-export type Sender = (url: string, payload: unknown) => Promise<void>;
+import type { Message } from './message.js';
 
 /** Hosts used by Teams Workflows (Power Automate) and the legacy incoming webhooks. */
 const ALLOWED_HOST_SUFFIXES = ['.logic.azure.com', '.powerplatform.com', '.webhook.office.com'];
@@ -27,7 +26,7 @@ export function maskUrl(raw: string): string {
   }
 }
 
-export const sendTeams: Sender = async (url, payload) => {
+export async function postTeams(url: string, payload: unknown): Promise<void> {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -38,25 +37,10 @@ export const sendTeams: Sender = async (url, payload) => {
     const text = (await res.text().catch(() => '')).slice(0, 200);
     throw new Error(`Teams trả về HTTP ${res.status}${text ? `: ${text}` : ''}`);
   }
-};
-
-export type Tone = 'attention' | 'warning' | 'good' | 'default';
-
-export interface CardLine {
-  text: string;
-  tone?: Tone;
-  subtle?: boolean;
-}
-
-export interface CardInput {
-  title: string;
-  tone?: Tone;
-  lines: CardLine[];
-  link?: { title: string; url: string };
 }
 
 /** Wraps an Adaptive Card in the message envelope that Teams Workflows expects. */
-export function adaptiveCard({ title, tone = 'default', lines, link }: CardInput) {
+export function adaptiveCard({ title, tone = 'default', lines, link }: Message) {
   return {
     type: 'message',
     attachments: [

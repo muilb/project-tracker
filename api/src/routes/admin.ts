@@ -3,7 +3,8 @@ import { HTTPException } from 'hono/http-exception';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { NotPendingError } from '../accounts.js';
-import { approveAccountSchema, createUserSchema, parseBody, patchUserSchema, settingsSchema } from '../schemas.js';
+import { looksLikeBotToken } from '../notify/telegram.js';
+import { approveAccountSchema, createUserSchema, parseBody, patchUserSchema, settingsSchema, telegramBotSchema } from '../schemas.js';
 import type { User } from '../types.js';
 
 export const admin = new Hono<AppEnv>();
@@ -89,4 +90,31 @@ admin.put('/settings', async (c) => {
   const settings = await parseBody(c.req, settingsSchema);
   await c.get('store').putSettings(settings);
   return c.json({ settings });
+});
+
+// --- Telegram bot (one per system; the token is write-only) ---
+
+admin.get('/settings/telegram', async (c) => {
+  const bot = await c.get('store').getTelegramBot();
+  return c.json({ configured: !!bot, username: bot?.username });
+});
+
+admin.put('/settings/telegram', async (c) => {
+  ensure(can.admin(c.get('user')), 'Chỉ PMO / quản lý mới cài bot Telegram');
+  const { token } = await parseBody(c.req, telegramBotSchema);
+  if (!looksLikeBotToken(token)) throw new HTTPException(400, { message: 'Token không đúng dạng 123456789:AA… (lấy từ @BotFather)' });
+  let username: string;
+  try {
+    ({ username } = await c.get('telegram').getMe(token));
+  } catch (e) {
+    throw new HTTPException(400, { message: `Telegram không chấp nhận token: ${(e as Error).message}` });
+  }
+  await c.get('store').putTelegramBot({ token, username });
+  return c.json({ configured: true, username });
+});
+
+admin.delete('/settings/telegram', async (c) => {
+  ensure(can.admin(c.get('user')), 'Chỉ PMO / quản lý mới gỡ bot Telegram');
+  await c.get('store').putTelegramBot(undefined);
+  return c.json({ configured: false });
 });

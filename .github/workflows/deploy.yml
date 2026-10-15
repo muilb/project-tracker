@@ -25,6 +25,26 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+      # When AWS rejects the login, show what GitHub sent (non-secret claims only)
+      # so it can be compared with the role's trust policy.
+      - name: Diagnose AWS login
+        if: failure()
+        env:
+          ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          REGION: ${{ vars.AWS_REGION }}
+        run: |
+          python3 - <<'EOF'
+          import base64, json, os, urllib.request
+          req = urllib.request.Request(
+              os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=sts.amazonaws.com",
+              headers={"Authorization": "bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]},
+          )
+          payload = json.load(urllib.request.urlopen(req))["value"].split(".")[1]
+          claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+          role = os.environ["ROLE_ARN"]
+          print(f"::notice title=AWS login diagnose::role={role!r} region={os.environ['REGION']!r} "
+                f"sub={claims.get('sub')} aud={claims.get('aud')} repository={claims.get('repository')} ref={claims.get('ref')}")
+          EOF
       - run: npm run deploy
         env:
           ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS }}

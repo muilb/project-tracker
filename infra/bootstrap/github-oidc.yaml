@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Lets GitHub Actions (main branch of one repository) deploy project-tracker with CDK,
+  without storing AWS keys in GitHub. Create once, after `cdk bootstrap`.
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: muilb/project-tracker
+    Description: owner/repo allowed to deploy
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: Set to false if the account already has the token.actions.githubusercontent.com provider
+Conditions:
+  CreateProvider: !Equals [!Ref CreateOidcProvider, 'true']
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: project-tracker-github-deploy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateProvider
+                - !Ref GitHubOidcProvider
+                - !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+              StringLike:
+                'token.actions.githubusercontent.com:sub': !Sub repo:${GitHubRepo}:ref:refs/heads/main
+      Policies:
+        # `cdk deploy` only needs to assume the roles created by `cdk bootstrap`.
+        - PolicyName: assume-cdk-bootstrap-roles
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/cdk-*
+Outputs:
+  RoleArn:
+    Description: Put this in the GitHub repo variable AWS_ROLE_ARN
+    Value: !GetAtt DeployRole.Arn

@@ -1,0 +1,7 @@
+{
+  "app": "npx tsx bin/app.ts",
+  "context": {
+    "stage": "prod",
+    "adminEmails": ""
+  }
+}

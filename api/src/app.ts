@@ -2,11 +2,13 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { MemoryAccounts, type Accounts } from './accounts.js';
+import { claudeClient, type AiClient } from './ai/assistant.js';
 import { parseInitialRoles, requireUser, type AuthConfig } from './auth.js';
 import type { AppEnv } from './env.js';
 import type { Sender } from './notify/sender.js';
 import { telegramClient, type TelegramClient } from './notify/telegram.js';
 import { admin } from './routes/admin.js';
+import { ai as aiRoutes } from './routes/ai.js';
 import { channels } from './routes/channels.js';
 import { projects } from './routes/projects.js';
 import type { Store } from './store/store.js';
@@ -26,6 +28,8 @@ export interface AppDeps {
   webUrl?: string;
   /** Pending sign-ups (Cognito in Lambda, in-memory elsewhere). */
   accounts?: Accounts;
+  /** Claude API for natural-language entry (tests pass a fake). */
+  ai?: AiClient;
 }
 
 export function createApp({
@@ -37,6 +41,7 @@ export function createApp({
   webUrl,
   accounts = new MemoryAccounts(),
   telegram = telegramClient,
+  ai = claudeClient,
 }: AppDeps) {
   const notify = { store, send, webUrl };
   const initialRoles = parseInitialRoles(auth.adminEmails);
@@ -50,6 +55,7 @@ export function createApp({
     c.set('accounts', accounts);
     c.set('initialRoles', initialRoles);
     c.set('telegram', telegram);
+    c.set('ai', ai);
     await next();
   });
 
@@ -84,6 +90,7 @@ export function createApp({
     );
   });
   app.route('/', admin);
+  app.route('/', aiRoutes);
   app.route('/projects', projects);
   app.route('/channels', channels);
 

@@ -8,7 +8,7 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { DEFAULT_SETTINGS, type Channel, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
+import { DEFAULT_SETTINGS, type AiConfig, type Channel, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
 import { ConflictError, type Snapshot, type Store } from './store.js';
 
 /*
@@ -150,6 +150,14 @@ export class DynamoStore implements Store {
   async putTelegramBot(bot: TelegramBot | undefined) {
     if (bot) await this.put('CONFIG', 'TELEGRAM', 'CONFIG', { value: bot });
     else await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: 'CONFIG', sk: 'TELEGRAM' } }));
+  }
+
+  async getAiConfig() {
+    return (await this.get<{ value: AiConfig }>('CONFIG', 'AI'))?.value;
+  }
+  async putAiConfig(config: AiConfig | undefined) {
+    if (config) await this.put('CONFIG', 'AI', 'CONFIG', { value: config });
+    else await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: 'CONFIG', sk: 'AI' } }));
   }
 
   async hasSent(key: string) {

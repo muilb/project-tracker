@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type Channel, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
+import { DEFAULT_SETTINGS, type AiConfig, type Channel, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
 import { ConflictError, type Snapshot, type Store } from './store.js';
 
 /** In-memory store for tests and local development. */
@@ -11,6 +11,7 @@ export class MemoryStore implements Store {
   channels = new Map<string, Channel>();
   sent = new Map<string, number>(); // key -> expiry (ms)
   telegramBot?: TelegramBot;
+  aiConfig?: AiConfig;
   seqs = { project: 0, item: 0, channel: 0 };
 
   async getUser(id: string) {
@@ -77,6 +78,12 @@ export class MemoryStore implements Store {
   }
   async putTelegramBot(bot: TelegramBot | undefined) {
     this.telegramBot = clone(bot);
+  }
+  async getAiConfig() {
+    return clone(this.aiConfig);
+  }
+  async putAiConfig(config: AiConfig | undefined) {
+    this.aiConfig = clone(config);
   }
 
   async hasSent(key: string) {

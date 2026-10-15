@@ -3,6 +3,7 @@
 //   curl -H 'x-dev-user: lan@example.com' localhost:3001/dashboard
 import { serve } from '@hono/node-server';
 import { MemoryAccounts } from './accounts.js';
+import { claudeClient, type AiClient } from './ai/assistant.js';
 import { createApp } from './app.js';
 import type { Message } from './notify/message.js';
 import { createSender } from './notify/sender.js';
@@ -32,6 +33,32 @@ const telegram: TelegramClient = process.env.LOCAL_SEND
       findChatByText: async () => ({ id: '-100123', title: 'Nhóm thử (local)' }),
       sendMessage: async (_t, chatId, html) => console.log(`[telegram → ${chatId}]`, html),
     };
+// Real Claude when ANTHROPIC_API_KEY is set (the key is pre-installed as if PMO saved it);
+// otherwise a fake that turns each "P01 …" sentence into an update.
+const ai: AiClient = process.env.ANTHROPIC_API_KEY
+  ? claudeClient
+  : {
+      verifyKey: async () => {},
+      extract: async (_key, _ctx, text) => ({
+        actions: [...text.matchAll(/\b(P\d{2})\b[^.\n]*/gi)].map((m) => ({
+          kind: 'update' as const,
+          projectId: m[1],
+          health: /đỏ|red/i.test(m[0]) ? ('red' as const) : /vàng|yellow/i.test(m[0]) ? ('yellow' as const) : null,
+          summary: m[0],
+          needHelp: null,
+          itemType: null,
+          title: null,
+          priority: null,
+          date: null,
+          owner: null,
+          itemId: null,
+          status: null,
+          note: null,
+        })),
+        questions: /\bP\d{2}\b/i.test(text) ? [] : ['(AI giả lập) Ghi chú không nêu mã dự án dạng P01'],
+      }),
+    };
+if (process.env.ANTHROPIC_API_KEY) await store.putAiConfig({ apiKey: process.env.ANTHROPIC_API_KEY });
 const app = createApp({
   store,
   auth: { mode: 'dev', adminEmails: [] },
@@ -40,6 +67,7 @@ const app = createApp({
   telegram,
   webUrl: 'http://localhost:5173',
   accounts,
+  ai,
 });
 serve({ fetch: app.fetch, port });
 console.log(`API dev server: http://localhost:${port}  (header x-dev-user: lan@example.com)`);

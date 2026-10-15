@@ -32,5 +32,6 @@ npm run dev:web   # (terminal khác) web ở http://localhost:5173
 
 Khi chạy trên máy:
 - Tin Teams / Telegram chỉ được in ra console của API, và bot Telegram là bot giả. Đặt `LOCAL_SEND=1` nếu muốn gửi thật.
+- Trang Nhập bằng AI dùng AI giả lập (mỗi câu có mã `P01…` thành một cập nhật). Đặt `ANTHROPIC_API_KEY` trước `npm run dev` để gọi Claude thật.
 - Dữ liệu nằm trong bộ nhớ, tắt server là mất.
 - Không cần Cognito: màn hình đăng nhập cho chọn người dùng mẫu (Lan · PMO, Hùng · GL, An · PL…).

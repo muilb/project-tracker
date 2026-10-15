@@ -778,3 +778,26 @@ code {
   padding: 0.3rem 0.5rem;
   user-select: all;
 }
+
+/* --- AI entry --- */
+.proposal {
+  border-left: 3px solid var(--border);
+}
+.proposal.selected {
+  border-left-color: var(--accent);
+}
+.proposal-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.proposal-head input {
+  width: auto;
+}
+.ok-text {
+  color: var(--good);
+  font-weight: 600;
+  margin-left: auto;
+}

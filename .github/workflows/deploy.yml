@@ -1,0 +1,29 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  id-token: write # OIDC: no AWS keys stored in GitHub
+  contents: read
+concurrency: deploy-prod
+jobs:
+  deploy:
+    # Skipped until the repo variables are set (see docs/SETUP-AWS.md).
+    if: vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - run: npm run deploy
+        env:
+          ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS }}

@@ -94,3 +94,17 @@ Mail công ty, nhất là Microsoft 365, hay chặn hoặc cách ly thư của C
 - **Nếu muốn email tới được:** nhờ IT kiểm tra quarantine / message trace, rồi cho phép người gửi `verificationemail.com`.
 - **Kiểm tra Cognito đã gửi thư chưa:** vào CloudTrail → Event history, lọc theo nguồn `cognito-idp.amazonaws.com`. Sự kiện `SignUp` hoặc `ResendConfirmationCode` báo thành công nghĩa là Cognito đã gửi thư đi.
 
+## Nhận thông báo qua Telegram
+
+1. **PMO / quản lý cài bot (một lần):**
+   - Trong Telegram, chat với **@BotFather** → gửi `/newbot` → đặt tên và username (kết thúc bằng `bot`).
+   - Copy **token** mà BotFather gửi lại.
+   - Trên web: **Cài đặt → Bot Telegram**, dán token và bấm **Lưu bot**.
+2. **Mỗi nhóm muốn nhận tin:**
+   - Thêm bot vào nhóm Telegram.
+   - Trên web: **Kênh thông báo → Đăng ký kênh → Telegram**. Copy dòng `/connect@… PT-…` mà web hiện ra, gửi vào nhóm, rồi bấm **Kết nối & gửi tin thử**.
+
+Lưu ý:
+- Mã kết nối phải được gửi trong vòng 24 giờ trước khi bấm Kết nối.
+- Nếu nhóm thường được nâng cấp thành *supergroup*, ID nhóm sẽ đổi. Khi đó xoá kênh và kết nối lại.
+

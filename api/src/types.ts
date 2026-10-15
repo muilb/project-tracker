@@ -100,12 +100,20 @@ export interface ChannelScope {
   projects?: string[]; // project ids when type = projects
 }
 
-/** A Teams channel registered through a Workflows "post to channel" webhook. */
+export const CHANNEL_KINDS = ['teams', 'telegram'] as const;
+export type ChannelKind = (typeof CHANNEL_KINDS)[number];
+
+/**
+ * Where alerts go: a Teams channel (Workflows "post to channel" webhook) or a
+ * Telegram chat/group the system bot was added to.
+ */
 export interface Channel {
   id: string;
   name: string;
-  kind: 'teams';
-  webhookUrl: string; // never returned by the API in full
+  kind: ChannelKind;
+  webhookUrl?: string; // teams; a secret, never returned by the API
+  telegramChatId?: string; // telegram
+  telegramChatTitle?: string; // telegram, for display
   scope: ChannelScope;
   events: AlertEvent[];
   quietHours: boolean; // no hourly alerts 22:00–07:00 (Vietnam time)
@@ -115,4 +123,10 @@ export interface Channel {
   updatedAt: string;
   lastSentAt?: string;
   lastError?: string;
+}
+
+/** The single Telegram bot used for all Telegram channels (token is a secret). */
+export interface TelegramBot {
+  token: string;
+  username: string;
 }

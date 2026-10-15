@@ -1,12 +1,13 @@
-import { useState, type FormEvent } from 'react';
-import { ALERT_EVENTS, type AlertEvent, type Channel, type ChannelScope } from '../../../api/src/types';
+import { useMemo, useState, type FormEvent } from 'react';
+import { ALERT_EVENTS, type AlertEvent, type Channel, type ChannelKind, type ChannelScope } from '../../../api/src/types';
 import { api, useApi } from '../api';
 import { Empty, ErrorBox, Section } from '../components/ui';
 import { fmtDateTime } from '../format';
 import { useSession } from '../session';
 import type { ProjectView } from '../types';
 
-type PublicChannel = Omit<Channel, 'webhookUrl'> & { webhookUrlMasked: string };
+type PublicChannel = Omit<Channel, 'webhookUrl'> & { webhookUrlMasked?: string };
+type BotStatus = { configured: boolean; username?: string };
 
 const EVENT_LABEL: Record<AlertEvent, string> = {
   became_red: 'Dự án chuyển sang Đỏ (ngay lập tức)',
@@ -16,9 +17,11 @@ const EVENT_LABEL: Record<AlertEvent, string> = {
   milestone_soon: 'Mốc / sự kiện vào ngày mai',
   daily_digest: 'Tóm tắt lúc 8h sáng',
 };
+const KIND_LABEL: Record<ChannelKind, string> = { telegram: 'Telegram', teams: 'Teams' };
 
 export function ChannelsPage() {
   const { data, error, reload } = useApi<{ channels: PublicChannel[] }>('/channels');
+  const bot = useApi<BotStatus>('/settings/telegram');
   const [editing, setEditing] = useState<PublicChannel | 'new' | null>(null);
   const [msg, setMsg] = useState<string>();
   const [actionError, setActionError] = useState<string>();
@@ -30,17 +33,16 @@ export function ChannelsPage() {
     try {
       await fn();
       setMsg(ok);
-      reload();
     } catch (e) {
       setActionError((e as Error).message);
-      reload();
     }
+    reload();
   }
 
   return (
     <div className="stack narrow">
       <div className="page-head">
-        <h1>Kênh thông báo Teams</h1>
+        <h1>Kênh thông báo</h1>
         {!editing && (
           <button className="btn btn-primary" onClick={() => setEditing('new')}>
             ＋ Đăng ký kênh
@@ -53,6 +55,7 @@ export function ChannelsPage() {
       {editing && (
         <ChannelForm
           channel={editing === 'new' ? undefined : editing}
+          bot={bot.data}
           onCancel={() => setEditing(null)}
           onSaved={(text) => {
             setEditing(null);
@@ -66,13 +69,14 @@ export function ChannelsPage() {
         {!data ? (
           <p className="loading">Đang tải…</p>
         ) : data.channels.length === 0 ? (
-          <Empty>Chưa có kênh nào. Bấm “Đăng ký kênh” để nhận cảnh báo trong Teams.</Empty>
+          <Empty>Chưa có kênh nào. Bấm “Đăng ký kênh” để nhận cảnh báo qua Telegram hoặc Teams.</Empty>
         ) : (
           <ul className="rows">
             {data.channels.map((ch) => (
               <li key={ch.id} className="row">
                 <div className="row-main">
                   <div className="row-title">
+                    <span className="badge">{KIND_LABEL[ch.kind]}</span>
                     <b>{ch.name}</b>
                     <span className={`badge ${ch.enabled ? 'tone-green' : ''}`}>
                       <span aria-hidden>{ch.enabled ? '●' : '○'}</span> {ch.enabled ? 'Đang bật' : 'Đã tắt'}
@@ -81,7 +85,8 @@ export function ChannelsPage() {
                   </div>
                   <p className="row-text">{ch.events.map((e) => EVENT_LABEL[e].replace(/ \(.*\)$/, '')).join(' · ')}</p>
                   <small className="muted">
-                    {ch.webhookUrlMasked} · tạo bởi {name(ch.createdBy)}
+                    {ch.kind === 'telegram' ? `Nhóm Telegram: ${ch.telegramChatTitle ?? ch.telegramChatId}` : ch.webhookUrlMasked} · tạo bởi{' '}
+                    {name(ch.createdBy)}
                     {ch.quietHours ? ' · yên lặng 22h–7h' : ''}
                     {ch.lastSentAt ? ` · gửi lần cuối ${fmtDateTime(ch.lastSentAt)}` : ''}
                   </small>
@@ -114,26 +119,6 @@ export function ChannelsPage() {
           </ul>
         )}
       </section>
-
-      <Section title="Cách lấy URL webhook trong Teams">
-        <ol className="howto">
-          <li>
-            Trong kênh Teams muốn nhận thông báo, bấm <b>⋯</b> cạnh tên kênh → <b>Workflows</b>.
-          </li>
-          <li>
-            Chọn mẫu <b>“Post to a channel when a webhook request is received”</b> (Đăng lên kênh khi nhận yêu cầu webhook).
-          </li>
-          <li>Đặt tên, chọn đúng Team và Channel, bấm <b>Add workflow</b>.</li>
-          <li>
-            Copy URL hiện ra (bắt đầu bằng <code>https://…logic.azure.com</code> hoặc <code>…powerplatform.com</code>) và dán vào ô URL ở
-            trên.
-          </li>
-        </ol>
-        <p className="muted">
-          URL này cho phép bất kỳ ai đăng tin vào kênh, nên hệ thống chỉ lưu và không bao giờ hiển thị lại đầy đủ. Khi đăng ký, hệ thống
-          gửi một tin thử; kênh chỉ được lưu khi tin thử tới được Teams.
-        </p>
-      </Section>
     </div>
   );
 }
@@ -144,19 +129,28 @@ function scopeLabel(scope: ChannelScope, name: (id?: string) => string) {
   return 'Tất cả dự án';
 }
 
+function newCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return `PT-${Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => chars[b % chars.length]).join('')}`;
+}
+
 function ChannelForm({
   channel,
+  bot,
   onCancel,
   onSaved,
 }: {
   channel?: PublicChannel;
+  bot?: BotStatus;
   onCancel: () => void;
   onSaved: (msg: string) => void;
 }) {
-  const { users, me } = useSession();
+  const { users, me, isAdmin } = useSession();
   const { data: projects } = useApi<{ projects: ProjectView[] }>('/projects');
+  const [kind, setKind] = useState<ChannelKind>(channel?.kind ?? 'telegram');
   const [chName, setName] = useState(channel?.name ?? '');
   const [url, setUrl] = useState('');
+  const code = useMemo(newCode, []);
   const [scopeType, setScopeType] = useState<ChannelScope['type']>(channel?.scope.type ?? (me.role === 'GL' ? 'gl' : 'all'));
   const [gl, setGl] = useState(channel?.scope.gl ?? (me.role === 'GL' ? me.id : ''));
   const [picked, setPicked] = useState<string[]>(channel?.scope.projects ?? []);
@@ -164,6 +158,7 @@ function ChannelForm({
   const [quietHours, setQuiet] = useState(channel?.quietHours ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const connectLine = `/connect@${bot?.username ?? 'bot'} ${code}`;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -176,8 +171,9 @@ function ChannelForm({
         await api.patch(`/channels/${channel.id}`, { name: chName, scope, events, quietHours, ...(url ? { webhookUrl: url } : {}) });
         onSaved(`Đã lưu kênh "${chName}"`);
       } else {
-        await api.post('/channels', { name: chName, webhookUrl: url, scope, events, quietHours });
-        onSaved(`Đã đăng ký kênh "${chName}" — kiểm tra tin thử trong Teams`);
+        const target = kind === 'telegram' ? { connectCode: code } : { webhookUrl: url };
+        await api.post('/channels', { kind, name: chName, scope, events, quietHours, ...target });
+        onSaved(`Đã kết nối "${chName}" — kiểm tra tin thử trong ${KIND_LABEL[kind]}`);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -187,18 +183,82 @@ function ChannelForm({
   }
 
   const toggle = <T,>(list: T[], v: T, on: boolean) => (on ? [...list, v] : list.filter((x) => x !== v));
+  const telegramBlocked = !channel && kind === 'telegram' && bot && !bot.configured;
 
   return (
     <form className="card form" onSubmit={submit}>
-      <h2>{channel ? `Sửa kênh "${channel.name}"` : 'Đăng ký kênh Teams'}</h2>
+      <h2>{channel ? `Sửa kênh "${channel.name}"` : 'Đăng ký kênh thông báo'}</h2>
+
+      {!channel && (
+        <div className="segmented" role="group" aria-label="Loại kênh">
+          {(['telegram', 'teams'] as ChannelKind[]).map((k) => (
+            <button type="button" key={k} className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
+              {KIND_LABEL[k]}
+            </button>
+          ))}
+        </div>
+      )}
+
       <label>
         Tên kênh (để nhận biết)
-        <input required value={chName} placeholder="VD: Nhóm Hùng – #du-an" onChange={(e) => setName(e.target.value)} />
+        <input required value={chName} placeholder="VD: Nhóm Hùng – dự án" onChange={(e) => setName(e.target.value)} />
       </label>
-      <label>
-        URL webhook của Teams Workflows {channel && <small className="muted">(để trống = giữ URL hiện tại: {channel.webhookUrlMasked})</small>}
-        <input type="url" required={!channel} value={url} placeholder="https://…logic.azure.com/workflows/…" onChange={(e) => setUrl(e.target.value)} />
-      </label>
+
+      {!channel && kind === 'telegram' && (
+        <fieldset>
+          <legend>Kết nối nhóm Telegram</legend>
+          {telegramBlocked ? (
+            <div className="error-box">
+              Chưa cài bot Telegram.{' '}
+              {isAdmin ? (
+                <>
+                  Vào <a href="/settings">Cài đặt → Bot Telegram</a> để cài.
+                </>
+              ) : (
+                'Nhờ PMO cài bot ở trang Cài đặt.'
+              )}
+            </div>
+          ) : (
+            <ol className="howto">
+              <li>
+                Trong Telegram, mở nhóm muốn nhận thông báo → <b>Add members</b> → thêm <b>@{bot?.username}</b>. (Muốn nhận riêng cho mình thì
+                mở chat với @{bot?.username} và bấm <b>Start</b>.)
+              </li>
+              <li>
+                Gửi vào nhóm đúng dòng sau:
+                <div className="copy-line">
+                  <code>{connectLine}</code>
+                  <button type="button" className="btn" onClick={() => navigator.clipboard?.writeText(connectLine)}>
+                    Copy
+                  </button>
+                </div>
+              </li>
+              <li>
+                Quay lại đây, bấm <b>Kết nối &amp; gửi tin thử</b>.
+              </li>
+            </ol>
+          )}
+        </fieldset>
+      )}
+
+      {kind === 'teams' && (
+        <label>
+          URL webhook của Teams Workflows{' '}
+          {channel && <small className="muted">(để trống = giữ URL hiện tại: {channel.webhookUrlMasked})</small>}
+          <input
+            type="url"
+            required={!channel}
+            value={url}
+            placeholder="https://…logic.azure.com/workflows/…"
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          {!channel && (
+            <small className="muted">
+              Trong kênh Teams: ⋯ → Workflows → mẫu “Send webhook alerts to a channel” → Save → copy URL. Cần quyền Power Automate.
+            </small>
+          )}
+        </label>
+      )}
 
       <fieldset>
         <legend>Phạm vi dự án</legend>
@@ -258,8 +318,8 @@ function ChannelForm({
         <button type="button" className="btn" onClick={onCancel}>
           Huỷ
         </button>
-        <button className="btn btn-primary" disabled={busy}>
-          {busy ? 'Đang gửi tin thử…' : channel ? 'Lưu' : 'Đăng ký & gửi tin thử'}
+        <button className="btn btn-primary" disabled={busy || !!telegramBlocked}>
+          {busy ? 'Đang gửi tin thử…' : channel ? 'Lưu' : 'Kết nối & gửi tin thử'}
         </button>
       </div>
     </form>

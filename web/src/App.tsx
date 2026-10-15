@@ -107,7 +107,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               Tổng quan
             </NavLink>
             <NavLink to="/projects">Dự án</NavLink>
-            <NavLink to="/channels">Kênh Teams</NavLink>
+            <NavLink to="/channels">Kênh thông báo</NavLink>
             {canManageUsers && (
               <NavLink to="/users">
                 Người dùng

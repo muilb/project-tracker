@@ -1,4 +1,4 @@
-import type { Channel, Item, Project, Settings, Update, User } from '../types.js';
+import type { Channel, Item, Project, Settings, TelegramBot, Update, User } from '../types.js';
 
 export interface Snapshot {
   users: User[];
@@ -38,6 +38,10 @@ export interface Store {
   getChannel(id: string): Promise<Channel | undefined>;
   putChannel(channel: Channel): Promise<void>;
   deleteChannel(id: string): Promise<void>;
+
+  /** The system Telegram bot (secret token); undefined removes it. */
+  getTelegramBot(): Promise<TelegramBot | undefined>;
+  putTelegramBot(bot: TelegramBot | undefined): Promise<void>;
 
   /** Alert de-duplication: whether `key` was recorded by markSent (records expire after `ttlDays`). */
   hasSent(key: string): Promise<boolean>;

@@ -9,9 +9,9 @@ import type { Channel, User } from '../types.js';
 
 export const channels = new Hono<AppEnv>();
 
-/** The webhook URL works as a password for posting into the channel: never send it back. */
+/** The Teams webhook URL works as a password for posting into the channel: never send it back. */
 function publicChannel({ webhookUrl, ...rest }: Channel) {
-  return { ...rest, webhookUrlMasked: maskUrl(webhookUrl) };
+  return { ...rest, ...(webhookUrl ? { webhookUrlMasked: maskUrl(webhookUrl) } : {}) };
 }
 
 const canEdit = (u: User, ch: Channel) => can.admin(u) || ch.createdBy === u.id;
@@ -38,27 +38,50 @@ channels.get('/', async (c) => {
 });
 
 channels.post('/', async (c) => {
+  const store = c.get('store');
   const notify = c.get('notify');
-  const body = await parseBody(c.req, createChannelSchema);
-  checkUrl(body.webhookUrl);
+  const { connectCode, ...body } = await parseBody(c.req, createChannelSchema);
   const now = c.get('now');
-  const channel: Channel = {
-    id: `C${String(await c.get('store').nextSeq('channel')).padStart(3, '0')}`,
-    kind: 'teams',
-    ...body,
+  const base = {
+    name: body.name,
+    scope: body.scope,
+    events: body.events,
+    quietHours: body.quietHours,
     enabled: true,
     createdBy: c.get('user').id,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   };
-  // Verify the URL by sending a test message before saving.
+
+  let target: Pick<Channel, 'kind' | 'webhookUrl' | 'telegramChatId' | 'telegramChatTitle'>;
+  if (body.kind === 'telegram') {
+    const bot = await store.getTelegramBot();
+    if (!bot) throw new HTTPException(400, { message: 'PMO chưa cài bot Telegram (Cài đặt → Telegram)' });
+    let chat;
+    try {
+      chat = await c.get('telegram').findChatByText(bot.token, connectCode!);
+    } catch (e) {
+      throw new HTTPException(502, { message: `Không đọc được tin nhắn của bot: ${(e as Error).message}` });
+    }
+    if (!chat)
+      throw new HTTPException(400, {
+        message: `Bot chưa nhận được mã ${connectCode}. Kiểm tra đã thêm @${bot.username} vào nhóm và gửi đúng dòng /connect@${bot.username} ${connectCode}, rồi thử lại.`,
+      });
+    target = { kind: 'telegram', telegramChatId: chat.id, telegramChatTitle: chat.title };
+  } else {
+    checkUrl(body.webhookUrl!);
+    target = { kind: 'teams', webhookUrl: body.webhookUrl };
+  }
+
+  const channel: Channel = { id: `C${String(await store.nextSeq('channel')).padStart(3, '0')}`, ...base, ...target };
+  // Verify delivery with a test message before saving.
   try {
-    await notify.send(channel.webhookUrl, testMessage(channel, notify.webUrl));
+    await notify.send(channel, testMessage(channel, notify.webUrl));
   } catch (e) {
-    throw new HTTPException(400, { message: `Không gửi được tin thử tới Teams: ${(e as Error).message}` });
+    throw new HTTPException(400, { message: `Không gửi được tin thử: ${(e as Error).message}` });
   }
   channel.lastSentAt = now.toISOString();
-  await c.get('store').putChannel(channel);
+  await store.putChannel(channel);
   return c.json({ channel: publicChannel(channel) }, 201);
 });
 
@@ -66,7 +89,10 @@ channels.patch('/:id', async (c) => {
   const ch = await load(c, c.req.param('id'));
   ensure(canEdit(c.get('user'), ch), 'Chỉ người tạo kênh hoặc PMO / quản lý mới được sửa');
   const body = await parseBody(c.req, patchChannelSchema);
-  if (body.webhookUrl) checkUrl(body.webhookUrl);
+  if (body.webhookUrl) {
+    if (ch.kind !== 'teams') throw new HTTPException(400, { message: 'Kênh Telegram không có URL webhook' });
+    checkUrl(body.webhookUrl);
+  }
   const updated: Channel = { ...ch, ...body, updatedAt: c.get('now').toISOString() };
   await c.get('store').putChannel(updated);
   return c.json({ channel: publicChannel(updated) });

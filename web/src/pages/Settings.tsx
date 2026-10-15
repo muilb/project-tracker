@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api } from '../api';
-import { ErrorBox } from '../components/ui';
+import { api, useApi } from '../api';
+import { ErrorBox, Section } from '../components/ui';
 import { useSession } from '../session';
 import type { Settings } from '../types';
 
@@ -38,6 +38,7 @@ export function SettingsPage() {
   return (
     <div className="stack narrow">
       <h1>Cài đặt</h1>
+      <TelegramSettings />
       <form className="card form" onSubmit={submit}>
         <fieldset>
           <legend>Tần suất cập nhật theo trạng thái (giờ)</legend>
@@ -85,3 +86,81 @@ export function SettingsPage() {
     </div>
   );
 }
+
+function TelegramSettings() {
+  const { data, reload } = useApi<{ configured: boolean; username?: string }>('/settings/telegram');
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.put('/settings/telegram', { token });
+      setToken('');
+      reload();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm('Gỡ bot Telegram? Các kênh Telegram sẽ ngừng nhận thông báo.')) return;
+    await api.del('/settings/telegram').catch((e: Error) => setError(e.message));
+    reload();
+  }
+
+  return (
+    <Section title="Bot Telegram">
+      {data?.configured ? (
+        <div className="form">
+          <div className="info-box">
+            ✓ Đang dùng bot <b>@{data.username}</b>. Mọi người đăng ký nhóm Telegram ở trang <b>Kênh thông báo</b>.
+          </div>
+          <div className="actions gap">
+            <button className="btn" onClick={remove}>
+              Gỡ bot
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form className="form" onSubmit={save}>
+          <ol className="howto">
+            <li>
+              Mở Telegram, chat với <b>@BotFather</b>, gửi <code>/newbot</code>.
+            </li>
+            <li>
+              Đặt tên hiển thị (VD: <i>Theo dõi dự án</i>) và username kết thúc bằng <code>bot</code> (VD: <code>brycen_duan_bot</code>).
+            </li>
+            <li>
+              BotFather trả về <b>token</b> dạng <code>123456789:AA…</code> — dán vào ô dưới.
+            </li>
+          </ol>
+          <label>
+            Token của bot
+            <input
+              type="password"
+              required
+              autoComplete="off"
+              value={token}
+              placeholder="123456789:AA…"
+              onChange={(e) => setToken(e.target.value)}
+            />
+            <small className="muted">Token được lưu trên máy chủ, không hiển thị lại. Chỉ PMO / quản lý thay hoặc gỡ được.</small>
+          </label>
+          <ErrorBox error={error} />
+          <div className="actions">
+            <button className="btn btn-primary" disabled={busy}>
+              {busy ? 'Đang kiểm tra…' : 'Lưu bot'}
+            </button>
+          </div>
+        </form>
+      )}
+    </Section>
+  );
+}
+

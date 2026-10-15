@@ -1,7 +1,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import { isDate } from './time.js';
-import { ALERT_EVENTS, HEALTHS, ITEM_STATUSES, ITEM_TYPES, PRIORITIES, PROJECT_STATES, ROLES, SCOPE_TYPES } from './types.js';
+import { ALERT_EVENTS, CHANNEL_KINDS, HEALTHS, ITEM_STATUSES, ITEM_TYPES, PRIORITIES, PROJECT_STATES, ROLES, SCOPE_TYPES } from './types.js';
 
 const email = z
   .string()
@@ -91,7 +91,7 @@ export const settingsSchema = z.object({
 
 const channelFields = {
   name: text(100).min(1, 'Tên kênh không được trống'),
-  webhookUrl: z.string().trim().url('URL webhook không hợp lệ').max(2000),
+  webhookUrl: z.string().trim().url('URL webhook không hợp lệ').max(2000).optional(),
   scope: z
     .object({
       type: z.enum(SCOPE_TYPES),
@@ -104,7 +104,17 @@ const channelFields = {
   quietHours: z.boolean().default(true),
 };
 
-export const createChannelSchema = z.object(channelFields);
+export const createChannelSchema = z
+  .object({
+    ...channelFields,
+    kind: z.enum(CHANNEL_KINDS).default('teams'),
+    /** Telegram: code the user sent to the bot, used to find the chat. */
+    connectCode: z.string().trim().max(40).optional(),
+  })
+  .refine((b) => b.kind !== 'teams' || !!b.webhookUrl, { message: 'Nhập URL webhook của Teams', path: ['webhookUrl'] })
+  .refine((b) => b.kind !== 'telegram' || !!b.connectCode, { message: 'Thiếu mã kết nối Telegram', path: ['connectCode'] });
+
+export const telegramBotSchema = z.object({ token: z.string().trim().min(10).max(200) });
 export const patchChannelSchema = z
   .object({ ...channelFields, quietHours: z.boolean(), enabled: z.boolean() })
   .partial();

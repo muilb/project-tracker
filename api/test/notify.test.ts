@@ -5,6 +5,7 @@ import { isTeamsWebhookUrl } from '../src/notify/teams.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';
 import { vnToIso } from '../src/time.js';
+import type { Message } from '../src/notify/message.js';
 import type { Channel } from '../src/types.js';
 
 const now = new Date(vnToIso(SAMPLE_NOW_VN)); // 09:45 Vietnam time
@@ -14,9 +15,9 @@ const URL_B = 'https://x.environment.api.powerplatform.com/powerautomate/automat
 let store: MemoryStore;
 let sent: { url: string; text: string }[];
 let failing: boolean;
-const send = async (url: string, payload: unknown) => {
+const send = async (ch: Channel, msg: Message) => {
   if (failing) throw new Error('Teams trả về HTTP 500');
-  sent.push({ url, text: JSON.stringify(payload) });
+  sent.push({ url: ch.webhookUrl ?? `tg:${ch.telegramChatId}`, text: JSON.stringify(msg) });
 };
 const deps = () => ({ store, send, webUrl: 'https://web.example' });
 
@@ -73,7 +74,7 @@ describe('channel registration', () => {
     expect(JSON.stringify(json)).not.toContain('SECRET');
     expect(json.channel.webhookUrlMasked).toBe('https://prod-01.southeastasia.logic.azure.com/workflows/a/tri…');
     expect(sent).toHaveLength(1);
-    expect(sent[0].text).toContain('Đã kết nối kênh');
+    expect(sent[0].text).toContain('Đã kết nối');
 
     const list = await (await call('GET', '/channels', 'an')).json();
     expect(JSON.stringify(list)).not.toContain('SECRET_A');

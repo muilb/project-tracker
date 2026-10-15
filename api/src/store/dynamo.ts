@@ -8,7 +8,7 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { DEFAULT_SETTINGS, type Channel, type Item, type Project, type Settings, type Update, type User } from '../types.js';
+import { DEFAULT_SETTINGS, type Channel, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
 import { ConflictError, type Snapshot, type Store } from './store.js';
 
 /*
@@ -19,7 +19,7 @@ import { ConflictError, type Snapshot, type Store } from './store.js';
  *   PROJECT#<id>      ITEM#<id>
  *   CHANNEL#<id>      CHANNEL
  *   SENT#<key>        SENT              (alert de-duplication, expires via the `ttl` attribute)
- *   CONFIG            SETTINGS | SEQ#project | SEQ#item | SEQ#channel
+ *   CONFIG            SETTINGS | TELEGRAM | SEQ#project | SEQ#item | SEQ#channel
  * Every row also has `kind` so a full scan can be grouped cheaply.
  */
 type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT';
@@ -142,6 +142,14 @@ export class DynamoStore implements Store {
   }
   async deleteChannel(id: string) {
     await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: `CHANNEL#${id}`, sk: 'CHANNEL' } }));
+  }
+
+  async getTelegramBot() {
+    return (await this.get<{ value: TelegramBot }>('CONFIG', 'TELEGRAM'))?.value;
+  }
+  async putTelegramBot(bot: TelegramBot | undefined) {
+    if (bot) await this.put('CONFIG', 'TELEGRAM', 'CONFIG', { value: bot });
+    else await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: 'CONFIG', sk: 'TELEGRAM' } }));
   }
 
   async hasSent(key: string) {

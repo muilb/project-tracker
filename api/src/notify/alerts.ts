@@ -4,7 +4,8 @@ import type { Store } from '../store/store.js';
 import { vnDate } from '../time.js';
 import type { AlertEvent, Channel, Health, Item, Project, Update } from '../types.js';
 import { activeProjectViews } from '../views.js';
-import { adaptiveCard, type CardLine, type Sender } from './teams.js';
+import type { Message, MessageLine } from './message.js';
+import type { Sender } from './sender.js';
 
 export interface NotifyDeps {
   store: Store;
@@ -25,6 +26,7 @@ function hours(h: number) {
 }
 const clip = (s = '', n = 140) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const vnHour = (now: Date) => (now.getUTCHours() + 7) % 24;
+const message = (m: Message): Message => m;
 
 export function inScope(ch: Channel, p: Pick<Project, 'id' | 'gl'>): boolean {
   if (ch.scope.type === 'gl') return !!ch.scope.gl && p.gl === ch.scope.gl;
@@ -41,13 +43,13 @@ function link(deps: NotifyDeps, path: string, title: string) {
 }
 
 /** Sends one message and records the outcome on the channel (shown on the web page). */
-export async function deliver(deps: NotifyDeps, ch: Channel, payload: unknown, now: Date): Promise<boolean> {
+export async function deliver(deps: NotifyDeps, ch: Channel, msg: Message, now: Date): Promise<boolean> {
   try {
-    await deps.send(ch.webhookUrl, payload);
+    await deps.send(ch, msg);
     await deps.store.putChannel({ ...ch, lastSentAt: now.toISOString(), lastError: undefined });
     return true;
   } catch (e) {
-    console.error(`Teams delivery failed for channel ${ch.id}`, e);
+    console.error(`Delivery failed for ${ch.kind} channel ${ch.id}`, e);
     await deps.store.putChannel({ ...ch, lastError: (e as Error).message.slice(0, 300) });
     return false;
   }
@@ -60,10 +62,10 @@ async function names(store: Store) {
 }
 
 export function testMessage(ch: Pick<Channel, 'name'>, webUrl?: string) {
-  return adaptiveCard({
-    title: `✅ Đã kết nối kênh "${ch.name}" với hệ thống Theo dõi dự án`,
+  return message({
+    title: `✅ Đã kết nối "${ch.name}" với hệ thống Theo dõi dự án`,
     tone: 'good',
-    lines: [{ text: 'Từ giờ các cảnh báo và bản tóm tắt sẽ được gửi vào kênh này.', subtle: true }],
+    lines: [{ text: 'Từ giờ các cảnh báo và bản tóm tắt sẽ được gửi vào đây.', subtle: true }],
     link: webUrl ? { title: 'Mở hệ thống', url: webUrl } : undefined,
   });
 }
@@ -75,7 +77,7 @@ export async function notifyBecameRed(deps: NotifyDeps, now: Date, view: Project
   const channels = (await deps.store.listChannels()).filter((c) => wants(c, 'became_red', view));
   if (!channels.length) return;
   const name = await names(deps.store);
-  const payload = adaptiveCard({
+  const msg = message({
     title: `■ ${view.id} · ${view.name} chuyển sang ĐỎ`,
     tone: 'attention',
     lines: [
@@ -85,7 +87,7 @@ export async function notifyBecameRed(deps: NotifyDeps, now: Date, view: Project
     ],
     link: link(deps, `/projects/${view.id}`, 'Mở dự án'),
   });
-  await Promise.all(channels.map((c) => deliver(deps, c, payload, now)));
+  await Promise.all(channels.map((c) => deliver(deps, c, msg, now)));
 }
 
 /** A new high-priority issue was logged. */
@@ -93,7 +95,7 @@ export async function notifyHighIssue(deps: NotifyDeps, now: Date, project: Proj
   const channels = (await deps.store.listChannels()).filter((c) => wants(c, 'high_issue', project));
   if (!channels.length) return;
   const name = await names(deps.store);
-  const payload = adaptiveCard({
+  const msg = message({
     title: `▲ Vấn đề ưu tiên cao mới – ${project.id} · ${project.name}`,
     tone: 'warning',
     lines: [
@@ -103,14 +105,14 @@ export async function notifyHighIssue(deps: NotifyDeps, now: Date, project: Proj
     ],
     link: link(deps, `/projects/${project.id}`, 'Mở dự án'),
   });
-  await Promise.all(channels.map((c) => deliver(deps, c, payload, now)));
+  await Promise.all(channels.map((c) => deliver(deps, c, msg, now)));
 }
 
 // ---------- Hourly job ----------
 
 interface Pending {
   key: string;
-  line: CardLine;
+  line: MessageLine;
 }
 
 function collectAlerts(ch: Channel, views: ProjectView[], now: Date, name: (id?: string) => string): Pending[] {
@@ -147,7 +149,7 @@ function digestMessage(deps: NotifyDeps, ch: Channel, views: ProjectView[], now:
   const soon: [ProjectView, ItemView][] = views.flatMap((v) =>
     v.openItems.filter((i) => i.type !== 'issue' && i.daysLeft >= 0 && i.daysLeft <= 1).map((i): [ProjectView, ItemView] => [v, i]),
   );
-  const lines: CardLine[] = [
+  const lines: MessageLine[] = [
     { text: `Đang chạy ${views.length} · ${HEALTH.red} ${count('red')} · ${HEALTH.yellow} ${count('yellow')} · ${HEALTH.green} ${count('green')}` },
     { text: `⏰ Trễ cập nhật: ${late} · ⚠ Mục quá hạn: ${overdue}`, tone: late || overdue ? 'attention' : 'default' },
   ];
@@ -161,7 +163,7 @@ function digestMessage(deps: NotifyDeps, ch: Channel, views: ProjectView[], now:
     for (const [v, i] of soon.slice(0, 8))
       lines.push({ text: `${i.daysLeft === 0 ? 'Hôm nay' : 'Ngày mai'} – ${v.id}: ${TYPE[i.type]} "${i.title}" (${name(i.owner)})` });
   }
-  return adaptiveCard({
+  return message({
     title: `☀️ Tóm tắt dự án ${dm(vnDate(now))} – ${ch.name}`,
     lines,
     link: link(deps, '/', 'Mở tổng quan'),
@@ -194,9 +196,9 @@ export async function runHourly(deps: NotifyDeps, now: Date): Promise<{ messages
       if (pending.length) {
         const shown = pending.slice(0, MAX_LINES).map((p) => p.line);
         if (pending.length > MAX_LINES) shown.push({ text: `… và ${pending.length - MAX_LINES} mục khác`, subtle: true });
-        const payload = adaptiveCard({ title: `🔔 Cần chú ý (${pending.length})`, tone: 'warning', lines: shown, link: link(deps, '/', 'Mở tổng quan') });
+        const msg = message({ title: `🔔 Cần chú ý (${pending.length})`, tone: 'warning', lines: shown, link: link(deps, '/', 'Mở tổng quan') });
         // Mark as sent only after a successful delivery, so failures are retried next hour.
-        if (await deliver(deps, ch, payload, now)) {
+        if (await deliver(deps, ch, msg, now)) {
           messages++;
           await Promise.all(pending.map((p) => deps.store.markSent(`${ch.id}#${p.key}`, DEDUPE_DAYS)));
         }

@@ -21,6 +21,7 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 - Cognito **chỉ lo đăng nhập** (email và mật khẩu, cho tự đăng ký). Vai trò và nhóm lưu trong DynamoDB.
   - Người đăng nhập lần đầu mặc định có vai trò PL.
   - Email nằm trong `ADMIN_EMAILS` nhận vai trò ghi kèm (`email:MNG`), hoặc PMO nếu không ghi vai trò.
+  - Mail công ty hay chặn thư xác nhận của Cognito (`no-reply@verificationemail.com`). Vì vậy PMO / MNG có thể **duyệt** tài khoản chờ xác nhận ở trang Người dùng; menu hiện số tài khoản đang chờ. Lambda API được cấp các quyền `ListUsers`, `AdminGetUser`, `AdminConfirmSignUp`, `AdminUpdateUserAttributes`, `AdminDeleteUser`, chỉ trên user pool này.
 - Dữ liệu ít (vài chục dự án), nên dashboard đọc toàn bộ bảng rồi tính trong bộ nhớ.
 - `GET /public` không cần đăng nhập:
   - chỉ trả về các trường được phép công khai;
@@ -84,6 +85,9 @@ Mọi endpoint, trừ `/health` và `/public`, cần header `Authorization: <Cog
 | GET / POST | `/projects/:id/items` | Vấn đề / sự kiện / mốc: `type` = `issue` / `event` / `milestone` |
 | PATCH | `/projects/:id/items/:itemId` | Sửa, đóng mục (`status: done`) |
 | GET / POST | `/users`, PATCH `/users/:email` | Người dùng; PMO tạo trước người chưa đăng nhập |
+| GET | `/users/pending` | PMO / MNG: các tài khoản đã đăng ký nhưng chưa xác nhận email (đọc từ Cognito) |
+| POST | `/users/pending/:email/approve` | PMO / MNG: xác nhận tài khoản và đánh dấu email đã xác minh. Body `{ "role"?: … }`; nếu không truyền vai trò thì lấy theo `ADMIN_EMAILS`, không có thì PL |
+| POST | `/users/pending/:email/reject` | PMO / MNG: xoá đăng ký chưa xác nhận |
 | GET / PUT | `/settings` | Tần suất cập nhật và các ngưỡng |
 | GET / POST | `/channels` | Kênh Teams: mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được |
 | PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, bật / tắt, URL) hoặc xoá: người tạo, PMO / quản lý |

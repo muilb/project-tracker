@@ -74,6 +74,8 @@ export const createUserSchema = z.object({
   role: z.enum(ROLES).default('PL'),
 });
 
+export const approveAccountSchema = z.object({ role: z.enum(ROLES).optional() });
+
 export const patchUserSchema = z.object({ name: text(100).min(1), role: z.enum(ROLES) }).partial();
 
 export const settingsSchema = z.object({

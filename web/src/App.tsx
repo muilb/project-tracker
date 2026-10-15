@@ -74,9 +74,27 @@ function Authenticated() {
   );
 }
 
+/** Number of sign-ups waiting for approval (PMO / MNG only), refreshed when the Users page acts. */
+function usePendingCount(enabled: boolean) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const load = () =>
+      api
+        .get<{ pending: unknown[] }>('/users/pending')
+        .then((r) => setCount(r.pending.length))
+        .catch(() => {});
+    load();
+    window.addEventListener('pending-changed', load);
+    return () => window.removeEventListener('pending-changed', load);
+  }, [enabled]);
+  return count;
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const { me, isAdmin, canManageUsers } = useSession();
   const navigate = useNavigate();
+  const pendingCount = usePendingCount(canManageUsers);
   return (
     <>
       <header className="topbar">
@@ -90,7 +108,16 @@ function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>
             <NavLink to="/projects">Dự án</NavLink>
             <NavLink to="/channels">Kênh Teams</NavLink>
-            {canManageUsers && <NavLink to="/users">Người dùng</NavLink>}
+            {canManageUsers && (
+              <NavLink to="/users">
+                Người dùng
+                {pendingCount > 0 && (
+                  <span className="nav-count" title={`${pendingCount} tài khoản chờ duyệt`}>
+                    {pendingCount}
+                  </span>
+                )}
+              </NavLink>
+            )}
             {isAdmin && <NavLink to="/settings">Cài đặt</NavLink>}
             <a href="/public" target="_blank" rel="noreferrer">
               Trang public ↗

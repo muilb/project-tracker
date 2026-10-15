@@ -109,6 +109,16 @@ export class TrackerStack extends Stack {
 
     const apiFn = new NodejsFunction(this, 'ApiFn', lambdaProps('Api', 'api/src/lambda.ts', 29));
     table.grantReadWriteData(apiFn);
+    // PMO / MNG approve sign-ups whose confirmation email never arrived.
+    apiFn.addEnvironment('USER_POOL_ID', userPool.userPoolId);
+    userPool.grant(
+      apiFn,
+      'cognito-idp:ListUsers',
+      'cognito-idp:AdminGetUser',
+      'cognito-idp:AdminConfirmSignUp',
+      'cognito-idp:AdminUpdateUserAttributes',
+      'cognito-idp:AdminDeleteUser',
+    );
 
     // Hourly Teams alerts + 08:00 digest (the job itself checks Vietnam time).
     const cronFn = new NodejsFunction(this, 'CronFn', lambdaProps('Cron', 'api/src/cron.ts', 120));

@@ -43,7 +43,6 @@ function identity(c: Parameters<MiddlewareHandler<AppEnv>>[0], config: AuthConfi
 
 /** Resolves the caller and auto-creates a user record on first login (role from ADMIN_EMAILS, else PL). */
 export function requireUser(config: AuthConfig): MiddlewareHandler<AppEnv> {
-  const initialRoles = parseInitialRoles(config.adminEmails);
   return async (c, next) => {
     const id = identity(c, config);
     if (!id) throw new HTTPException(401, { message: 'Chưa đăng nhập' });
@@ -54,7 +53,7 @@ export function requireUser(config: AuthConfig): MiddlewareHandler<AppEnv> {
       user = {
         id: email,
         name: id.name || email.split('@')[0],
-        role: initialRoles.get(email) ?? 'PL',
+        role: c.get('initialRoles').get(email) ?? 'PL',
         createdAt: c.get('now').toISOString(),
       };
       await store.putUser(user);

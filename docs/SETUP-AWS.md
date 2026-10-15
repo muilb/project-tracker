@@ -57,7 +57,7 @@ Các vai trò hợp lệ: `PL`, `GL`, `PMO`, `SUBMNG`, `MNG`, `OTHER`.
 
 - Merge PR vào `main`, hoặc vào tab **Actions → Deploy → Run workflow**.
 - Khi job chạy xong, mở log bước `npm run deploy` để xem các output:
-  - `WebUrl`: địa chỉ web (có từ giai đoạn 2).
+  - `WebUrl`: địa chỉ web. Trang public nằm ở `WebUrl/public`.
   - `ApiUrl`: địa chỉ API. Thử mở `ApiUrl/health` và `ApiUrl/public`.
   - `TableName`: tên bảng DynamoDB.
 

@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type Item, type Project, type Settings, type Update, type User } from '../types.js';
+import { DEFAULT_SETTINGS, type Channel, type Item, type Project, type Settings, type Update, type User } from '../types.js';
 import { ConflictError, type Snapshot, type Store } from './store.js';
 
 /** In-memory store for tests and local development. */
@@ -8,7 +8,9 @@ export class MemoryStore implements Store {
   updates: Update[] = [];
   items = new Map<string, Item>();
   settings: Settings = structuredClone(DEFAULT_SETTINGS);
-  seqs = { project: 0, item: 0 };
+  channels = new Map<string, Channel>();
+  sent = new Map<string, number>(); // key -> expiry (ms)
+  seqs = { project: 0, item: 0, channel: 0 };
 
   async getUser(id: string) {
     return clone(this.users.get(id));
@@ -56,7 +58,27 @@ export class MemoryStore implements Store {
     this.settings = clone(settings);
   }
 
-  async nextSeq(name: 'project' | 'item') {
+  async listChannels() {
+    return [...this.channels.values()].map(clone);
+  }
+  async getChannel(id: string) {
+    return clone(this.channels.get(id));
+  }
+  async putChannel(channel: Channel) {
+    this.channels.set(channel.id, clone(channel));
+  }
+  async deleteChannel(id: string) {
+    this.channels.delete(id);
+  }
+
+  async hasSent(key: string) {
+    return (this.sent.get(key) ?? 0) > Date.now();
+  }
+  async markSent(key: string, ttlDays: number) {
+    this.sent.set(key, Date.now() + ttlDays * 86_400_000);
+  }
+
+  async nextSeq(name: 'project' | 'item' | 'channel') {
     return ++this.seqs[name];
   }
 

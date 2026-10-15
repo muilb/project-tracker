@@ -1,5 +1,6 @@
 import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
+  DeleteCommand,
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
@@ -7,7 +8,7 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { DEFAULT_SETTINGS, type Item, type Project, type Settings, type Update, type User } from '../types.js';
+import { DEFAULT_SETTINGS, type Channel, type Item, type Project, type Settings, type Update, type User } from '../types.js';
 import { ConflictError, type Snapshot, type Store } from './store.js';
 
 /*
@@ -16,10 +17,12 @@ import { ConflictError, type Snapshot, type Store } from './store.js';
  *   PROJECT#<id>      PROJECT
  *   PROJECT#<id>      UPDATE#<iso time>#<id>
  *   PROJECT#<id>      ITEM#<id>
- *   CONFIG            SETTINGS | SEQ#project | SEQ#item
+ *   CHANNEL#<id>      CHANNEL
+ *   SENT#<key>        SENT              (alert de-duplication, expires via the `ttl` attribute)
+ *   CONFIG            SETTINGS | SEQ#project | SEQ#item | SEQ#channel
  * Every row also has `kind` so a full scan can be grouped cheaply.
  */
-type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM';
+type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT';
 
 export class DynamoStore implements Store {
   private db: DynamoDBDocumentClient;
@@ -114,7 +117,43 @@ export class DynamoStore implements Store {
     return this.put('CONFIG', 'SETTINGS', 'CONFIG', { value: settings });
   }
 
-  async nextSeq(name: 'project' | 'item') {
+  async listChannels() {
+    const out: Channel[] = [];
+    let start: Record<string, unknown> | undefined;
+    do {
+      const res = await this.db.send(
+        new ScanCommand({
+          TableName: this.table,
+          FilterExpression: 'kind = :k',
+          ExpressionAttributeValues: { ':k': 'CHANNEL' },
+          ExclusiveStartKey: start,
+        }),
+      );
+      out.push(...(res.Items ?? []).map((i) => strip<Channel>(i)));
+      start = res.LastEvaluatedKey;
+    } while (start);
+    return out;
+  }
+  getChannel(id: string) {
+    return this.get<Channel>(`CHANNEL#${id}`, 'CHANNEL');
+  }
+  putChannel(channel: Channel) {
+    return this.put(`CHANNEL#${channel.id}`, 'CHANNEL', 'CHANNEL', channel);
+  }
+  async deleteChannel(id: string) {
+    await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: `CHANNEL#${id}`, sk: 'CHANNEL' } }));
+  }
+
+  async hasSent(key: string) {
+    const row = await this.get<{ ttl: number }>(`SENT#${key}`, 'SENT');
+    // DynamoDB deletes expired rows lazily, so also check the expiry here.
+    return !!row && row.ttl * 1000 > Date.now();
+  }
+  markSent(key: string, ttlDays: number) {
+    return this.put(`SENT#${key}`, 'SENT', 'SENT', { ttl: Math.floor(Date.now() / 1000) + ttlDays * 86_400 });
+  }
+
+  async nextSeq(name: 'project' | 'item' | 'channel') {
     const res = await this.db.send(
       new UpdateCommand({
         TableName: this.table,

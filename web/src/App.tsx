@@ -4,6 +4,7 @@ import { api, setUnauthorizedHandler } from './api';
 import { auth } from './auth';
 import { ErrorBox } from './components/ui';
 import { ROLE_LABEL } from './labels';
+import { ChannelsPage } from './pages/Channels';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { ProjectDetailPage } from './pages/ProjectDetail';
@@ -63,6 +64,7 @@ function Authenticated() {
           <Route path="/projects/new" element={<ProjectForm />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
+          <Route path="/channels" element={<ChannelsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -87,6 +89,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               Tổng quan
             </NavLink>
             <NavLink to="/projects">Dự án</NavLink>
+            <NavLink to="/channels">Kênh Teams</NavLink>
             {canManageUsers && <NavLink to="/users">Người dùng</NavLink>}
             {isAdmin && <NavLink to="/settings">Cài đặt</NavLink>}
             <a href="/public" target="_blank" rel="noreferrer">

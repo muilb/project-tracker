@@ -1,4 +1,4 @@
-import type { Item, Project, Settings, Update, User } from '../types.js';
+import type { Channel, Item, Project, Settings, Update, User } from '../types.js';
 
 export interface Snapshot {
   users: User[];
@@ -34,8 +34,17 @@ export interface Store {
   getSettings(): Promise<Settings>;
   putSettings(settings: Settings): Promise<void>;
 
+  listChannels(): Promise<Channel[]>;
+  getChannel(id: string): Promise<Channel | undefined>;
+  putChannel(channel: Channel): Promise<void>;
+  deleteChannel(id: string): Promise<void>;
+
+  /** Alert de-duplication: whether `key` was recorded by markSent (records expire after `ttlDays`). */
+  hasSent(key: string): Promise<boolean>;
+  markSent(key: string, ttlDays: number): Promise<void>;
+
   /** Atomically increments and returns a named counter (project / item ids). */
-  nextSeq(name: 'project' | 'item'): Promise<number>;
+  nextSeq(name: 'project' | 'item' | 'channel'): Promise<number>;
 
   snapshot(): Promise<Snapshot>;
 }

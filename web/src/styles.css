@@ -724,3 +724,31 @@ small {
     font-size: 1.5rem;
   }
 }
+
+/* ---- Channels ---- */
+.actions-col {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-content: flex-start;
+  justify-content: flex-end;
+}
+.checks.column {
+  flex-direction: column;
+}
+.actions.gap {
+  gap: 0.5rem;
+}
+.howto {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+.howto li {
+  margin: 0.25rem 0;
+}
+code {
+  font-size: 0.85em;
+  background: var(--surface-2);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}

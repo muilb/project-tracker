@@ -1,7 +1,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import { isDate } from './time.js';
-import { HEALTHS, ITEM_STATUSES, ITEM_TYPES, PRIORITIES, PROJECT_STATES, ROLES } from './types.js';
+import { ALERT_EVENTS, HEALTHS, ITEM_STATUSES, ITEM_TYPES, PRIORITIES, PROJECT_STATES, ROLES, SCOPE_TYPES } from './types.js';
 
 const email = z
   .string()
@@ -86,6 +86,26 @@ export const settingsSchema = z.object({
   nearEventFrequencyHours: z.number().int().min(1),
   upcomingDays: z.number().int().min(1).max(60),
 });
+
+const channelFields = {
+  name: text(100).min(1, 'Tên kênh không được trống'),
+  webhookUrl: z.string().trim().url('URL webhook không hợp lệ').max(2000),
+  scope: z
+    .object({
+      type: z.enum(SCOPE_TYPES),
+      gl: email.optional(),
+      projects: z.array(z.string().trim().toUpperCase()).max(100).optional(),
+    })
+    .refine((s) => s.type !== 'gl' || !!s.gl, 'Chọn GL cho phạm vi theo nhóm')
+    .refine((s) => s.type !== 'projects' || !!s.projects?.length, 'Chọn ít nhất một dự án'),
+  events: z.array(z.enum(ALERT_EVENTS)).min(1, 'Chọn ít nhất một loại thông báo'),
+  quietHours: z.boolean().default(true),
+};
+
+export const createChannelSchema = z.object(channelFields);
+export const patchChannelSchema = z
+  .object({ ...channelFields, quietHours: z.boolean(), enabled: z.boolean() })
+  .partial();
 
 export async function parseBody<T extends z.ZodType>(req: { json(): Promise<unknown> }, schema: T): Promise<z.infer<T>> {
   let body: unknown;

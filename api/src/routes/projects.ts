@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
+import { notifyBecameRed, notifyHighIssue } from '../notify/alerts.js';
 import { buildProjectView, compareItems, toItemView } from '../rules.js';
 import { createItemSchema, createProjectSchema, createUpdateSchema, parseBody, patchItemSchema, patchProjectSchema } from '../schemas.js';
 import { ConflictError, type Store } from '../store/store.js';
@@ -15,6 +16,15 @@ async function loadProject(store: Store, id: string): Promise<Project> {
   const p = await store.getProject(id.toUpperCase());
   if (!p) throw new HTTPException(404, { message: `Không tìm thấy dự án ${id}` });
   return p;
+}
+
+/** Alerts must never make the user's change fail. */
+async function alert(fn: () => Promise<void>) {
+  try {
+    await fn();
+  } catch (e) {
+    console.error('alert failed', e);
+  }
 }
 
 /** Referenced people must exist (PMO can pre-create them via POST /users). */
@@ -116,10 +126,17 @@ projects.post('/:id/updates', async (c) => {
   const me = c.get('user');
   const project = await loadProject(store, c.req.param('id'));
   const body = await parseBody(c.req, createUpdateSchema);
+  const now = c.get('now');
+  const [updates, items, settings] = await Promise.all([
+    store.listUpdates(project.id),
+    store.listItems(project.id),
+    store.getSettings(),
+  ]);
+  const before = buildProjectView(project, updates, items, settings, now);
   const update: Update = {
     id: randomUUID().slice(0, 8),
     projectId: project.id,
-    at: body.at ? new Date(body.at).toISOString() : c.get('now').toISOString(),
+    at: body.at ? new Date(body.at).toISOString() : now.toISOString(),
     author: me.id,
     authorRole: me.role,
     health: body.health,
@@ -128,6 +145,10 @@ projects.post('/:id/updates', async (c) => {
     rawText: body.rawText,
   };
   await store.addUpdate(update);
+  const after = buildProjectView(project, [...updates, update], items, settings, now);
+  if (project.state === 'active' && after.health === 'red' && before.health !== 'red') {
+    await alert(() => notifyBecameRed(c.get('notify'), now, after, update));
+  }
   return c.json({ update }, 201);
 });
 
@@ -154,6 +175,9 @@ projects.post('/:id/items', async (c) => {
     updatedAt: now,
   };
   await store.putItem(item);
+  if (item.type === 'issue' && item.priority === 'high' && item.status !== 'done' && project.state === 'active') {
+    await alert(() => notifyHighIssue(c.get('notify'), c.get('now'), project, item));
+  }
   return c.json({ item }, 201);
 });
 

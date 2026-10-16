@@ -7,6 +7,7 @@ import { ROLE_LABEL } from './labels';
 import { AiEntryPage } from './pages/AiEntry';
 import { ChannelsPage } from './pages/Channels';
 import { Dashboard } from './pages/Dashboard';
+import { HelpPage } from './pages/Help';
 import { Login } from './pages/Login';
 import { ProjectDetailPage } from './pages/ProjectDetail';
 import { ProjectForm } from './pages/ProjectForm';
@@ -21,6 +22,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/public" element={<PublicPage />} />
+      <Route path="/help" element={<HelpPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="*" element={<Authenticated />} />
     </Routes>
@@ -126,6 +128,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             <a href="/public" target="_blank" rel="noreferrer">
               Trang public ↗
             </a>
+            <NavLink to="/help">Hướng dẫn</NavLink>
           </nav>
           <div className="me">
             <span title={me.id}>

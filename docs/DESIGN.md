@@ -120,6 +120,7 @@ POST /projects
 | `/login` | Mọi người | Đăng nhập, đăng ký, xác nhận email, quên mật khẩu (gọi thẳng Cognito) |
 | `/` Tổng quan | Đã đăng nhập | Ô số liệu, dự án cần chú ý, mốc / sự kiện sắp tới, vấn đề cần xử lý, trễ cập nhật, theo GL. PL / GL / người hỗ trợ mặc định xem "Dự án của tôi", PMO / quản lý xem "Tất cả" |
 | `/ai` Nhập bằng AI | PL trở lên | Viết ghi chú tự do → AI đề xuất cập nhật, thêm / sửa / đổi trạng thái mục, tạo / sửa dự án → sửa, chọn rồi ghi. Cập nhật lưu kèm nguyên văn ghi chú (`rawText`) |
+| `/help` Hướng dẫn | Mọi người (không cần đăng nhập) | Hướng dẫn sử dụng cho người mới: tài khoản, vai trò, trạng thái, cập nhật, mục, AI, dự án, thông báo, trang public, PMO, hỏi đáp. Cập nhật khi giao diện đổi |
 | `/projects` | Đã đăng nhập | Danh sách, lọc theo tình trạng / phạm vi, tìm kiếm |
 | `/projects/new`, `/projects/:id/edit` | PL trở lên / người có quyền sửa | Form dự án |
 | `/projects/:id` | Đã đăng nhập | Thông tin, form cập nhật nhanh, lịch sử, vấn đề / sự kiện / mốc (thêm, đổi trạng thái) |

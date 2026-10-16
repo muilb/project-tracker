@@ -7,6 +7,7 @@ Project tracking system replacing an Excel sheet. Serverless on AWS. UI text and
 - `web/` — React + Vite SPA. Talks to the Cognito JSON API directly (`src/auth.ts`, no Amplify); reads `/config.json` (written by CDK) in production; in dev uses the `/api` proxy to :3001 and `x-dev-user` auth. Response types are imported from the API code (`src/types.ts`). Status colors always come with an icon + text label.
 - `infra/` — AWS CDK stack (`lib/stack.ts`). `bootstrap/github-oidc.yaml` creates the GitHub Actions deploy role.
 - `docs/DESIGN.md` — design, rules, API list, roadmap. Update it when behavior changes.
+- `web/src/pages/Help.tsx` — user manual (public `/help`, Vietnamese). Update it when UI labels or behavior change.
 
 ## Commands (run from repo root)
 - `npm test` — vitest for api (must pass)

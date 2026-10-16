@@ -801,3 +801,14 @@ code {
   font-weight: 600;
   margin-left: auto;
 }
+
+.test-sender {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.test-sender select {
+  width: auto;
+  max-width: 100%;
+}

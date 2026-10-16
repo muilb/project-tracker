@@ -1,5 +1,6 @@
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
+import { TEST_SAMPLES } from './notify/alerts.js';
 import { isDate } from './time.js';
 import { ALERT_EVENTS, CHANNEL_KINDS, HEALTHS, ITEM_STATUSES, ITEM_TYPES, PRIORITIES, PROJECT_STATES, ROLES, SCOPE_TYPES } from './types.js';
 
@@ -118,6 +119,8 @@ export const aiKeySchema = z.object({ apiKey: z.string().trim().min(20, 'API key
 export const aiParseSchema = z.object({
   text: text(4000).min(1, 'Nhập nội dung cần ghi'),
 });
+
+export const testSampleSchema = z.object({ sample: z.enum(TEST_SAMPLES).default('connect') });
 
 export const telegramBotSchema = z.object({ token: z.string().trim().min(10).max(200) });
 export const patchChannelSchema = z

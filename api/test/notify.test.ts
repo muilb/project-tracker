@@ -181,3 +181,36 @@ describe('hourly job', () => {
     expect((await runHourly(deps(), new Date(eight.getTime() + 600_000))).messages).toBe(0);
   });
 });
+
+describe('test samples', () => {
+  it('sends previews built from current data, without marking anything sent', async () => {
+    // Samples ignore which events the channel subscribed to.
+    const ch = await addChannel({ events: ['late_update', 'overdue'] });
+    for (const sample of ['connect', 'became_red', 'high_issue', 'hourly', 'daily_digest']) {
+      const res = await call('POST', `/channels/${ch.id}/test`, 'lan', { sample });
+      expect(res.status).toBe(200);
+    }
+    const msgs = sent.map((s) => JSON.parse(s.text) as Message);
+    expect(msgs[0].title).toContain('Đã kết nối');
+    expect(msgs[1].title).toMatch(/^\[Mẫu\] ■ P\d+ · .* chuyển sang ĐỎ$/);
+    expect(msgs[2].title).toContain('[Mẫu] ▲ Vấn đề ưu tiên cao mới');
+    expect(msgs[3].title).toMatch(/^\[Mẫu\] 🔔 Cần chú ý \(\d+\)$/);
+    expect(msgs[4].title).toContain('[Mẫu] ☀️ Tóm tắt dự án');
+    expect(msgs[4].lines.at(-1)?.text).toContain('Tin mẫu');
+    // The real hourly job still sends its own alerts afterwards.
+    expect((await runHourly(deps(), now)).messages).toBeGreaterThan(0);
+  });
+
+  it('defaults to the connect message and rejects unknown samples', async () => {
+    const ch = await addChannel();
+    expect((await call('POST', `/channels/${ch.id}/test`, 'lan')).status).toBe(200);
+    expect(JSON.parse(sent[0].text).title).toContain('Đã kết nối');
+    expect((await call('POST', `/channels/${ch.id}/test`, 'lan', { sample: 'nope' })).status).toBe(400);
+  });
+
+  it('explains when the channel scope has no data', async () => {
+    const ch = await addChannel({ scope: { type: 'projects', projects: ['ZZZ'] } });
+    await call('POST', `/channels/${ch.id}/test`, 'lan', { sample: 'daily_digest' });
+    expect(JSON.parse(sent[0].text).lines[0].text).toContain('chưa có dữ liệu');
+  });
+});

@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { AiError, blankAction, type AiClient, type AiOutput, type AiRawAction } from '../src/ai/assistant.js';
+import {
+  AiError,
+  blankAction,
+  fromWire,
+  OUTPUT_JSON_SCHEMA,
+  wireOutputSchema,
+  type AiClient,
+  type AiOutput,
+  type AiRawAction,
+} from '../src/ai/assistant.js';
 import { buildContext } from '../src/ai/proposals.js';
 import { createApp } from '../src/app.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
@@ -22,8 +31,7 @@ const ai: AiClient = {
   },
 };
 
-const app = () =>
-  createApp({ store, auth: { mode: 'dev', adminEmails: [] }, clock: () => now, send: async () => {}, ai });
+const app = () => createApp({ store, auth: { mode: 'dev', adminEmails: [] }, clock: () => now, send: async () => {}, ai });
 const call = (method: string, path: string, as: string, body?: unknown) =>
   app().request(path, {
     method,
@@ -197,7 +205,10 @@ describe('projects and item edits', () => {
   });
 
   it('edits project info with before values, only for allowed people', async () => {
-    output = { actions: [action({ kind: 'project_update', projectId: 'P03', pl: 'long@example.com', endDate: '2026-12-20', state: 'paused' })], questions: [] };
+    output = {
+      actions: [action({ kind: 'project_update', projectId: 'P03', pl: 'long@example.com', endDate: '2026-12-20', state: 'paused' })],
+      questions: [],
+    };
     let { proposals } = await parse('cuong');
     expect(proposals[0]).toMatchObject({
       kind: 'project_update',
@@ -212,7 +223,10 @@ describe('projects and item edits', () => {
   it('a project edit with no real change is flagged', async () => {
     output = { actions: [action({ kind: 'project_update', projectId: 'P03' })], questions: [] };
     expect((await parse('cuong')).proposals[0].error).toContain('Không có thay đổi');
-    output = { actions: [action({ kind: 'project_update', projectId: 'P03', pl: 'cuong@example.com', endDate: '2026-12-01' })], questions: [] };
+    output = {
+      actions: [action({ kind: 'project_update', projectId: 'P03', pl: 'cuong@example.com', endDate: '2026-12-01' })],
+      questions: [],
+    };
     expect((await parse('cuong')).proposals[0].body).toEqual({ endDate: '2026-12-01' });
   });
 
@@ -240,5 +254,49 @@ describe('projects and item edits', () => {
     const item = (await store.listItems('P01'))[0];
     output = { actions: [action({ kind: 'item_update', itemId: item.id, date: 'thứ 3' })], questions: [] };
     expect((await parse()).proposals[0].error).toContain('YYYY-MM-DD');
+  });
+});
+
+describe('structured output schema', () => {
+  // The API rejects schemas with more than 16 nullable / union fields, and numeric or length constraints.
+  it('has no union types or unsupported constraints', () => {
+    const bad: string[] = [];
+    const walk = (node: unknown, path: string) => {
+      if (!node || typeof node !== 'object') return;
+      const n = node as Record<string, unknown>;
+      if ('anyOf' in n || 'oneOf' in n || Array.isArray(n.type)) bad.push(`${path}: union`);
+      for (const k of ['minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'minLength', 'maxLength', 'minItems', 'maxItems'])
+        if (k in n) bad.push(`${path}: ${k}`);
+      for (const [k, v] of Object.entries(n)) walk(v, `${path}.${k}`);
+    };
+    walk(OUTPUT_JSON_SCHEMA, '$');
+    expect(bad).toEqual([]);
+  });
+
+  it('maps empty wire values to null', () => {
+    const wire = {
+      questions: [],
+      actions: [
+        {
+          ...Object.fromEntries(Object.keys(wireOutputSchema.shape.actions.element.shape).map((k) => [k, ''])),
+          kind: 'item',
+          projectId: 'P01',
+          itemType: 'issue',
+          title: 'Lỗi',
+          supporters: [],
+          frequencyHours: 0,
+        },
+      ],
+    } as unknown as Parameters<typeof fromWire>[0];
+    const [a] = fromWire(wire).actions;
+    expect(a).toMatchObject({
+      kind: 'item',
+      projectId: 'P01',
+      itemType: 'issue',
+      title: 'Lỗi',
+      health: null,
+      supporters: null,
+      frequencyHours: null,
+    });
   });
 });

@@ -9,8 +9,11 @@ export interface TelegramChat {
 export interface TelegramClient {
   /** Validates a bot token; returns the bot's @username (without @). */
   getMe(token: string): Promise<{ username: string }>;
-  /** Pending updates (Telegram keeps them ~24h); used to find the chat that sent a connect code. */
-  findChatByText(token: string, needle: string): Promise<TelegramChat | undefined>;
+  /**
+   * Pending updates (Telegram keeps them ~24h); used to find the chat that sent a connect code.
+   * `seen` lists the chats the bot received anything from, to explain a miss.
+   */
+  findChatByText(token: string, needle: string): Promise<{ chat?: TelegramChat; seen: string[] }>;
   sendMessage(token: string, chatId: string, html: string): Promise<void>;
 }
 
@@ -43,16 +46,17 @@ export const telegramClient: TelegramClient = {
   async findChatByText(token, needle) {
     const updates = await call<TgUpdate[]>(token, 'getUpdates', { allowed_updates: ['message', 'channel_post'] });
     const want = needle.toLowerCase();
+    const seen = new Set<string>();
     // Newest first, so a re-sent code wins.
     for (const u of [...updates].reverse()) {
       const m = u.message ?? u.channel_post;
-      if (m?.text?.toLowerCase().includes(want)) {
-        const c = m.chat;
-        const title = c.title ?? ([c.first_name, c.last_name].filter(Boolean).join(' ') || c.username || String(c.id));
-        return { id: String(c.id), title };
-      }
+      if (!m) continue;
+      const c = m.chat;
+      const title = c.title ?? ([c.first_name, c.last_name].filter(Boolean).join(' ') || c.username || String(c.id));
+      if (m.text?.toLowerCase().includes(want)) return { chat: { id: String(c.id), title }, seen: [...seen] };
+      seen.add(title);
     }
-    return undefined;
+    return { seen: [...seen] };
   },
   async sendMessage(token, chatId, html) {
     await call(token, 'sendMessage', {

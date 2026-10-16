@@ -4,6 +4,7 @@ import type { Message } from '../src/notify/message.js';
 import { createSender } from '../src/notify/sender.js';
 import { looksLikeBotToken, renderTelegram, type TelegramClient } from '../src/notify/telegram.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
+import { channelFromRow, channelToRow } from '../src/store/dynamo.js';
 import { MemoryStore } from '../src/store/memory.js';
 import { vnToIso } from '../src/time.js';
 import type { Channel } from '../src/types.js';
@@ -23,7 +24,7 @@ const telegram: TelegramClient = {
   },
   async findChatByText(_token, needle) {
     const c = chats.find((m) => m.text.toLowerCase().includes(needle.toLowerCase()));
-    return c && { id: c.id, title: c.title };
+    return { chat: c && { id: c.id, title: c.title }, seen: chats.filter((m) => m !== c).map((m) => m.title) };
   },
   async sendMessage(token, chatId, html) {
     tgSent.push({ token, chatId, html });
@@ -109,7 +110,13 @@ describe('telegram channels', () => {
     await store.putTelegramBot({ token: TOKEN, username: 'du_an_bot' });
     let res = await call('POST', '/channels', 'an', channelBody('PT-ABCD'));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toContain('/connect@du_an_bot PT-ABCD');
+    let error = (await res.json()).error;
+    expect(error).toContain('/connect@du_an_bot PT-ABCD');
+    expect(error).toContain('chưa nhận được tin nào');
+
+    chats.push({ text: 'xin chào', id: '-1009', title: 'Nhóm khác' });
+    error = (await (await call('POST', '/channels', 'an', channelBody('PT-ABCD'))).json()).error;
+    expect(error).toContain('chỉ nhận được tin từ: Nhóm khác');
 
     chats.push({ text: '/connect@du_an_bot pt-abcd', id: '-1001234', title: 'Dự án kho' });
     res = await call('POST', '/channels', 'an', channelBody('PT-ABCD'));
@@ -159,5 +166,33 @@ describe('telegram channels', () => {
     await store.putChannel(ch);
     expect((await call('POST', '/projects/P07/updates', 'long', { health: 'red', summary: 'Đỏ' })).status).toBe(201);
     expect((await store.getChannel('T1'))?.lastError).toContain('Chưa cài bot Telegram');
+  });
+});
+
+describe('dynamo channel rows', () => {
+  const ch: Channel = {
+    id: 'C001',
+    name: 'TG',
+    kind: 'telegram',
+    telegramChatId: '-100',
+    scope: { type: 'all' },
+    events: ['became_red'],
+    quietHours: true,
+    enabled: true,
+    createdBy: 'an@example.com',
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+
+  it('keeps the channel kind apart from the row kind', () => {
+    const row = { ...channelToRow(ch), pk: 'CHANNEL#C001', sk: 'CHANNEL', kind: 'CHANNEL' };
+    expect(channelFromRow(row)).toEqual(ch);
+    expect(channelFromRow({ ...channelToRow({ ...ch, kind: 'teams', telegramChatId: undefined }), kind: 'CHANNEL' }).kind).toBe('teams');
+  });
+
+  it('repairs rows saved before the fix', () => {
+    const { kind: _k, ...old } = ch;
+    expect(channelFromRow({ ...old, pk: 'CHANNEL#C001', sk: 'CHANNEL', kind: 'CHANNEL' }).kind).toBe('telegram');
+    expect(channelFromRow({ ...old, telegramChatId: undefined, webhookUrl: 'https://x', kind: 'CHANNEL' }).kind).toBe('teams');
   });
 });

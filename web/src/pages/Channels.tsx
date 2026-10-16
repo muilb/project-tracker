@@ -129,9 +129,37 @@ function scopeLabel(scope: ChannelScope, name: (id?: string) => string) {
   return 'Tất cả dự án';
 }
 
-function newCode() {
+const CODE_KEY = 'telegram-connect-code';
+const CODE_TTL_MS = 24 * 3600_000; // Telegram keeps undelivered bot updates about 24h
+
+/**
+ * Connect code, kept in localStorage: on phones the browser often reloads the tab
+ * while the user is in the Telegram app, and a new code would no longer match the
+ * line already sent to the group.
+ */
+function connectCode() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CODE_KEY) ?? 'null') as { code: string; at: number } | null;
+    if (saved && Date.now() - saved.at < CODE_TTL_MS) return saved.code;
+  } catch {
+    // storage unavailable: fall through to a fresh code
+  }
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return `PT-${Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => chars[b % chars.length]).join('')}`;
+  const code = `PT-${Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => chars[b % chars.length]).join('')}`;
+  try {
+    localStorage.setItem(CODE_KEY, JSON.stringify({ code, at: Date.now() }));
+  } catch {
+    // ignore
+  }
+  return code;
+}
+
+function forgetConnectCode() {
+  try {
+    localStorage.removeItem(CODE_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 function ChannelForm({
@@ -150,7 +178,7 @@ function ChannelForm({
   const [kind, setKind] = useState<ChannelKind>(channel?.kind ?? 'telegram');
   const [chName, setName] = useState(channel?.name ?? '');
   const [url, setUrl] = useState('');
-  const code = useMemo(newCode, []);
+  const code = useMemo(connectCode, []);
   const [scopeType, setScopeType] = useState<ChannelScope['type']>(channel?.scope.type ?? (me.role === 'GL' ? 'gl' : 'all'));
   const [gl, setGl] = useState(channel?.scope.gl ?? (me.role === 'GL' ? me.id : ''));
   const [picked, setPicked] = useState<string[]>(channel?.scope.projects ?? []);
@@ -173,6 +201,7 @@ function ChannelForm({
       } else {
         const target = kind === 'telegram' ? { connectCode: code } : { webhookUrl: url };
         await api.post('/channels', { kind, name: chName, scope, events, quietHours, ...target });
+        if (kind === 'telegram') forgetConnectCode();
         onSaved(`Đã kết nối "${chName}" — kiểm tra tin thử trong ${KIND_LABEL[kind]}`);
       }
     } catch (err) {

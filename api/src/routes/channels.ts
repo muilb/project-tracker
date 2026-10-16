@@ -57,15 +57,20 @@ channels.post('/', async (c) => {
   if (body.kind === 'telegram') {
     const bot = await store.getTelegramBot();
     if (!bot) throw new HTTPException(400, { message: 'PMO chưa cài bot Telegram (Cài đặt → Telegram)' });
-    let chat;
+    let chat, seen: string[];
     try {
-      chat = await c.get('telegram').findChatByText(bot.token, connectCode!);
+      ({ chat, seen } = await c.get('telegram').findChatByText(bot.token, connectCode!));
     } catch (e) {
       throw new HTTPException(502, { message: `Không đọc được tin nhắn của bot: ${(e as Error).message}` });
     }
     if (!chat)
       throw new HTTPException(400, {
-        message: `Bot chưa nhận được mã ${connectCode}. Kiểm tra đã thêm @${bot.username} vào nhóm và gửi đúng dòng /connect@${bot.username} ${connectCode}, rồi thử lại.`,
+        message:
+          `Bot chưa nhận được mã ${connectCode}. Kiểm tra đã thêm @${bot.username} vào nhóm (xem danh sách thành viên) ` +
+          `rồi mới gửi dòng /connect@${bot.username} ${connectCode}, sau đó thử lại. ` +
+          (seen.length
+            ? `Trong 24 giờ qua bot chỉ nhận được tin từ: ${seen.slice(0, 5).join(', ')}.`
+            : `Trong 24 giờ qua bot chưa nhận được tin nào — bot chưa ở trong nhóm, hoặc tin được gửi trước khi thêm bot.`),
       });
     target = { kind: 'telegram', telegramChatId: chat.id, telegramChatTitle: chat.title };
   } else {

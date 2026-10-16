@@ -30,7 +30,7 @@ const telegram: TelegramClient = process.env.LOCAL_SEND
   ? telegramClient
   : {
       getMe: async () => ({ username: 'local_dev_bot' }),
-      findChatByText: async () => ({ id: '-100123', title: 'Nhóm thử (local)' }),
+      findChatByText: async () => ({ chat: { id: '-100123', title: 'Nhóm thử (local)' }, seen: [] }),
       sendMessage: async (_t, chatId, html) => console.log(`[telegram → ${chatId}]`, html),
     };
 // Real Claude when ANTHROPIC_API_KEY is set (the key is pre-installed as if PMO saved it);

@@ -130,3 +130,8 @@ export interface TelegramBot {
   token: string;
   username: string;
 }
+
+/** Claude API key for the natural-language entry page (a secret, never returned by the API). */
+export interface AiConfig {
+  apiKey: string;
+}

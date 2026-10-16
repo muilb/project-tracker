@@ -93,6 +93,8 @@ Mọi endpoint, trừ `/health` và `/public`, cần header `Authorization: <Cog
 | GET / PUT / DELETE | `/settings/telegram` | Trạng thái bot (`configured`, `username`; ai đăng nhập cũng xem được). Cài token (`PUT { token }`) hoặc gỡ bot: PMO / quản lý |
 | PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, bật / tắt, URL) hoặc xoá: người tạo, PMO / quản lý |
 | POST | `/channels/:id/test` | Gửi tin thử |
+| GET / PUT / DELETE | `/settings/ai` | Trạng thái API key Claude (`configured`, `model`). Cài (`PUT { apiKey }`, được kiểm tra với Claude trước khi lưu) hoặc gỡ: PMO / quản lý. Key không bao giờ được trả về |
+| POST | `/ai/parse` | PL trở lên. Body `{ text }` (≤ 4000 ký tự). Trả về `proposals` (đề xuất `update` / `item` / `item_status`, đã kiểm tra hợp lệ, có `error` nếu không ghi được) và `questions`. **Không ghi gì** — web hiển thị để người dùng sửa / bỏ chọn, rồi tự gọi các endpoint ở trên |
 
 Ví dụ tạo dự án:
 
@@ -109,7 +111,7 @@ POST /projects
 | 1 | API, quy tắc, CDK, CI/CD, seed | Xong |
 | 2 | Web nội bộ (đăng nhập, dashboard, form) và trang public | Xong |
 | 3 | Teams: đăng ký kênh, cảnh báo, tóm tắt 8h sáng | Xong |
-| 4 | Trang nhập bằng AI (Bedrock hoặc Claude API) | |
+| 4 | Trang nhập bằng AI (Claude API, model Haiku 5.5) | Xong |
 
 ## Web
 
@@ -117,6 +119,7 @@ POST /projects
 |---|---|---|
 | `/login` | Mọi người | Đăng nhập, đăng ký, xác nhận email, quên mật khẩu (gọi thẳng Cognito) |
 | `/` Tổng quan | Đã đăng nhập | Ô số liệu, dự án cần chú ý, mốc / sự kiện sắp tới, vấn đề cần xử lý, trễ cập nhật, theo GL. PL / GL / người hỗ trợ mặc định xem "Dự án của tôi", PMO / quản lý xem "Tất cả" |
+| `/ai` Nhập bằng AI | PL trở lên | Viết ghi chú tự do → AI đề xuất cập nhật / vấn đề / sự kiện / đổi trạng thái → sửa, chọn rồi ghi. Cập nhật lưu kèm nguyên văn ghi chú (`rawText`) |
 | `/projects` | Đã đăng nhập | Danh sách, lọc theo tình trạng / phạm vi, tìm kiếm |
 | `/projects/new`, `/projects/:id/edit` | PL trở lên / người có quyền sửa | Form dự án |
 | `/projects/:id` | Đã đăng nhập | Thông tin, form cập nhật nhanh, lịch sử, vấn đề / sự kiện / mốc (thêm, đổi trạng thái) |
@@ -158,3 +161,10 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 
 Teams lỗi không làm thất bại thao tác của người dùng, ví dụ lưu cập nhật vẫn thành công.
 
+
+## Nhập bằng AI
+
+- Gọi Claude API (`claude-haiku-5-5`, effort `low`, structured output theo JSON schema sinh từ zod) trong `api/src/ai/assistant.ts`. Prompt gồm: hôm nay + lịch 3 tuần (để AI tính "thứ 6", "tuần sau"), các dự án chưa đóng và mục đang mở của chúng, danh sách người dùng.
+- AI chỉ **đề xuất**. Mọi thay đổi đi qua REST API thường nên vẫn kiểm tra hợp lệ, phân quyền và bắn cảnh báo (chuyển Đỏ, vấn đề Cao) như nhập tay.
+- API key lưu ở `CONFIG/AI` trong DynamoDB, PMO / quản lý cài ở Cài đặt → AI. Nên đặt giới hạn chi tiêu trên console.anthropic.com. Chi phí Haiku 5.5 rất nhỏ (khoảng vài nghìn token mỗi lần, $0.10 / 1M token vào).
+- Thời gian chờ Claude 12 giây (thử lại 1 lần) để nằm trong giới hạn 30 giây của API Gateway.

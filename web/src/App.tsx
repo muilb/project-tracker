@@ -4,6 +4,7 @@ import { api, setUnauthorizedHandler } from './api';
 import { auth } from './auth';
 import { ErrorBox } from './components/ui';
 import { ROLE_LABEL } from './labels';
+import { AiEntryPage } from './pages/AiEntry';
 import { ChannelsPage } from './pages/Channels';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
@@ -64,6 +65,7 @@ function Authenticated() {
           <Route path="/projects/new" element={<ProjectForm />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
+          <Route path="/ai" element={<AiEntryPage />} />
           <Route path="/channels" element={<ChannelsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
@@ -93,6 +95,7 @@ function usePendingCount(enabled: boolean) {
 
 function Layout({ children }: { children: React.ReactNode }) {
   const { me, isAdmin, canManageUsers } = useSession();
+  const canUseAi = me.role !== 'OTHER';
   const navigate = useNavigate();
   const pendingCount = usePendingCount(canManageUsers);
   return (
@@ -107,6 +110,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               Tổng quan
             </NavLink>
             <NavLink to="/projects">Dự án</NavLink>
+            {canUseAi && <NavLink to="/ai">✦ Nhập bằng AI</NavLink>}
             <NavLink to="/channels">Kênh thông báo</NavLink>
             {canManageUsers && (
               <NavLink to="/users">

@@ -114,6 +114,11 @@ export const createChannelSchema = z
   .refine((b) => b.kind !== 'teams' || !!b.webhookUrl, { message: 'Nhập URL webhook của Teams', path: ['webhookUrl'] })
   .refine((b) => b.kind !== 'telegram' || !!b.connectCode, { message: 'Thiếu mã kết nối Telegram', path: ['connectCode'] });
 
+export const aiKeySchema = z.object({ apiKey: z.string().trim().min(20, 'API key không hợp lệ').max(300) });
+export const aiParseSchema = z.object({
+  text: text(4000).min(1, 'Nhập nội dung cần ghi'),
+});
+
 export const telegramBotSchema = z.object({ token: z.string().trim().min(10).max(200) });
 export const patchChannelSchema = z
   .object({ ...channelFields, quietHours: z.boolean(), enabled: z.boolean() })

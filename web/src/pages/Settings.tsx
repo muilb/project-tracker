@@ -38,6 +38,7 @@ export function SettingsPage() {
   return (
     <div className="stack narrow">
       <h1>Cài đặt</h1>
+      <AiSettings />
       <TelegramSettings />
       <form className="card form" onSubmit={submit}>
         <fieldset>
@@ -164,3 +165,79 @@ function TelegramSettings() {
   );
 }
 
+
+function AiSettings() {
+  const { data, reload } = useApi<{ configured: boolean; model: string }>('/settings/ai');
+  const [apiKey, setApiKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.put('/settings/ai', { apiKey });
+      setApiKey('');
+      reload();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm('Gỡ API key? Trang "Nhập bằng AI" sẽ ngừng hoạt động.')) return;
+    await api.del('/settings/ai').catch((e: Error) => setError(e.message));
+    reload();
+  }
+
+  return (
+    <Section title="AI (Claude)">
+      {data?.configured ? (
+        <div className="form">
+          <div className="info-box">
+            ✓ Đã cài API key, đang dùng model <code>{data.model}</code>. Trang <b>Nhập bằng AI</b> đã sẵn sàng.
+          </div>
+          <ErrorBox error={error} />
+          <div className="actions gap">
+            <button className="btn" onClick={remove}>
+              Gỡ API key
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form className="form" onSubmit={save}>
+          <ol className="howto">
+            <li>
+              Vào <b>console.anthropic.com</b> → <b>Billing</b>: nạp credit (vài USD là đủ dùng lâu với {data?.model ?? 'Haiku'}).
+            </li>
+            <li>
+              <b>API keys</b> → <b>Create key</b>, đặt tên (VD: <i>project-tracker</i>), copy key dạng <code>sk-ant-…</code>.
+            </li>
+            <li>Dán vào ô dưới. Nên đặt giới hạn chi tiêu (Limits) trên console.</li>
+          </ol>
+          <label>
+            API key Claude
+            <input
+              type="password"
+              required
+              autoComplete="off"
+              value={apiKey}
+              placeholder="sk-ant-…"
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <small className="muted">Key được lưu trên máy chủ, không hiển thị lại. Chỉ PMO / quản lý thay hoặc gỡ được.</small>
+          </label>
+          <ErrorBox error={error} />
+          <div className="actions">
+            <button className="btn btn-primary" disabled={busy}>
+              {busy ? 'Đang kiểm tra…' : 'Lưu API key'}
+            </button>
+          </div>
+        </form>
+      )}
+    </Section>
+  );
+}

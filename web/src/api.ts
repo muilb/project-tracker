@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { auth } from './auth';
 import { getConfig } from './config';
+import { l, lang } from './i18n';
 
 export class ApiError extends Error {
   constructor(
@@ -18,7 +19,7 @@ export function setUnauthorizedHandler(fn: () => void) {
 }
 
 async function request<T>(method: string, path: string, body?: unknown, authenticated = true): Promise<T> {
-  const headers: Record<string, string> = { ...(authenticated ? await auth.headers() : {}) };
+  const headers: Record<string, string> = { 'accept-language': lang, ...(authenticated ? await auth.headers() : {}) };
   if (body !== undefined) headers['content-type'] = 'application/json';
   const res = await fetch(getConfig().apiUrl.replace(/\/$/, '') + path, {
     method,
@@ -30,7 +31,7 @@ async function request<T>(method: string, path: string, body?: unknown, authenti
     auth.signOut();
     onUnauthorized();
   }
-  if (!res.ok) throw new ApiError(res.status, json.error ?? json.message ?? `Lỗi ${res.status}`);
+  if (!res.ok) throw new ApiError(res.status, json.error ?? json.message ?? `${l('Lỗi', 'エラー')} ${res.status}`);
   return json as T;
 }
 

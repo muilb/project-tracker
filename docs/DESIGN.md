@@ -71,6 +71,8 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 
 Mọi endpoint, trừ `/health` và `/public`, cần header `Authorization: <Cognito ID token>`.
 
+Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng Nhật, còn lại → tiếng Việt); web luôn gửi ngôn ngữ người dùng đang chọn.
+
 | Method | Path | Mô tả |
 |---|---|---|
 | GET | `/health` | Kiểm tra API còn sống |
@@ -89,9 +91,9 @@ Mọi endpoint, trừ `/health` và `/public`, cần header `Authorization: <Cog
 | POST | `/users/pending/:email/approve` | PMO / MNG: xác nhận tài khoản và đánh dấu email đã xác minh. Body `{ "role"?: … }`; nếu không truyền vai trò thì lấy theo `ADMIN_EMAILS`, không có thì PL |
 | POST | `/users/pending/:email/reject` | PMO / MNG: xoá đăng ký chưa xác nhận |
 | GET / PUT | `/settings` | Tần suất cập nhật và các ngưỡng |
-| GET / POST | `/channels` | Kênh thông báo `kind: teams` (`webhookUrl`) hoặc `kind: telegram` (`connectCode`). Mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được |
+| GET / POST | `/channels` | Kênh thông báo `kind: teams` (`webhookUrl`) hoặc `kind: telegram` (`connectCode`). Mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được. `lang` (`vi` / `ja`) là ngôn ngữ tin gửi vào kênh, mặc định theo ngôn ngữ người tạo |
 | GET / PUT / DELETE | `/settings/telegram` | Trạng thái bot (`configured`, `username`; ai đăng nhập cũng xem được). Cài token (`PUT { token }`) hoặc gỡ bot: PMO / quản lý |
-| PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, bật / tắt, URL) hoặc xoá: người tạo, PMO / quản lý |
+| PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, ngôn ngữ tin `lang`, bật / tắt, URL) hoặc xoá: người tạo, PMO / quản lý |
 | POST | `/channels/:id/test` | Gửi tin thử. Body `{ sample }`: `connect` (mặc định), hoặc mẫu tin thật lấy từ dữ liệu hiện tại trong phạm vi kênh: `became_red`, `high_issue`, `hourly`, `daily_digest`. Tiêu đề có `[Mẫu]`, không đánh dấu đã gửi nên không ảnh hưởng cảnh báo thật |
 | GET / PUT / DELETE | `/settings/ai` | Trạng thái API key Claude (`configured`, `model`). Cài (`PUT { apiKey }`, được kiểm tra với Claude trước khi lưu) hoặc gỡ: PMO / quản lý. Key không bao giờ được trả về |
 | POST | `/ai/parse` | PL trở lên. Body `{ text, projectId? }` (≤ 4000 ký tự; `projectId` = dự án mặc định khi ghi chú không nêu dự án). Không xác định được dự án thì đề xuất vẫn được trả về với `needsProject: true` để người dùng chọn. Trả về `proposals` (đề xuất `update` / `item` / `item_status` / `item_update` / `project_create` / `project_update`, đã kiểm tra hợp lệ, có `error` nếu không ghi được) và `questions`. **Không ghi gì** — web hiển thị để người dùng sửa / bỏ chọn, rồi tự gọi các endpoint ở trên |
@@ -112,6 +114,7 @@ POST /projects
 | 2 | Web nội bộ (đăng nhập, dashboard, form) và trang public | Xong |
 | 3 | Teams: đăng ký kênh, cảnh báo, tóm tắt 8h sáng | Xong |
 | 4 | Trang nhập bằng AI (Claude API, model Haiku 5.5) | Xong |
+| 5 | Giao diện tiếng Nhật (web, lỗi API, tin thông báo theo kênh, hướng dẫn) | Xong |
 
 ## Web
 
@@ -127,6 +130,8 @@ POST /projects
 | `/users` | PMO / MNG | Thêm người dùng trước, đổi vai trò |
 | `/settings` | PMO / SUBMNG / MNG | Tần suất, ngưỡng |
 | `/public` | Mọi người (internet) | Số dự án theo mức khẩn cấp, dự án khẩn cấp / cần chú ý, mốc và sự kiện sắp tới; tự làm mới mỗi phút |
+
+**Ngôn ngữ:** tiếng Việt (mặc định) và tiếng Nhật. Nút `VI / 日本語` ở thanh trên, trang đăng nhập, trang public và hướng dẫn; lựa chọn lưu trong trình duyệt (`localStorage`), lần đầu theo ngôn ngữ trình duyệt. Chuỗi giao diện viết cặp `l('tiếng Việt', '日本語')` (`web/src/i18n.ts`); đổi ngôn ngữ thì tải lại trang. Hướng dẫn tiếng Nhật ở `HelpJa.tsx`. Dữ liệu người dùng nhập (tên dự án, tình hình…) giữ nguyên ngôn ngữ gốc.
 
 Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.
 
@@ -158,6 +163,8 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 - Một cảnh báo chỉ được đánh dấu "đã gửi" khi Teams nhận thành công. Nếu gửi lỗi thì giờ sau gửi lại, và lỗi được hiện trên trang kênh.
 - Bản ghi chống trùng tự hết hạn nhờ TTL của DynamoDB.
 
+**Ngôn ngữ tin:** mỗi kênh có `lang` (`vi` / `ja`); mọi tin gửi vào kênh (cảnh báo ngay, job mỗi giờ, tóm tắt, tin thử) dùng ngôn ngữ của kênh, không phụ thuộc người thao tác.
+
 **Giờ yên lặng** (22h–7h, tuỳ chọn cho từng kênh) chỉ chặn các tin của job mỗi giờ. Cảnh báo Đỏ và vấn đề Cao vẫn gửi ngay.
 
 Teams lỗi không làm thất bại thao tác của người dùng, ví dụ lưu cập nhật vẫn thành công.
@@ -169,4 +176,5 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 - Dự án mới trong ghi chú có mã tạm `NEW1`, `NEW2`…; web tạo dự án trước, rồi ghi các mục / cập nhật của nó bằng mã thật. Sửa dự án / sửa mục chỉ gửi các trường thực sự thay đổi, kèm giá trị hiện tại để so sánh. Người không có trong danh sách người dùng bị bỏ trống kèm cảnh báo.
 - AI chỉ **đề xuất**. Mọi thay đổi đi qua REST API thường nên vẫn kiểm tra hợp lệ, phân quyền và bắn cảnh báo (chuyển Đỏ, vấn đề Cao) như nhập tay.
 - API key lưu ở `CONFIG/AI` trong DynamoDB, PMO / quản lý cài ở Cài đặt → AI. Nên đặt giới hạn chi tiêu trên console.anthropic.com. Chi phí Haiku 5.5 rất nhỏ (khoảng vài nghìn token mỗi lần, $0.10 / 1M token vào).
+- AI giữ ngôn ngữ của ghi chú (tiếng Việt, tiếng Nhật…) cho tóm tắt / tiêu đề; câu hỏi làm rõ viết theo ngôn ngữ giao diện của người viết.
 - Thời gian chờ Claude 12 giây (thử lại 1 lần) để nằm trong giới hạn 30 giây của API Gateway.

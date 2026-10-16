@@ -6,6 +6,7 @@ import { fmtDateTime, fmtDay } from '../format';
 import { STATE_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { ProjectView } from '../types';
+import { l } from '../i18n';
 
 export function Projects() {
   const { me, name } = useSession();
@@ -28,26 +29,31 @@ export function Projects() {
   return (
     <div className="stack">
       <div className="page-head">
-        <h1>Dự án</h1>
+        <h1>{l('Dự án', 'プロジェクト')}</h1>
         <div className="filters">
-          <input type="search" placeholder="Tìm mã, tên, khách hàng, người…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <select value={state} onChange={(e) => set('state', e.target.value)} aria-label="Tình trạng">
+          <input
+            type="search"
+            placeholder={l('Tìm mã, tên, khách hàng, người…', 'コード・名前・顧客・担当者で検索…')}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <select value={state} onChange={(e) => set('state', e.target.value)} aria-label={l('Tình trạng', '状況')}>
             <option value="active">{STATE_LABEL.active}</option>
             <option value="paused">{STATE_LABEL.paused}</option>
             <option value="closed">{STATE_LABEL.closed}</option>
-            <option value="all">Tất cả</option>
+            <option value="all">{l('Tất cả', 'すべて')}</option>
           </select>
-          <div className="segmented" role="group" aria-label="Phạm vi">
+          <div className="segmented" role="group" aria-label={l('Phạm vi', '対象範囲')}>
             <button className={scope === 'mine' ? 'active' : ''} onClick={() => set('scope', 'mine')}>
-              Của tôi
+              {l('Của tôi', '自分の')}
             </button>
             <button className={scope === 'all' ? 'active' : ''} onClick={() => set('scope', 'all')}>
-              Tất cả
+              {l('Tất cả', 'すべて')}
             </button>
           </div>
           {me.role !== 'OTHER' && (
             <Link className="btn btn-primary" to="/projects/new">
-              ＋ Tạo dự án
+              ＋ {l('Tạo dự án', 'プロジェクト作成')}
             </Link>
           )}
         </div>
@@ -55,21 +61,21 @@ export function Projects() {
       <ErrorBox error={error} />
       <section className="card">
         {loading && !data ? (
-          <p className="loading">Đang tải…</p>
+          <p className="loading">{l('Đang tải…', '読み込み中…')}</p>
         ) : projects.length === 0 ? (
-          <Empty>Không có dự án nào</Empty>
+          <Empty>{l('Không có dự án nào', 'プロジェクトはありません')}</Empty>
         ) : (
           <div className="table-wrap">
             <table className="projects-table">
               <thead>
                 <tr>
-                  <th>Dự án</th>
-                  <th>Trạng thái</th>
+                  <th>{l('Dự án', 'プロジェクト')}</th>
+                  <th>{l('Trạng thái', '状態')}</th>
                   <th>GL / PL</th>
-                  <th>Tình hình mới nhất</th>
-                  <th>Kế tiếp</th>
-                  <th className="num">VĐ mở</th>
-                  <th>Cập nhật cuối</th>
+                  <th>{l('Tình hình mới nhất', '最新の状況')}</th>
+                  <th>{l('Kế tiếp', '次の予定')}</th>
+                  <th className="num">{l('VĐ mở', '未完了の課題')}</th>
+                  <th>{l('Cập nhật cuối', '最終報告')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -90,7 +96,7 @@ export function Projects() {
                       <div className="muted">{name(p.pl)}</div>
                     </td>
                     <td className="summary-cell">
-                      {p.latestUpdate?.summary ?? <span className="muted">Chưa có cập nhật</span>}
+                      {p.latestUpdate?.summary ?? <span className="muted">{l('Chưa có cập nhật', '報告なし')}</span>}
                       <Warnings lateHours={p.lateHours} overdueItems={p.overdueItems} highIssues={p.highIssues} />
                     </td>
                     <td className="nowrap">

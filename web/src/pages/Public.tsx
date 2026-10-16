@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { api, useApi } from '../api';
-import { Empty, ErrorBox, Kpi, Section, TypeIcon, UrgencyBadge } from '../components/ui';
+import { Empty, ErrorBox, Kpi, LangSwitch, Section, TypeIcon, UrgencyBadge } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft } from '../format';
 import { PRIORITY_LABEL, TYPE_LABEL } from '../labels';
 import type { PublicDashboard } from '../types';
+import { l } from '../i18n';
 
 /** Public, read-only status page. Refreshes every minute. */
 export function PublicPage() {
@@ -17,26 +18,33 @@ export function PublicPage() {
     <main className="container stack public">
       <div className="page-head">
         <div>
-          <h1>Tình hình dự án</h1>
-          {data && <p className="muted">Cập nhật lúc {fmtDateTime(data.generatedAt)} · tự làm mới mỗi phút</p>}
+          <h1>{l('Tình hình dự án', 'プロジェクト状況')}</h1>
+          {data && (
+            <p className="muted">
+              {l('Cập nhật lúc', '更新時刻')} {fmtDateTime(data.generatedAt)} · {l('tự làm mới mỗi phút', '1 分ごとに自動更新')}
+            </p>
+          )}
         </div>
-        <a className="btn" href="/login">
-          Đăng nhập
-        </a>
+        <div className="filters">
+          <LangSwitch />
+          <a className="btn" href="/login">
+            {l('Đăng nhập', 'ログイン')}
+          </a>
+        </div>
       </div>
       <ErrorBox error={error} />
       {data && (
         <>
           <div className="kpis">
-            <Kpi label="Dự án đang chạy" value={data.counts.total} />
-            <Kpi label="Khẩn cấp" value={data.counts.critical} tone="red" />
-            <Kpi label="Cần chú ý" value={data.counts.attention} tone="yellow" />
-            <Kpi label="Bình thường" value={data.counts.normal} tone="green" />
+            <Kpi label={l('Dự án đang chạy', '進行中のプロジェクト')} value={data.counts.total} />
+            <Kpi label={l('Khẩn cấp', '緊急')} value={data.counts.critical} tone="red" />
+            <Kpi label={l('Cần chú ý', '要注意')} value={data.counts.attention} tone="yellow" />
+            <Kpi label={l('Bình thường', '通常')} value={data.counts.normal} tone="green" />
           </div>
           <div className="grid-2">
-            <Section title="Dự án khẩn cấp / cần chú ý">
+            <Section title={l('Dự án khẩn cấp / cần chú ý', '緊急 / 要注意のプロジェクト')}>
               {data.projects.length === 0 ? (
-                <Empty>Không có dự án khẩn cấp 🎉</Empty>
+                <Empty>{l('Không có dự án khẩn cấp 🎉', '緊急のプロジェクトはありません 🎉')}</Empty>
               ) : (
                 <ul className="items">
                   {data.projects.map((p) => (
@@ -48,7 +56,7 @@ export function PublicPage() {
                         </b>
                         {p.nextItem && (
                           <small className="muted">
-                            Kế tiếp: {TYPE_LABEL[p.nextItem.type]} {fmtDay(p.nextItem.date)} – {p.nextItem.title}
+                            {l('Kế tiếp', '次の予定')}: {TYPE_LABEL[p.nextItem.type]} {fmtDay(p.nextItem.date)} – {p.nextItem.title}
                           </small>
                         )}
                       </span>
@@ -57,9 +65,9 @@ export function PublicPage() {
                 </ul>
               )}
             </Section>
-            <Section title="Mốc & sự kiện sắp tới">
+            <Section title={l('Mốc & sự kiện sắp tới', '近日のマイルストーン・イベント')}>
               {data.upcoming.length === 0 ? (
-                <Empty>Không có sự kiện sắp tới</Empty>
+                <Empty>{l('Không có sự kiện sắp tới', '近日のイベントはありません')}</Empty>
               ) : (
                 <ul className="items">
                   {data.upcoming.map((i, n) => (
@@ -73,7 +81,7 @@ export function PublicPage() {
                         {i.title}
                         <small className="muted">
                           {i.projectId} · {i.projectName}
-                          {i.priority === 'high' ? ` · ưu tiên ${PRIORITY_LABEL.high.toLowerCase()}` : ''}
+                          {i.priority === 'high' ? ` · ${l('ưu tiên', '優先度')} ${PRIORITY_LABEL.high.toLowerCase()}` : ''}
                         </small>
                       </span>
                     </li>

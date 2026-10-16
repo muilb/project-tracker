@@ -1,3 +1,5 @@
+import type { Lang } from './i18n.js';
+
 // Domain types. Codes are English; the web UI maps them to Vietnamese labels.
 
 export const HEALTHS = ['green', 'yellow', 'red'] as const;
@@ -117,6 +119,7 @@ export interface Channel {
   scope: ChannelScope;
   events: AlertEvent[];
   quietHours: boolean; // no hourly alerts 22:00–07:00 (Vietnam time)
+  lang?: Lang; // language of the messages; Vietnamese when missing
   enabled: boolean;
   createdBy: string;
   createdAt: string;

@@ -1,4 +1,5 @@
 import { can } from '../auth.js';
+import { l, lang } from '../i18n.js';
 import { createItemSchema, createProjectSchema, createUpdateSchema, patchItemSchema, patchProjectSchema } from '../schemas.js';
 import type { Snapshot } from '../store/store.js';
 import { vnDate } from '../time.js';
@@ -36,6 +37,8 @@ export type Proposal = {
   projectId: string;
   projectName?: string;
   needsProject?: boolean;
+  /** `error` is about the project (unknown id): picking another project clears it. */
+  badProject?: boolean;
   /** The project is created by a `project_create` proposal of the same note. */
   newProject?: boolean;
   error?: string;
@@ -70,6 +73,7 @@ export function buildContext(snap: Snapshot, now: Date, me: User, defaultProject
   const lines = [
     `Hôm nay: ${vnDate(now)} (${WEEKDAYS[new Date(vnDate(now)).getUTCDay()]}). Người viết ghi chú: ${me.name} <${me.id}>.`,
     def ? `Dự án mặc định (khi ghi chú không nêu dự án): ${def.id} ${def.name}` : 'Dự án mặc định: không có',
+    `Ngôn ngữ giao diện của người viết: ${lang() === 'ja' ? 'tiếng Nhật' : 'tiếng Việt'}.`,
     '',
     '<lich_3_tuan>',
     calendar(now, 21),
@@ -118,19 +122,19 @@ interface Ctx {
   defaultProjectId?: string;
 }
 
+const NO_CHANGE = () => l('Không có thay đổi nào', '変更はありません');
+
 /** Unknown people would make the POST fail: leave them out and say so. */
 function person(ctx: Ctx, raw: string | null, label: string, warnings: string[]) {
   const id = opt(raw)?.toLowerCase();
   if (!id) return undefined;
   if (ctx.users.has(id)) return id;
-  warnings.push(`Không có người dùng "${raw}" — để trống ${label}`);
+  warnings.push(l(`Không có người dùng "${raw}" — để trống ${label}`, `ユーザー「${raw}」が存在しません — ${label}は空欄にします`));
   return undefined;
 }
 
 function projectFields(a: AiRawAction, ctx: Ctx, warnings: string[]) {
-  const supporters = a.supporters
-    ?.map((s) => person(ctx, s, 'người hỗ trợ', warnings))
-    .filter((s): s is string => !!s);
+  const supporters = a.supporters?.map((s) => person(ctx, s, l('người hỗ trợ', 'サポーター'), warnings)).filter((s): s is string => !!s);
   return defined({
     name: opt(a.name),
     customer: opt(a.customer),
@@ -150,7 +154,7 @@ function itemChanges(a: AiRawAction, ctx: Ctx, warnings: string[]) {
     type: a.itemType ?? undefined,
     date: opt(a.date),
     priority: a.priority ?? undefined,
-    owner: person(ctx, a.owner, 'người phụ trách', warnings),
+    owner: person(ctx, a.owner, l('người phụ trách', '担当者'), warnings),
     status: a.status ?? undefined,
     note: opt(a.note),
   });
@@ -196,17 +200,18 @@ function toProposal(a: AiRawAction, ctx: Ctx): Proposal {
   const newName = ctx.newProjects.get(projectId);
   const onNew = newName !== undefined && (a.kind === 'update' || a.kind === 'item');
   const needsProject = !projectId && (a.kind === 'update' || a.kind === 'item');
+  const badProject = !(project || needsProject || onNew);
   const base = {
     projectId,
     projectName: project?.name ?? (onNew ? newName : undefined),
     needsProject: needsProject || undefined,
     newProject: onNew || undefined,
-    error:
-      project || needsProject || onNew
-        ? undefined
-        : projectId
-          ? `Không tìm thấy dự án ${projectId}`
-          : 'Không xác định được dự án',
+    badProject: badProject || undefined,
+    error: !badProject
+      ? undefined
+      : projectId
+        ? l(`Không tìm thấy dự án ${projectId}`, `プロジェクト ${projectId} が見つかりません`)
+        : l('Không xác định được dự án', 'プロジェクトを特定できません'),
   };
   const check = (res: { success: boolean; error?: Parameters<typeof firstIssue>[0] }, extra?: string) =>
     base.error ?? extra ?? (res.success ? undefined : firstIssue(res.error!));
@@ -221,7 +226,7 @@ function toProposal(a: AiRawAction, ctx: Ctx): Proposal {
       title: a.title?.trim() ?? '',
       priority: a.priority ?? 'medium',
       date: a.date ?? '',
-      owner: person(ctx, a.owner, 'người phụ trách', warnings),
+      owner: person(ctx, a.owner, l('người phụ trách', '担当者'), warnings),
     };
     return done({ ...base, kind: 'item', body, error: check(createItemSchema.safeParse(body)) });
   }
@@ -236,13 +241,25 @@ function toProposal(a: AiRawAction, ctx: Ctx): Proposal {
       before: project ? (pick(project, keys) as Partial<ProjectFields>) : {},
       error: check(
         patchProjectSchema.safeParse(body),
-        !keys.length ? 'Không có thay đổi nào' : project && !allowed ? 'Bạn không có quyền sửa dự án này (chỉ PMO, quản lý, GL / PL của dự án)' : undefined,
+        !keys.length
+          ? NO_CHANGE()
+          : project && !allowed
+            ? l(
+                'Bạn không có quyền sửa dự án này (chỉ PMO, quản lý, GL / PL của dự án)',
+                'このプロジェクトを編集する権限がありません（PMO・管理者・プロジェクトの GL / PL のみ）',
+              )
+            : undefined,
       ),
     });
   }
 
   const itemId = (a.itemId ?? '').trim().toUpperCase();
-  const missing = item ? undefined : `Không tìm thấy mục ${itemId}${projectId ? ` trong ${projectId}` : ''}`;
+  const missing = item
+    ? undefined
+    : l(
+        `Không tìm thấy mục ${itemId}${projectId ? ` trong ${projectId}` : ''}`,
+        `${projectId ? `${projectId} に` : ''}項目 ${itemId} が見つかりません`,
+      );
   if (a.kind === 'item_update') {
     const body = changesOnly(itemChanges(a, ctx, warnings), item);
     const keys = Object.keys(body);
@@ -253,11 +270,18 @@ function toProposal(a: AiRawAction, ctx: Ctx): Proposal {
       itemTitle: item?.title,
       body,
       before: item ? pick(item, keys) : {},
-      error: check(patchItemSchema.safeParse(body), missing ?? (!keys.length ? 'Không có thay đổi nào' : undefined)),
+      error: check(patchItemSchema.safeParse(body), missing ?? (!keys.length ? NO_CHANGE() : undefined)),
     });
   }
   const body = { status: a.status ?? 'done', note: opt(a.note) };
-  return done({ ...base, kind: 'item_status', itemId, itemTitle: item?.title, body, error: check(patchItemSchema.safeParse(body), missing) });
+  return done({
+    ...base,
+    kind: 'item_status',
+    itemId,
+    itemTitle: item?.title,
+    body,
+    error: check(patchItemSchema.safeParse(body), missing),
+  });
 }
 
 export function toProposals(

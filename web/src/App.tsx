@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { api, setUnauthorizedHandler } from './api';
 import { auth } from './auth';
-import { ErrorBox } from './components/ui';
+import { ErrorBox, LangSwitch } from './components/ui';
+import { l } from './i18n';
 import { ROLE_LABEL } from './labels';
 import { AiEntryPage } from './pages/AiEntry';
 import { ChannelsPage } from './pages/Channels';
@@ -56,7 +57,7 @@ function Authenticated() {
 
   if (!auth.isSignedIn()) return <Navigate to="/login" replace />;
   if (error) return <ErrorBox error={error} />;
-  if (!me) return <p className="loading">Đang tải…</p>;
+  if (!me) return <p className="loading">{l('Đang tải…', '読み込み中…')}</p>;
 
   return (
     <SessionProvider me={me}>
@@ -105,32 +106,33 @@ function Layout({ children }: { children: React.ReactNode }) {
       <header className="topbar">
         <div className="topbar-inner">
           <NavLink to="/" className="brand">
-            Theo dõi dự án
+            {l('Theo dõi dự án', 'プロジェクト管理')}
           </NavLink>
           <nav className="nav">
             <NavLink to="/" end>
-              Tổng quan
+              {l('Tổng quan', 'ダッシュボード')}
             </NavLink>
-            <NavLink to="/projects">Dự án</NavLink>
-            {canUseAi && <NavLink to="/ai">✦ Nhập bằng AI</NavLink>}
-            <NavLink to="/channels">Kênh thông báo</NavLink>
+            <NavLink to="/projects">{l('Dự án', 'プロジェクト')}</NavLink>
+            {canUseAi && <NavLink to="/ai">✦ {l('Nhập bằng AI', 'AI入力')}</NavLink>}
+            <NavLink to="/channels">{l('Kênh thông báo', '通知チャネル')}</NavLink>
             {canManageUsers && (
               <NavLink to="/users">
-                Người dùng
+                {l('Người dùng', 'ユーザー')}
                 {pendingCount > 0 && (
-                  <span className="nav-count" title={`${pendingCount} tài khoản chờ duyệt`}>
+                  <span className="nav-count" title={l(`${pendingCount} tài khoản chờ duyệt`, `承認待ちアカウント ${pendingCount}件`)}>
                     {pendingCount}
                   </span>
                 )}
               </NavLink>
             )}
-            {isAdmin && <NavLink to="/settings">Cài đặt</NavLink>}
+            {isAdmin && <NavLink to="/settings">{l('Cài đặt', '設定')}</NavLink>}
             <a href="/public" target="_blank" rel="noreferrer">
-              Trang public ↗
+              {l('Trang public', '公開ページ')} ↗
             </a>
-            <NavLink to="/help">Hướng dẫn</NavLink>
+            <NavLink to="/help">{l('Hướng dẫn', 'ヘルプ')}</NavLink>
           </nav>
           <div className="me">
+            <LangSwitch />
             <span title={me.id}>
               {me.name} · {ROLE_LABEL[me.role]}
             </span>
@@ -141,7 +143,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                 navigate('/login');
               }}
             >
-              Đăng xuất
+              {l('Đăng xuất', 'ログアウト')}
             </button>
           </div>
         </div>

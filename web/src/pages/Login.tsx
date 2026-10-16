@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { AuthError, auth } from '../auth';
-import { ErrorBox } from '../components/ui';
+import { ErrorBox, LangSwitch } from '../components/ui';
+import { l, lang } from '../i18n';
 import { getConfig } from '../config';
 
 type Mode = 'signIn' | 'signUp' | 'confirm' | 'forgot' | 'reset';
@@ -36,7 +37,12 @@ export function Login() {
       if (e instanceof AuthError && e.code === 'UserNotConfirmedException') {
         await auth.resendCode(email).catch(() => {});
         setMode('confirm');
-        setInfo('Tài khoản chưa xác nhận. Mã xác nhận mới đã được gửi tới email của bạn.');
+        setInfo(
+          l(
+            'Tài khoản chưa xác nhận. Mã xác nhận mới đã được gửi tới email của bạn.',
+            'アカウントが未確認です。新しい確認コードをメールで送信しました。',
+          ),
+        );
       } else setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -56,20 +62,20 @@ export function Login() {
       return run(async () => {
         await auth.signUp(email, password, name);
         setMode('confirm');
-        setInfo('Đã gửi mã xác nhận tới email của bạn.');
+        setInfo(l('Đã gửi mã xác nhận tới email của bạn.', '確認コードをメールで送信しました。'));
       });
     if (mode === 'confirm')
       return run(async () => {
         await auth.confirmSignUp(email, code);
         if (password) return signIn();
         setMode('signIn');
-        setInfo('Xác nhận thành công, mời đăng nhập.');
+        setInfo(l('Xác nhận thành công, mời đăng nhập.', '確認が完了しました。ログインしてください。'));
       });
     if (mode === 'forgot')
       return run(async () => {
         await auth.forgotPassword(email);
         setMode('reset');
-        setInfo('Đã gửi mã đặt lại mật khẩu tới email của bạn.');
+        setInfo(l('Đã gửi mã đặt lại mật khẩu tới email của bạn.', 'パスワード再設定コードをメールで送信しました。'));
       });
     return run(async () => {
       await auth.confirmForgotPassword(email, code, password);
@@ -78,22 +84,27 @@ export function Login() {
   }
 
   const titles: Record<Mode, string> = {
-    signIn: 'Đăng nhập',
-    signUp: 'Đăng ký tài khoản',
-    confirm: 'Xác nhận email',
-    forgot: 'Quên mật khẩu',
-    reset: 'Đặt lại mật khẩu',
+    signIn: l('Đăng nhập', 'ログイン'),
+    signUp: l('Đăng ký tài khoản', '新規登録'),
+    confirm: l('Xác nhận email', 'メール確認'),
+    forgot: l('Quên mật khẩu', 'パスワードを忘れた場合'),
+    reset: l('Đặt lại mật khẩu', 'パスワード再設定'),
   };
 
   return (
     <div className="auth-page">
       <form className="card auth-card" onSubmit={submit}>
-        <h1>Theo dõi dự án</h1>
+        <h1>{l('Theo dõi dự án', 'プロジェクト管理')}</h1>
         <h2>{titles[mode]}</h2>
 
         {dev ? (
           <>
-            <p className="muted">Chế độ chạy trên máy: chọn một người dùng mẫu hoặc nhập email.</p>
+            <p className="muted">
+              {l(
+                'Chế độ chạy trên máy: chọn một người dùng mẫu hoặc nhập email.',
+                'ローカル実行モード：サンプルユーザーを選ぶか、メールを入力してください。',
+              )}
+            </p>
             <div className="sample-users">
               {SAMPLE_USERS.map(([e, label]) => (
                 <button type="button" key={e} className="btn" onClick={() => signIn(e)}>
@@ -107,8 +118,17 @@ export function Login() {
         {info && <div className="info-box">{info}</div>}
         {mode === 'confirm' && (
           <p className="muted">
-            Không nhận được email (kể cả trong Spam)? Báo PMO duyệt tài khoản của bạn trên trang Người dùng, sau đó quay lại{' '}
-            <b>Đăng nhập</b> bằng email và mật khẩu vừa đặt.
+            {lang === 'ja' ? (
+              <>
+                メールが届かない場合（迷惑メールも確認）は、PMO に「ユーザー」画面でアカウントを承認してもらい、設定したメールとパスワードで
+                <b>ログイン</b>してください。
+              </>
+            ) : (
+              <>
+                Không nhận được email (kể cả trong Spam)? Báo PMO duyệt tài khoản của bạn trên trang Người dùng, sau đó quay lại{' '}
+                <b>Đăng nhập</b> bằng email và mật khẩu vừa đặt.
+              </>
+            )}
           </p>
         )}
         <ErrorBox error={error} />
@@ -119,19 +139,19 @@ export function Login() {
         </label>
         {mode === 'signUp' && (
           <label>
-            Họ tên
+            {l('Họ tên', '氏名')}
             <input required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
         )}
         {(mode === 'confirm' || mode === 'reset') && (
           <label>
-            Mã xác nhận (trong email)
+            {l('Mã xác nhận (trong email)', '確認コード（メール記載）')}
             <input required inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
           </label>
         )}
         {!dev && (mode === 'signIn' || mode === 'signUp' || mode === 'reset') && (
           <label>
-            {mode === 'reset' ? 'Mật khẩu mới' : 'Mật khẩu'}
+            {mode === 'reset' ? l('Mật khẩu mới', '新しいパスワード') : l('Mật khẩu', 'パスワード')}
             <input
               type="password"
               required
@@ -140,12 +160,14 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            {mode !== 'signIn' && <small className="muted">Tối thiểu 8 ký tự, gồm chữ thường và số</small>}
+            {mode !== 'signIn' && (
+              <small className="muted">{l('Tối thiểu 8 ký tự, gồm chữ thường và số', '8 文字以上、英小文字と数字を含む')}</small>
+            )}
           </label>
         )}
 
         <button className="btn btn-primary" disabled={busy}>
-          {busy ? 'Đang xử lý…' : titles[mode]}
+          {busy ? l('Đang xử lý…', '処理中…') : titles[mode]}
         </button>
 
         {!dev && (
@@ -153,32 +175,39 @@ export function Login() {
             {mode === 'signIn' ? (
               <>
                 <button type="button" className="btn-link" onClick={() => setMode('signUp')}>
-                  Đăng ký tài khoản
+                  {l('Đăng ký tài khoản', '新規登録')}
                 </button>
                 <button type="button" className="btn-link" onClick={() => setMode('forgot')}>
-                  Quên mật khẩu?
+                  {l('Quên mật khẩu?', 'パスワードを忘れた場合')}
                 </button>
               </>
             ) : (
               <>
                 {mode === 'confirm' && (
-                  <button type="button" className="btn-link" onClick={() => run(() => auth.resendCode(email).then(() => setInfo('Đã gửi lại mã.')))}>
-                    Gửi lại mã
+                  <button
+                    type="button"
+                    className="btn-link"
+                    onClick={() => run(() => auth.resendCode(email).then(() => setInfo(l('Đã gửi lại mã.', 'コードを再送信しました。'))))}
+                  >
+                    {l('Gửi lại mã', 'コードを再送信')}
                   </button>
                 )}
                 <button type="button" className="btn-link" onClick={() => setMode('signIn')}>
-                  ← Quay lại đăng nhập
+                  ← {l('Quay lại đăng nhập', 'ログインに戻る')}
                 </button>
               </>
             )}
           </div>
         )}
         <a className="btn-link public-link" href="/help">
-          Người mới? Xem hướng dẫn sử dụng →
+          {l('Người mới? Xem hướng dẫn sử dụng →', '初めての方へ：利用ガイドを見る →')}
         </a>
         <a className="btn-link public-link" href="/public">
-          Xem trang tình hình dự án (public) →
+          {l('Xem trang tình hình dự án (public) →', 'プロジェクト状況（公開ページ）を見る →')}
         </a>
+        <div className="auth-lang">
+          <LangSwitch />
+        </div>
       </form>
     </div>
   );

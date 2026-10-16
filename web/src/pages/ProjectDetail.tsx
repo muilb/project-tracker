@@ -7,13 +7,14 @@ import { fmtDateTime, fmtDay, fmtDaysLeft, todayVN } from '../format';
 import { HEALTH_LABEL, ITEM_STATUS_LABEL, PRIORITY_LABEL, ROLE_LABEL, STATE_LABEL, TYPE_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { ItemView, ProjectDetail } from '../types';
+import { l } from '../i18n';
 
 export function ProjectDetailPage() {
   const { id } = useParams();
   const { me, name, isAdmin } = useSession();
   const { data, error, reload } = useApi<ProjectDetail>(`/projects/${id}`);
   if (error) return <ErrorBox error={error} />;
-  if (!data) return <p className="loading">Đang tải…</p>;
+  if (!data) return <p className="loading">{l('Đang tải…', '読み込み中…')}</p>;
   const p = data.project;
   const canEdit = isAdmin || p.gl === me.id || p.pl === me.id;
 
@@ -22,7 +23,7 @@ export function ProjectDetailPage() {
       <div className="page-head">
         <div>
           <Link to="/projects" className="muted">
-            ← Dự án
+            ← {l('Dự án', 'プロジェクト')}
           </Link>
           <h1>
             {p.id} · {p.name}
@@ -31,47 +32,54 @@ export function ProjectDetailPage() {
             <HealthBadge health={p.health} />
             <UrgencyBadge urgency={p.urgency} />
             {p.state !== 'active' && <span className="badge">{STATE_LABEL[p.state]}</span>}
-            {!p.publicVisible && <span className="badge">Ẩn khỏi trang public</span>}
+            {!p.publicVisible && <span className="badge">{l('Ẩn khỏi trang public', '公開ページに非表示')}</span>}
           </div>
         </div>
         {canEdit && (
           <Link className="btn" to={`/projects/${p.id}/edit`}>
-            Sửa dự án
+            {l('Sửa dự án', 'プロジェクト編集')}
           </Link>
         )}
       </div>
 
       <section className="card">
         <dl className="facts">
-          <Fact label="Khách hàng">{p.customer || '—'}</Fact>
+          <Fact label={l('Khách hàng', '顧客')}>{p.customer || '—'}</Fact>
           <Fact label="GL">{name(p.gl)}</Fact>
           <Fact label="PL">{name(p.pl)}</Fact>
-          <Fact label="Người hỗ trợ">{p.supporters.map(name).join(', ') || '—'}</Fact>
-          <Fact label="PMO theo dõi">{name(p.pmo)}</Fact>
-          <Fact label="Thời gian">
+          <Fact label={l('Người hỗ trợ', 'サポーター')}>{p.supporters.map(name).join(', ') || '—'}</Fact>
+          <Fact label={l('PMO theo dõi', '担当 PMO')}>{name(p.pmo)}</Fact>
+          <Fact label={l('Thời gian', '期間')}>
             {fmtDay(p.startDate, false)} → {fmtDay(p.endDate, false)}
           </Fact>
-          <Fact label="Trạng thái PL/GL khai">{p.declaredHealth ? HEALTH_LABEL[p.declaredHealth] : '—'}</Fact>
-          <Fact label="PMO đánh giá">{p.pmoHealth ? HEALTH_LABEL[p.pmoHealth] : '—'}</Fact>
-          <Fact label="Tần suất cập nhật">
-            {p.frequencyHours} giờ{p.updateFrequencyHours ? ' (riêng)' : ''}
+          <Fact label={l('Trạng thái PL/GL khai', 'PL/GL申告の状態')}>{p.declaredHealth ? HEALTH_LABEL[p.declaredHealth] : '—'}</Fact>
+          <Fact label={l('PMO đánh giá', 'PMO評価')}>{p.pmoHealth ? HEALTH_LABEL[p.pmoHealth] : '—'}</Fact>
+          <Fact label={l('Tần suất cập nhật', '報告頻度')}>
+            {p.frequencyHours}
+            {l(' giờ', '時間')}
+            {p.updateFrequencyHours ? l(' (riêng)', '（個別設定）') : ''}
           </Fact>
-          <Fact label="Hạn cập nhật">{fmtDateTime(p.dueAt)}</Fact>
+          <Fact label={l('Hạn cập nhật', '報告期限')}>{fmtDateTime(p.dueAt)}</Fact>
         </dl>
         <Warnings lateHours={p.lateHours} overdueItems={p.overdueItems} highIssues={p.highIssues} />
-        {p.lastOwnerUpdate?.needHelp && <p className="help">🙋 Cần hỗ trợ: {p.lastOwnerUpdate.needHelp}</p>}
+        {p.lastOwnerUpdate?.needHelp && (
+          <p className="help">
+            🙋 {l('Cần hỗ trợ', '支援依頼')}: {p.lastOwnerUpdate.needHelp}
+          </p>
+        )}
         {p.managerComment && (
           <p className="help">
-            💬 Ý kiến quản lý ({name(p.managerComment.author)}, {fmtDateTime(p.managerComment.at)}): {p.managerComment.summary}
+            💬 {l('Ý kiến quản lý', 'マネージャーのコメント')} ({name(p.managerComment.author)}, {fmtDateTime(p.managerComment.at)}):{' '}
+            {p.managerComment.summary}
           </p>
         )}
       </section>
 
       <div className="grid-2">
         <UpdateForm projectId={p.id} defaultHealth={p.declaredHealth ?? p.health} onDone={reload} />
-        <Section title="Lịch sử cập nhật">
+        <Section title={l('Lịch sử cập nhật', '報告履歴')}>
           {data.updates.length === 0 ? (
-            <Empty>Chưa có cập nhật</Empty>
+            <Empty>{l('Chưa có cập nhật', '報告はまだありません')}</Empty>
           ) : (
             <ul className="history">
               {data.updates.map((u) => (
@@ -129,10 +137,10 @@ function UpdateForm({ projectId, defaultHealth, onDone }: { projectId: string; d
   }
 
   return (
-    <Section title="Cập nhật tình hình">
+    <Section title={l('Cập nhật tình hình', '状況報告')}>
       <form className="form" onSubmit={submit}>
         <fieldset className="health-pick">
-          <legend>Trạng thái</legend>
+          <legend>{l('Trạng thái', '状態')}</legend>
           {(['green', 'yellow', 'red'] as Health[]).map((h) => (
             <label key={h} className={`pick tone-${h} ${health === h ? 'picked' : ''}`}>
               <input type="radio" name="health" value={h} checked={health === h} onChange={() => setHealth(h)} />
@@ -141,16 +149,16 @@ function UpdateForm({ projectId, defaultHealth, onDone }: { projectId: string; d
           ))}
         </fieldset>
         <label>
-          Tình hình (1–3 dòng)
+          {l('Tình hình (1–3 dòng)', '状況（1〜3 行）')}
           <textarea required rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} />
         </label>
         <label>
-          Cần hỗ trợ / chỉ đạo (nếu có)
+          {l('Cần hỗ trợ / chỉ đạo (nếu có)', '支援依頼 / 指示が必要なこと（任意）')}
           <input value={needHelp} onChange={(e) => setNeedHelp(e.target.value)} />
         </label>
         <ErrorBox error={error} />
         <button className="btn btn-primary" disabled={busy}>
-          {busy ? 'Đang lưu…' : 'Lưu cập nhật'}
+          {busy ? l('Đang lưu…', '保存中…') : l('Lưu cập nhật', '報告を保存')}
         </button>
       </form>
     </Section>
@@ -176,14 +184,15 @@ function Items({ projectId, items, onChange }: { projectId: string; items: ItemV
 
   return (
     <Section
-      title="Vấn đề · Sự kiện · Mốc"
+      title={l('Vấn đề · Sự kiện · Mốc', '課題・イベント・マイルストーン')}
       extra={
         <div className="filters">
           <label className="check">
-            <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} /> Hiện mục đã xong / hoãn
+            <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />{' '}
+            {l('Hiện mục đã xong / hoãn', '完了 / 保留の項目も表示')}
           </label>
           <button className="btn btn-primary" onClick={() => setAdding((a) => !a)}>
-            {adding ? 'Đóng' : '＋ Thêm'}
+            {adding ? l('Đóng', '閉じる') : l('＋ Thêm', '＋ 追加')}
           </button>
         </div>
       }
@@ -200,18 +209,18 @@ function Items({ projectId, items, onChange }: { projectId: string; items: ItemV
       )}
       <ErrorBox error={error} />
       {shown.length === 0 ? (
-        <Empty>Không có mục nào</Empty>
+        <Empty>{l('Không có mục nào', '項目はありません')}</Empty>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Loại</th>
-                <th>Nội dung</th>
-                <th>Ưu tiên</th>
-                <th>Ngày</th>
-                <th>Phụ trách</th>
-                <th>Trạng thái</th>
+                <th>{l('Loại', '種類')}</th>
+                <th>{l('Nội dung', '内容')}</th>
+                <th>{l('Ưu tiên', '優先度')}</th>
+                <th>{l('Ngày', '日付')}</th>
+                <th>{l('Phụ trách', '担当者')}</th>
+                <th>{l('Trạng thái', 'ステータス')}</th>
               </tr>
             </thead>
             <tbody>
@@ -231,7 +240,11 @@ function Items({ projectId, items, onChange }: { projectId: string; items: ItemV
                   </td>
                   <td>{name(i.owner)}</td>
                   <td>
-                    <select value={i.status} onChange={(e) => patch(i, { status: e.target.value as ItemStatus })} aria-label="Trạng thái">
+                    <select
+                      value={i.status}
+                      onChange={(e) => patch(i, { status: e.target.value as ItemStatus })}
+                      aria-label={l('Trạng thái', 'ステータス')}
+                    >
                       {Object.entries(ITEM_STATUS_LABEL).map(([k, v]) => (
                         <option key={k} value={k}>
                           {v}
@@ -276,7 +289,7 @@ function ItemForm({ projectId, users, onDone }: { projectId: string; users: { id
   return (
     <form className="form inline-form" onSubmit={submit}>
       <label>
-        Loại
+        {l('Loại', '種類')}
         <select value={type} onChange={(e) => setType(e.target.value as ItemType)}>
           {Object.entries(TYPE_LABEL).map(([k, v]) => (
             <option key={k} value={k}>
@@ -286,11 +299,11 @@ function ItemForm({ projectId, users, onDone }: { projectId: string; users: { id
         </select>
       </label>
       <label className="grow">
-        Nội dung
+        {l('Nội dung', '内容')}
         <input required value={title} onChange={(e) => setTitle(e.target.value)} />
       </label>
       <label>
-        Ưu tiên
+        {l('Ưu tiên', '優先度')}
         <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
           {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
             <option key={k} value={k}>
@@ -300,11 +313,11 @@ function ItemForm({ projectId, users, onDone }: { projectId: string; users: { id
         </select>
       </label>
       <label>
-        {type === 'issue' ? 'Hạn xử lý' : 'Ngày diễn ra'}
+        {type === 'issue' ? l('Hạn xử lý', '対応期限') : l('Ngày diễn ra', '開催日')}
         <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
       <label>
-        Phụ trách
+        {l('Phụ trách', '担当者')}
         <select value={owner} onChange={(e) => setOwner(e.target.value)}>
           <option value="">—</option>
           {users.map((u) => (
@@ -315,12 +328,12 @@ function ItemForm({ projectId, users, onDone }: { projectId: string; users: { id
         </select>
       </label>
       <label className="grow">
-        Ghi chú
+        {l('Ghi chú', 'メモ')}
         <input value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
       <ErrorBox error={error} />
       <button className="btn btn-primary" disabled={busy}>
-        {busy ? 'Đang lưu…' : 'Thêm'}
+        {busy ? l('Đang lưu…', '保存中…') : l('Thêm', '追加')}
       </button>
     </form>
   );

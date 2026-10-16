@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, useApi } from '../api';
 import { ErrorBox, Section } from '../components/ui';
+import { l, lang } from '../i18n';
+import { HEALTH_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { Settings } from '../types';
 
@@ -17,8 +19,8 @@ export function SettingsPage() {
       .catch((e: Error) => setError(e.message));
   }, []);
 
-  if (!isAdmin) return <ErrorBox error="Chỉ PMO / quản lý mới sửa cài đặt" />;
-  if (!s) return error ? <ErrorBox error={error} /> : <p className="loading">Đang tải…</p>;
+  if (!isAdmin) return <ErrorBox error={l('Chỉ PMO / quản lý mới sửa cài đặt', '設定の変更は PMO / 管理者のみ行えます')} />;
+  if (!s) return error ? <ErrorBox error={error} /> : <p className="loading">{l('Đang tải…', '読み込み中…')}</p>;
 
   const num = (v: string) => Math.max(0, Math.round(Number(v) || 0));
 
@@ -37,16 +39,16 @@ export function SettingsPage() {
 
   return (
     <div className="stack narrow">
-      <h1>Cài đặt</h1>
+      <h1>{l('Cài đặt', '設定')}</h1>
       <AiSettings />
       <TelegramSettings />
       <form className="card form" onSubmit={submit}>
         <fieldset>
-          <legend>Tần suất cập nhật theo trạng thái (giờ)</legend>
+          <legend>{l('Tần suất cập nhật theo trạng thái (giờ)', '状態別の報告頻度（時間）')}</legend>
           <div className="form-grid">
             {(['green', 'yellow', 'red'] as const).map((h) => (
               <label key={h}>
-                {{ green: 'Xanh', yellow: 'Vàng', red: 'Đỏ' }[h]}
+                {HEALTH_LABEL[h]}
                 <input
                   type="number"
                   min={1}
@@ -60,11 +62,11 @@ export function SettingsPage() {
         </fieldset>
         <div className="form-grid">
           <label>
-            Cảnh báo "sắp tới" khi còn ≤ (ngày)
+            {l('Cảnh báo "sắp tới" khi còn ≤ (ngày)', '「間近」と警告する残り日数（≤ 日）')}
             <input type="number" min={0} required value={s.soonDays} onChange={(e) => setS({ ...s, soonDays: num(e.target.value) })} />
           </label>
           <label>
-            Tần suất khi mốc / sự kiện sắp tới (giờ)
+            {l('Tần suất khi mốc / sự kiện sắp tới (giờ)', 'マイルストーン / イベント間近の報告頻度（時間）')}
             <input
               type="number"
               min={1}
@@ -74,14 +76,20 @@ export function SettingsPage() {
             />
           </label>
           <label>
-            Danh sách "sắp tới" trên dashboard (ngày)
-            <input type="number" min={1} required value={s.upcomingDays} onChange={(e) => setS({ ...s, upcomingDays: num(e.target.value) })} />
+            {l('Danh sách "sắp tới" trên dashboard (ngày)', 'ダッシュボードの「近日」一覧（日）')}
+            <input
+              type="number"
+              min={1}
+              required
+              value={s.upcomingDays}
+              onChange={(e) => setS({ ...s, upcomingDays: num(e.target.value) })}
+            />
           </label>
         </div>
         <ErrorBox error={error} />
-        {saved && <div className="info-box">Đã lưu.</div>}
+        {saved && <div className="info-box">{l('Đã lưu.', '保存しました。')}</div>}
         <div className="actions">
-          <button className="btn btn-primary">Lưu cài đặt</button>
+          <button className="btn btn-primary">{l('Lưu cài đặt', '設定を保存')}</button>
         </div>
       </form>
     </div>
@@ -110,21 +118,37 @@ function TelegramSettings() {
   }
 
   async function remove() {
-    if (!confirm('Gỡ bot Telegram? Các kênh Telegram sẽ ngừng nhận thông báo.')) return;
+    if (
+      !confirm(
+        l(
+          'Gỡ bot Telegram? Các kênh Telegram sẽ ngừng nhận thông báo.',
+          'Telegram ボットを削除しますか？ Telegram チャネルへの通知が止まります。',
+        ),
+      )
+    )
+      return;
     await api.del('/settings/telegram').catch((e: Error) => setError(e.message));
     reload();
   }
 
   return (
-    <Section title="Bot Telegram">
+    <Section title={l('Bot Telegram', 'Telegram ボット')}>
       {data?.configured ? (
         <div className="form">
           <div className="info-box">
-            ✓ Đang dùng bot <b>@{data.username}</b>. Mọi người đăng ký nhóm Telegram ở trang <b>Kênh thông báo</b>.
+            {lang === 'ja' ? (
+              <>
+                ✓ ボット <b>@{data.username}</b> を使用中です。Telegram グループは各自<b>通知チャネル</b>画面で登録します。
+              </>
+            ) : (
+              <>
+                ✓ Đang dùng bot <b>@{data.username}</b>. Mọi người đăng ký nhóm Telegram ở trang <b>Kênh thông báo</b>.
+              </>
+            )}
           </div>
           <div className="actions gap">
             <button className="btn" onClick={remove}>
-              Gỡ bot
+              {l('Gỡ bot', 'ボットを削除')}
             </button>
           </div>
         </div>
@@ -132,17 +156,43 @@ function TelegramSettings() {
         <form className="form" onSubmit={save}>
           <ol className="howto">
             <li>
-              Mở Telegram, chat với <b>@BotFather</b>, gửi <code>/newbot</code>.
+              {lang === 'ja' ? (
+                <>
+                  Telegram で <b>@BotFather</b> とのチャットを開き、<code>/newbot</code> を送信します。
+                </>
+              ) : (
+                <>
+                  Mở Telegram, chat với <b>@BotFather</b>, gửi <code>/newbot</code>.
+                </>
+              )}
             </li>
             <li>
-              Đặt tên hiển thị (VD: <i>Theo dõi dự án</i>) và username kết thúc bằng <code>bot</code> (VD: <code>brycen_duan_bot</code>).
+              {lang === 'ja' ? (
+                <>
+                  表示名（例: <i>プロジェクト管理</i>）と、<code>bot</code> で終わるユーザー名（例: <code>brycen_duan_bot</code>
+                  ）を決めます。
+                </>
+              ) : (
+                <>
+                  Đặt tên hiển thị (VD: <i>Theo dõi dự án</i>) và username kết thúc bằng <code>bot</code> (VD: <code>brycen_duan_bot</code>
+                  ).
+                </>
+              )}
             </li>
             <li>
-              BotFather trả về <b>token</b> dạng <code>123456789:AA…</code> — dán vào ô dưới.
+              {lang === 'ja' ? (
+                <>
+                  BotFather から <code>123456789:AA…</code> 形式の<b>トークン</b>が届くので、下の欄に貼り付けます。
+                </>
+              ) : (
+                <>
+                  BotFather trả về <b>token</b> dạng <code>123456789:AA…</code> — dán vào ô dưới.
+                </>
+              )}
             </li>
           </ol>
           <label>
-            Token của bot
+            {l('Token của bot', 'ボットのトークン')}
             <input
               type="password"
               required
@@ -151,12 +201,17 @@ function TelegramSettings() {
               placeholder="123456789:AA…"
               onChange={(e) => setToken(e.target.value)}
             />
-            <small className="muted">Token được lưu trên máy chủ, không hiển thị lại. Chỉ PMO / quản lý thay hoặc gỡ được.</small>
+            <small className="muted">
+              {l(
+                'Token được lưu trên máy chủ, không hiển thị lại. Chỉ PMO / quản lý thay hoặc gỡ được.',
+                'トークンはサーバーに保存され、再表示されません。変更・削除は PMO / 管理者のみ行えます。',
+              )}
+            </small>
           </label>
           <ErrorBox error={error} />
           <div className="actions">
             <button className="btn btn-primary" disabled={busy}>
-              {busy ? 'Đang kiểm tra…' : 'Lưu bot'}
+              {busy ? l('Đang kiểm tra…', '確認中…') : l('Lưu bot', 'ボットを保存')}
             </button>
           </div>
         </form>
@@ -164,7 +219,6 @@ function TelegramSettings() {
     </Section>
   );
 }
-
 
 function AiSettings() {
   const { data, reload } = useApi<{ configured: boolean; model: string }>('/settings/ai');
@@ -188,7 +242,8 @@ function AiSettings() {
   }
 
   async function remove() {
-    if (!confirm('Gỡ API key? Trang "Nhập bằng AI" sẽ ngừng hoạt động.')) return;
+    if (!confirm(l('Gỡ API key? Trang "Nhập bằng AI" sẽ ngừng hoạt động.', 'API キーを削除しますか？「AI入力」画面が使えなくなります。')))
+      return;
     await api.del('/settings/ai').catch((e: Error) => setError(e.message));
     reload();
   }
@@ -198,12 +253,20 @@ function AiSettings() {
       {data?.configured ? (
         <div className="form">
           <div className="info-box">
-            ✓ Đã cài API key, đang dùng model <code>{data.model}</code>. Trang <b>Nhập bằng AI</b> đã sẵn sàng.
+            {lang === 'ja' ? (
+              <>
+                ✓ API キー設定済み、モデル <code>{data.model}</code> を使用中です。<b>AI入力</b>画面を利用できます。
+              </>
+            ) : (
+              <>
+                ✓ Đã cài API key, đang dùng model <code>{data.model}</code>. Trang <b>Nhập bằng AI</b> đã sẵn sàng.
+              </>
+            )}
           </div>
           <ErrorBox error={error} />
           <div className="actions gap">
             <button className="btn" onClick={remove}>
-              Gỡ API key
+              {l('Gỡ API key', 'API キーを削除')}
             </button>
           </div>
         </div>
@@ -211,15 +274,38 @@ function AiSettings() {
         <form className="form" onSubmit={save}>
           <ol className="howto">
             <li>
-              Vào <b>console.anthropic.com</b> → <b>Billing</b>: nạp credit (vài USD là đủ dùng lâu với {data?.model ?? 'Haiku'}).
+              {lang === 'ja' ? (
+                <>
+                  <b>console.anthropic.com</b> → <b>Billing</b> でクレジットをチャージします（{data?.model ?? 'Haiku'}{' '}
+                  なら数ドルで長く使えます）。
+                </>
+              ) : (
+                <>
+                  Vào <b>console.anthropic.com</b> → <b>Billing</b>: nạp credit (vài USD là đủ dùng lâu với {data?.model ?? 'Haiku'}).
+                </>
+              )}
             </li>
             <li>
-              <b>API keys</b> → <b>Create key</b>, đặt tên (VD: <i>project-tracker</i>), copy key dạng <code>sk-ant-…</code>.
+              {lang === 'ja' ? (
+                <>
+                  <b>API keys</b> → <b>Create key</b> で名前（例: <i>project-tracker</i>）を付け、<code>sk-ant-…</code>{' '}
+                  形式のキーをコピーします。
+                </>
+              ) : (
+                <>
+                  <b>API keys</b> → <b>Create key</b>, đặt tên (VD: <i>project-tracker</i>), copy key dạng <code>sk-ant-…</code>.
+                </>
+              )}
             </li>
-            <li>Dán vào ô dưới. Nên đặt giới hạn chi tiêu (Limits) trên console.</li>
+            <li>
+              {l(
+                'Dán vào ô dưới. Nên đặt giới hạn chi tiêu (Limits) trên console.',
+                '下の欄に貼り付けます。console で利用上限（Limits）の設定をおすすめします。',
+              )}
+            </li>
           </ol>
           <label>
-            API key Claude
+            {l('API key Claude', 'Claude の API キー')}
             <input
               type="password"
               required
@@ -228,12 +314,17 @@ function AiSettings() {
               placeholder="sk-ant-…"
               onChange={(e) => setApiKey(e.target.value)}
             />
-            <small className="muted">Key được lưu trên máy chủ, không hiển thị lại. Chỉ PMO / quản lý thay hoặc gỡ được.</small>
+            <small className="muted">
+              {l(
+                'Key được lưu trên máy chủ, không hiển thị lại. Chỉ PMO / quản lý thay hoặc gỡ được.',
+                'キーはサーバーに保存され、再表示されません。変更・削除は PMO / 管理者のみ行えます。',
+              )}
+            </small>
           </label>
           <ErrorBox error={error} />
           <div className="actions">
             <button className="btn btn-primary" disabled={busy}>
-              {busy ? 'Đang kiểm tra…' : 'Lưu API key'}
+              {busy ? l('Đang kiểm tra…', '確認中…') : l('Lưu API key', 'API キーを保存')}
             </button>
           </div>
         </form>

@@ -4,6 +4,7 @@ import type { AskMessage } from '../../../api/src/ai/ask';
 import type { AskAnswer } from '../../../api/src/ai/assistant';
 import { api, useApi } from '../api';
 import { ErrorBox } from '../components/ui';
+import { VoiceButton } from '../components/VoiceButton';
 import { l } from '../i18n';
 import type { ProjectView } from '../types';
 
@@ -121,6 +122,7 @@ export function AskPanel() {
           onKeyDown={onKey}
         />
         <div className="actions gap">
+          <VoiceButton value={text} onChange={setText} disabled={busy} />
           {turns.length > 0 && (
             <button
               type="button"

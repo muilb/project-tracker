@@ -100,13 +100,27 @@ function Layout({ children }: { children: React.ReactNode }) {
   const { me, isAdmin, canManageUsers } = useSession();
   const navigate = useNavigate();
   const pendingCount = usePendingCount(canManageUsers);
+  // Phones: the menu folds behind ☰ and closes after each navigation.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname, search } = useLocation();
+  useEffect(() => setMenuOpen(false), [pathname, search]);
   return (
     <>
       <header className="topbar">
-        <div className="topbar-inner">
+        <div className={`topbar-inner${menuOpen ? ' open' : ''}`}>
           <NavLink to="/" className="brand">
             {l('Theo dõi dự án', 'プロジェクト管理')}
           </NavLink>
+          <button
+            type="button"
+            className="menu-toggle"
+            aria-expanded={menuOpen}
+            aria-label={l('Menu', 'メニュー')}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            {menuOpen ? '✕' : '☰'}
+            {!menuOpen && pendingCount > 0 && <span className="nav-count">{pendingCount}</span>}
+          </button>
           <nav className="nav">
             <NavLink to="/" end>
               {l('Tổng quan', 'ダッシュボード')}

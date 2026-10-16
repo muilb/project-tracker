@@ -593,6 +593,7 @@ button:focus-visible {
 }
 .actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
 }
 
@@ -933,4 +934,68 @@ html {
 .chat-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+/* ---- Phone header: menu behind ☰ ---- */
+.menu-toggle {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 0.3rem 0.65rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .menu-toggle {
+    display: inline-flex;
+  }
+  .topbar-inner {
+    padding: 0.5rem 16px;
+  }
+  .topbar-inner .nav,
+  .topbar-inner .me {
+    display: none;
+  }
+  .topbar-inner.open .nav {
+    display: flex;
+    flex-direction: column;
+    flex-basis: 100%;
+    gap: 0;
+  }
+  .topbar-inner.open .nav a {
+    padding: 0.65rem 0.5rem;
+    font-size: 1rem;
+  }
+  .topbar-inner.open .me {
+    display: flex;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 0.6rem 0.5rem 0.25rem;
+    border-top: 1px solid var(--border);
+  }
+  .page-head .segmented {
+    width: 100%;
+  }
+  .page-head .segmented button {
+    flex: 1;
+  }
+}
+
+/* ---- Voice input ---- */
+.voice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-right: auto;
+  min-width: 0;
+}
+.voice-btn.listening {
+  border-color: var(--critical);
+  color: var(--critical);
 }

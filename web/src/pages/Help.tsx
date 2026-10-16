@@ -380,6 +380,10 @@ export function HelpPage() {
           <li>Sửa dự án / sửa mục hiện "Hiện tại: …" cạnh giá trị mới để so sánh.</li>
           <li>⚠ màu đỏ trên thẻ là cảnh báo (ví dụ không tìm thấy người); khung đỏ "Không ghi được" là đề xuất bị chặn.</li>
           <li>Cập nhật tình hình qua AI vẫn lưu kèm nguyên văn ghi chú của bạn.</li>
+          <li>
+            Trên điện thoại có nút <B>🎤 Nói</B> cạnh ô nhập (cả tab Nhập và Hỏi): bấm, nói một câu, chữ hiện vào ô; bấm lại để nói tiếp.
+            Lần đầu trình duyệt hỏi quyền micro — chọn Cho phép. Nếu trình duyệt không hỗ trợ, dùng nút 🎤 trên bàn phím điện thoại.
+          </li>
         </ul>
         <h3>Hỏi về dữ liệu</h3>
         <p>

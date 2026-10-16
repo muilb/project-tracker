@@ -8,7 +8,7 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { DEFAULT_SETTINGS, type AiConfig, type Channel, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
+import { DEFAULT_SETTINGS, type AiConfig, type Channel, type ChannelKind, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
 import { ConflictError, type Snapshot, type Store } from './store.js';
 
 /*
@@ -129,16 +129,17 @@ export class DynamoStore implements Store {
           ExclusiveStartKey: start,
         }),
       );
-      out.push(...(res.Items ?? []).map((i) => strip<Channel>(i)));
+      out.push(...(res.Items ?? []).map((i) => channelFromRow(i)));
       start = res.LastEvaluatedKey;
     } while (start);
     return out;
   }
-  getChannel(id: string) {
-    return this.get<Channel>(`CHANNEL#${id}`, 'CHANNEL');
+  async getChannel(id: string) {
+    const row = await this.get<Record<string, unknown>>(`CHANNEL#${id}`, 'CHANNEL');
+    return row && channelFromRow(row);
   }
   putChannel(channel: Channel) {
-    return this.put(`CHANNEL#${channel.id}`, 'CHANNEL', 'CHANNEL', channel);
+    return this.put(`CHANNEL#${channel.id}`, 'CHANNEL', 'CHANNEL', channelToRow(channel));
   }
   async deleteChannel(id: string) {
     await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: `CHANNEL#${id}`, sk: 'CHANNEL' } }));
@@ -200,6 +201,17 @@ export class DynamoStore implements Store {
     } while (start);
     return snap;
   }
+}
+
+// Every row has a `kind` attribute (row type), so Channel.kind is stored as `channelKind`.
+export function channelToRow({ kind, ...rest }: Channel): Record<string, unknown> {
+  return { ...rest, channelKind: kind };
+}
+export function channelFromRow(row: Record<string, unknown>): Channel {
+  const { channelKind, ...rest } = strip<Record<string, unknown>>(row);
+  // Rows saved before the fix lost their kind; a Telegram channel always has a chat id.
+  const kind = (channelKind as ChannelKind | undefined) ?? (rest.telegramChatId ? 'telegram' : 'teams');
+  return { ...rest, kind } as Channel;
 }
 
 function strip<T>(row: Record<string, unknown>): T {

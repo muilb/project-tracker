@@ -4,6 +4,7 @@ import type { Message } from '../src/notify/message.js';
 import { createSender } from '../src/notify/sender.js';
 import { looksLikeBotToken, renderTelegram, type TelegramClient } from '../src/notify/telegram.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
+import { channelFromRow, channelToRow } from '../src/store/dynamo.js';
 import { MemoryStore } from '../src/store/memory.js';
 import { vnToIso } from '../src/time.js';
 import type { Channel } from '../src/types.js';
@@ -165,5 +166,33 @@ describe('telegram channels', () => {
     await store.putChannel(ch);
     expect((await call('POST', '/projects/P07/updates', 'long', { health: 'red', summary: 'Đỏ' })).status).toBe(201);
     expect((await store.getChannel('T1'))?.lastError).toContain('Chưa cài bot Telegram');
+  });
+});
+
+describe('dynamo channel rows', () => {
+  const ch: Channel = {
+    id: 'C001',
+    name: 'TG',
+    kind: 'telegram',
+    telegramChatId: '-100',
+    scope: { type: 'all' },
+    events: ['became_red'],
+    quietHours: true,
+    enabled: true,
+    createdBy: 'an@example.com',
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+
+  it('keeps the channel kind apart from the row kind', () => {
+    const row = { ...channelToRow(ch), pk: 'CHANNEL#C001', sk: 'CHANNEL', kind: 'CHANNEL' };
+    expect(channelFromRow(row)).toEqual(ch);
+    expect(channelFromRow({ ...channelToRow({ ...ch, kind: 'teams', telegramChatId: undefined }), kind: 'CHANNEL' }).kind).toBe('teams');
+  });
+
+  it('repairs rows saved before the fix', () => {
+    const { kind: _k, ...old } = ch;
+    expect(channelFromRow({ ...old, pk: 'CHANNEL#C001', sk: 'CHANNEL', kind: 'CHANNEL' }).kind).toBe('telegram');
+    expect(channelFromRow({ ...old, telegramChatId: undefined, webhookUrl: 'https://x', kind: 'CHANNEL' }).kind).toBe('teams');
   });
 });

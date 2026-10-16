@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { AskPanel } from './AiAsk';
 import { api, useApi } from '../api';
 import { ErrorBox, Section } from '../components/ui';
+import { VoiceButton } from '../components/VoiceButton';
 import { l, lang } from '../i18n';
 import { HEALTH_LABEL, ITEM_STATUS_LABEL, PRIORITY_LABEL, STATE_LABEL, TYPE_LABEL } from '../labels';
 import { useSession } from '../session';
@@ -245,6 +246,7 @@ function EntryPanel() {
         </label>
         <ErrorBox error={error} />
         <div className="actions gap">
+          <VoiceButton value={text} onChange={setText} disabled={!!busy} />
           {!text && (
             <button type="button" className="btn" onClick={() => setText(EXAMPLE)}>
               {l('Dùng ví dụ', '例を使う')}

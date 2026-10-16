@@ -132,6 +132,8 @@ POST /projects
 | `/settings` | PMO / SUBMNG / MNG | Tần suất, ngưỡng |
 | `/public` | Mọi người (internet) | Số dự án theo mức khẩn cấp, dự án khẩn cấp / cần chú ý, mốc và sự kiện sắp tới; tự làm mới mỗi phút |
 
+**Điện thoại:** dưới 760px, menu thu vào nút ☰ (đóng lại sau mỗi lần chuyển trang). Trang AI có nút 🎤 nhập giọng nói (Web Speech API, `vi-VN` / `ja-JP` theo ngôn ngữ giao diện), chỉ hiện trên thiết bị cảm ứng; trình duyệt không hỗ trợ thì hướng dẫn dùng micro của bàn phím.
+
 **Ngôn ngữ:** tiếng Việt (mặc định) và tiếng Nhật. Nút `VI / 日本語` ở thanh trên, trang đăng nhập, trang public và hướng dẫn; lựa chọn lưu trong trình duyệt (`localStorage`), lần đầu theo ngôn ngữ trình duyệt. Chuỗi giao diện viết cặp `l('tiếng Việt', '日本語')` (`web/src/i18n.ts`); đổi ngôn ngữ thì tải lại trang. Hướng dẫn tiếng Nhật ở `HelpJa.tsx`. Dữ liệu người dùng nhập (tên dự án, tình hình…) giữ nguyên ngôn ngữ gốc.
 
 Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.

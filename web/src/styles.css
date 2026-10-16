@@ -890,3 +890,47 @@ html {
 .help-section {
   scroll-margin-top: 1rem;
 }
+
+/* AI questions */
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.suggestions .btn {
+  text-align: left;
+  white-space: normal;
+}
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.chat-q {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--accent-soft);
+  color: var(--ink);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-a {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.answer p {
+  margin: 0 0 0.5rem;
+}
+.answer ul {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+.answer li {
+  margin: 0.15rem 0;
+}
+.chat-actions {
+  display: flex;
+  justify-content: flex-end;
+}

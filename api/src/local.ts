@@ -34,7 +34,7 @@ const telegram: TelegramClient = process.env.LOCAL_SEND
       sendMessage: async (_t, chatId, html) => console.log(`[telegram → ${chatId}]`, html),
     };
 // Real Claude when ANTHROPIC_API_KEY is set (the key is pre-installed as if PMO saved it);
-// otherwise a fake that turns each "P01 …" sentence into an update.
+// otherwise a fake that turns each "P01 …" sentence into an update and answers questions with the red projects.
 const ai: AiClient = process.env.ANTHROPIC_API_KEY
   ? claudeClient
   : {
@@ -54,6 +54,16 @@ const ai: AiClient = process.env.ANTHROPIC_API_KEY
           ),
           questions: [],
         };
+      },
+      ask: async (_key, context, messages) => {
+        // Echo the question and list the red projects found in the context.
+        const red = context
+          .split('\n### ')
+          .slice(1)
+          .filter((block) => block.includes('Trạng thái: Đỏ'))
+          .map((block) => `- **${block.split('\n')[0]}**`);
+        const q = messages.at(-1)!.content;
+        return { answer: `(AI giả lập) Bạn hỏi: "${q}".\nDự án đang Đỏ:\n${red.join('\n') || '- không có'}`, truncated: false };
       },
     };
 if (process.env.ANTHROPIC_API_KEY) await store.putAiConfig({ apiKey: process.env.ANTHROPIC_API_KEY });

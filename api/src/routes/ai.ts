@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { AI_MODEL, AiError } from '../ai/assistant.js';
+import { buildAskContext } from '../ai/ask.js';
 import { buildContext, toProposals } from '../ai/proposals.js';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
-import { aiKeySchema, aiParseSchema, parseBody } from '../schemas.js';
+import { aiAskSchema, aiKeySchema, aiParseSchema, parseBody } from '../schemas.js';
 
 export const ai = new Hono<AppEnv>();
 
@@ -54,6 +55,24 @@ ai.post('/ai/parse', async (c) => {
   try {
     const out = await c.get('ai').extract(config.apiKey, buildContext(snap, c.get('now'), c.get('user'), projectId), text);
     return c.json(toProposals(out, snap, c.get('user'), projectId));
+  } catch (e) {
+    if (e instanceof AiError) throw new HTTPException(e.status, { message: e.message });
+    throw e;
+  }
+});
+
+/** Read-only questions about the data (every signed-in user sees the same data on the web). */
+ai.post('/ai/ask', async (c) => {
+  const { messages } = await parseBody(c.req, aiAskSchema);
+  const store = c.get('store');
+  const config = await store.getAiConfig();
+  if (!config)
+    throw new HTTPException(400, {
+      message: l('PMO chưa cài API key AI (Cài đặt → AI)', 'PMO が AI の API キーを未設定です（設定 → AI）'),
+    });
+  const context = buildAskContext(await store.snapshot(), c.get('now'));
+  try {
+    return c.json(await c.get('ai').ask(config.apiKey, context, messages));
   } catch (e) {
     if (e instanceof AiError) throw new HTTPException(e.status, { message: e.message });
     throw e;

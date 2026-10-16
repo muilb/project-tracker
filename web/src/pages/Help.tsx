@@ -15,7 +15,7 @@ const SECTIONS: [id: string, title: string][] = [
   ['du-an', '5. Danh sách & chi tiết dự án'],
   ['cap-nhat', '6. Cập nhật tình hình (việc hằng ngày)'],
   ['muc', '7. Vấn đề · Sự kiện · Mốc'],
-  ['ai', '8. Nhập bằng AI'],
+  ['ai', '8. Trợ lý AI: nhập và hỏi'],
   ['tao-du-an', '9. Tạo và sửa dự án'],
   ['thong-bao', '10. Kênh thông báo (Telegram / Teams)'],
   ['public', '11. Trang public'],
@@ -67,7 +67,7 @@ export function HelpPage() {
         <ol className="howto">
           <li>Đăng ký bằng email công ty, đăng nhập.</li>
           <li>
-            Mở dự án của mình → <B>Cập nhật tình hình</B> đúng hạn (hoặc dùng <B>✦ Nhập bằng AI</B> để gõ như nhắn tin).
+            Mở dự án của mình → <B>Cập nhật tình hình</B> đúng hạn (hoặc dùng <B>✦ AI</B> để gõ như nhắn tin).
           </li>
           <li>Ghi lại vấn đề, sự kiện, mốc và đóng chúng khi xong.</li>
         </ol>
@@ -129,7 +129,8 @@ export function HelpPage() {
                 <td>PL</td>
                 <td>Trưởng dự án</td>
                 <td>
-                  Xem tất cả; cập nhật tình hình, thêm / sửa vấn đề, sự kiện, mốc; tạo dự án mới; sửa dự án mình là PL; dùng Nhập bằng AI
+                  Xem tất cả; cập nhật tình hình, thêm / sửa vấn đề, sự kiện, mốc; tạo dự án mới; sửa dự án mình là PL; dùng AI (nhập và
+                  hỏi)
                 </td>
               </tr>
               <tr>
@@ -150,7 +151,10 @@ export function HelpPage() {
               <tr>
                 <td>Hỗ trợ / Khác</td>
                 <td>Thành viên hỗ trợ</td>
-                <td>Xem, cập nhật tình hình thay PL / GL khi được thêm vào "Người hỗ trợ" của dự án. Không tạo dự án, không dùng AI</td>
+                <td>
+                  Xem, cập nhật tình hình thay PL / GL khi được thêm vào "Người hỗ trợ" của dự án. Không tạo dự án; dùng AI chỉ để hỏi,
+                  không nhập
+                </td>
               </tr>
             </tbody>
           </table>
@@ -321,8 +325,12 @@ export function HelpPage() {
 
       <H id="ai">
         <p>
-          Menu <B>✦ Nhập bằng AI</B> (PL trở lên): gõ tình hình như nhắn tin, AI tách thành các thao tác. <b>AI không tự ghi gì</b>: bạn xem
-          từng đề xuất, sửa, bỏ chọn cái không muốn, rồi bấm <B>Ghi … mục đã chọn</B>.
+          Menu <B>✦ AI</B> có hai tab: <B>Nhập dữ liệu</B> (PL trở lên) và <B>Hỏi về dữ liệu</B> (mọi người).
+        </p>
+        <h3>Nhập dữ liệu</h3>
+        <p>
+          Gõ tình hình như nhắn tin, AI tách thành các thao tác. <b>AI không tự ghi gì</b>: bạn xem từng đề xuất, sửa, bỏ chọn cái không
+          muốn, rồi bấm <B>Ghi … mục đã chọn</B>.
         </p>
         <h3>AI làm được</h3>
         <div className="table-wrap">
@@ -372,6 +380,23 @@ export function HelpPage() {
           <li>Sửa dự án / sửa mục hiện "Hiện tại: …" cạnh giá trị mới để so sánh.</li>
           <li>⚠ màu đỏ trên thẻ là cảnh báo (ví dụ không tìm thấy người); khung đỏ "Không ghi được" là đề xuất bị chặn.</li>
           <li>Cập nhật tình hình qua AI vẫn lưu kèm nguyên văn ghi chú của bạn.</li>
+        </ul>
+        <h3>Hỏi về dữ liệu</h3>
+        <p>
+          Tab <B>Hỏi về dữ liệu</B>: hỏi bằng câu bình thường, AI đọc dữ liệu trong hệ thống rồi trả lời. <b>Chỉ đọc</b> — AI không sửa gì.
+          Hỏi tiếp được (VD: "còn P05 thì sao?"); đóng trang hoặc bấm <B>Cuộc hỏi mới</B> là xoá cuộc hỏi.
+        </p>
+        <ul>
+          <li>
+            Ví dụ: "Dự án nào đang Đỏ, vì sao?", "Tuần này có mốc gì?", "P03 hai tuần qua thế nào?", "Viết báo cáo tuần để gửi quản lý".
+          </li>
+          <li>AI thấy các dự án, cập nhật 60 ngày gần nhất, vấn đề / sự kiện / mốc và danh sách người dùng.</li>
+          <li>
+            Mã dự án trong câu trả lời bấm được để mở dự án; nút <B>Copy</B> để chép câu trả lời (VD: dán vào email).
+          </li>
+          <li>
+            AI có thể nhầm; số liệu chính thức xem ở <B>Tổng quan</B>. Muốn ghi / sửa thì dùng tab <B>Nhập dữ liệu</B>.
+          </li>
         </ul>
       </H>
 

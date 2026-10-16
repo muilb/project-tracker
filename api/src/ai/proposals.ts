@@ -57,7 +57,9 @@ const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'T
 const MAX_ITEMS_PER_PROJECT = 30;
 const NEW_REF = /^NEW\d*$/;
 
-function calendar(now: Date, days: number): string {
+export const weekday = (date: string) => WEEKDAYS[new Date(date).getUTCDay()];
+
+export function calendar(now: Date, days: number): string {
   const today = Date.parse(vnDate(now));
   return Array.from({ length: days }, (_, i) => {
     const d = new Date(today + i * 86_400_000);

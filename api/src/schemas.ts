@@ -153,6 +153,19 @@ export const aiParseSchema = z.object({
   projectId: z.string().trim().toUpperCase().max(20).optional(),
 });
 
+export const aiAskSchema = z.object({
+  messages: z
+    .array(z.object({ role: z.enum(['user', 'assistant']), content: text(8000).min(1) }))
+    .min(1)
+    .max(20)
+    .refine((m) => m.every((x, i) => x.role === (i % 2 ? 'assistant' : 'user')) && m.length % 2 === 1, {
+      ...msg(
+        'Hội thoại phải xen kẽ câu hỏi / trả lời và kết thúc bằng câu hỏi',
+        '会話は質問と回答が交互で、最後は質問である必要があります',
+      ),
+    }),
+});
+
 export const testSampleSchema = z.object({ sample: z.enum(TEST_SAMPLES).default('connect') });
 
 export const telegramBotSchema = z.object({ token: z.string().trim().min(10).max(200) });

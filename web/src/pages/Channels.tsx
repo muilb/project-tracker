@@ -4,6 +4,7 @@ import { api, useApi } from '../api';
 import { Empty, ErrorBox, Section } from '../components/ui';
 import { fmtDateTime } from '../format';
 import { useSession } from '../session';
+import type { TestSample } from '../../../api/src/notify/alerts';
 import type { ProjectView } from '../types';
 
 type PublicChannel = Omit<Channel, 'webhookUrl'> & { webhookUrlMasked?: string };
@@ -18,6 +19,42 @@ const EVENT_LABEL: Record<AlertEvent, string> = {
   daily_digest: 'Tóm tắt lúc 8h sáng',
 };
 const KIND_LABEL: Record<ChannelKind, string> = { telegram: 'Telegram', teams: 'Teams' };
+
+const SAMPLE_LABEL: Record<TestSample, string> = {
+  connect: 'Tin kết nối',
+  became_red: 'Mẫu: dự án chuyển Đỏ',
+  high_issue: 'Mẫu: vấn đề ưu tiên Cao',
+  hourly: 'Mẫu: nhắc mỗi giờ',
+  daily_digest: 'Mẫu: tóm tắt 8h sáng',
+};
+
+/** "Gửi thử" with a choice of sample: real alert formats filled with the channel's current data. */
+function TestSender({ onSend }: { onSend: (sample: TestSample) => Promise<void> }) {
+  const [sample, setSample] = useState<TestSample>('connect');
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="test-sender">
+      <select aria-label="Mẫu tin thử" value={sample} onChange={(e) => setSample(e.target.value as TestSample)}>
+        {(Object.keys(SAMPLE_LABEL) as TestSample[]).map((k) => (
+          <option key={k} value={k}>
+            {SAMPLE_LABEL[k]}
+          </option>
+        ))}
+      </select>
+      <button
+        className="btn"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          await onSend(sample);
+          setBusy(false);
+        }}
+      >
+        {busy ? 'Đang gửi…' : 'Gửi thử'}
+      </button>
+    </div>
+  );
+}
 
 export function ChannelsPage() {
   const { data, error, reload } = useApi<{ channels: PublicChannel[] }>('/channels');
@@ -93,9 +130,7 @@ export function ChannelsPage() {
                   {ch.lastError && <div className="warn">⚠ Lỗi gửi gần nhất: {ch.lastError}</div>}
                 </div>
                 <div className="row-side actions-col">
-                  <button className="btn" onClick={() => act(() => api.post(`/channels/${ch.id}/test`, {}), `Đã gửi tin thử tới "${ch.name}"`)}>
-                    Gửi thử
-                  </button>
+                  <TestSender onSend={(sample) => act(() => api.post(`/channels/${ch.id}/test`, { sample }), `Đã gửi "${SAMPLE_LABEL[sample]}" tới "${ch.name}"`)} />
                   <button className="btn" onClick={() => setEditing(ch)}>
                     Sửa
                   </button>

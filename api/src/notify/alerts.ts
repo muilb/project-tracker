@@ -72,12 +72,8 @@ export function testMessage(ch: Pick<Channel, 'name'>, webUrl?: string) {
 
 // ---------- Immediate alerts (sent from the API right after a change) ----------
 
-/** A project's aggregated health turned red. */
-export async function notifyBecameRed(deps: NotifyDeps, now: Date, view: ProjectView, update: Update) {
-  const channels = (await deps.store.listChannels()).filter((c) => wants(c, 'became_red', view));
-  if (!channels.length) return;
-  const name = await names(deps.store);
-  const msg = message({
+function becameRedMessage(deps: NotifyDeps, view: ProjectView, update: Update, name: (id?: string) => string) {
+  return message({
     title: `■ ${view.id} · ${view.name} chuyển sang ĐỎ`,
     tone: 'attention',
     lines: [
@@ -87,15 +83,10 @@ export async function notifyBecameRed(deps: NotifyDeps, now: Date, view: Project
     ],
     link: link(deps, `/projects/${view.id}`, 'Mở dự án'),
   });
-  await Promise.all(channels.map((c) => deliver(deps, c, msg, now)));
 }
 
-/** A new high-priority issue was logged. */
-export async function notifyHighIssue(deps: NotifyDeps, now: Date, project: Project, item: Item) {
-  const channels = (await deps.store.listChannels()).filter((c) => wants(c, 'high_issue', project));
-  if (!channels.length) return;
-  const name = await names(deps.store);
-  const msg = message({
+function highIssueMessage(deps: NotifyDeps, project: Project, item: Item, name: (id?: string) => string) {
+  return message({
     title: `▲ Vấn đề ưu tiên cao mới – ${project.id} · ${project.name}`,
     tone: 'warning',
     lines: [
@@ -105,6 +96,21 @@ export async function notifyHighIssue(deps: NotifyDeps, now: Date, project: Proj
     ],
     link: link(deps, `/projects/${project.id}`, 'Mở dự án'),
   });
+}
+
+/** A project's aggregated health turned red. */
+export async function notifyBecameRed(deps: NotifyDeps, now: Date, view: ProjectView, update: Update) {
+  const channels = (await deps.store.listChannels()).filter((c) => wants(c, 'became_red', view));
+  if (!channels.length) return;
+  const msg = becameRedMessage(deps, view, update, await names(deps.store));
+  await Promise.all(channels.map((c) => deliver(deps, c, msg, now)));
+}
+
+/** A new high-priority issue was logged. */
+export async function notifyHighIssue(deps: NotifyDeps, now: Date, project: Project, item: Item) {
+  const channels = (await deps.store.listChannels()).filter((c) => wants(c, 'high_issue', project));
+  if (!channels.length) return;
+  const msg = highIssueMessage(deps, project, item, await names(deps.store));
   await Promise.all(channels.map((c) => deliver(deps, c, msg, now)));
 }
 
@@ -139,6 +145,12 @@ function collectAlerts(ch: Channel, views: ProjectView[], now: Date, name: (id?:
     }
   }
   return out;
+}
+
+function hourlyMessage(deps: NotifyDeps, pending: Pending[]) {
+  const shown = pending.slice(0, MAX_LINES).map((p) => p.line);
+  if (pending.length > MAX_LINES) shown.push({ text: `… và ${pending.length - MAX_LINES} mục khác`, subtle: true });
+  return message({ title: `🔔 Cần chú ý (${pending.length})`, tone: 'warning', lines: shown, link: link(deps, '/', 'Mở tổng quan') });
 }
 
 function digestMessage(deps: NotifyDeps, ch: Channel, views: ProjectView[], now: Date, name: (id?: string) => string) {
@@ -194,9 +206,7 @@ export async function runHourly(deps: NotifyDeps, now: Date): Promise<{ messages
         if (!(await deps.store.hasSent(`${ch.id}#${p.key}`))) pending.push(p);
       }
       if (pending.length) {
-        const shown = pending.slice(0, MAX_LINES).map((p) => p.line);
-        if (pending.length > MAX_LINES) shown.push({ text: `… và ${pending.length - MAX_LINES} mục khác`, subtle: true });
-        const msg = message({ title: `🔔 Cần chú ý (${pending.length})`, tone: 'warning', lines: shown, link: link(deps, '/', 'Mở tổng quan') });
+        const msg = hourlyMessage(deps, pending);
         // Mark as sent only after a successful delivery, so failures are retried next hour.
         if (await deliver(deps, ch, msg, now)) {
           messages++;
@@ -214,4 +224,53 @@ export async function runHourly(deps: NotifyDeps, now: Date): Promise<{ messages
     }
   }
   return { messages };
+}
+
+// ---------- Samples ("Gửi thử" on the channels page) ----------
+
+export const TEST_SAMPLES = ['connect', 'became_red', 'high_issue', 'hourly', 'daily_digest'] as const;
+export type TestSample = (typeof TEST_SAMPLES)[number];
+
+/**
+ * A preview of a real alert built from the channel's current data, so people can see
+ * what they will receive. Nothing is de-duplicated or marked as sent.
+ */
+export async function sampleMessage(deps: NotifyDeps, ch: Channel, sample: TestSample, now: Date): Promise<Message> {
+  if (sample === 'connect') return testMessage(ch, deps.webUrl);
+  const snap = await deps.store.snapshot();
+  const views = activeProjectViews(snap, now).filter((v) => inScope(ch, v)); // worst first
+  const byId = new Map(snap.users.map((u) => [u.id, u.name]));
+  const name = (id?: string) => (id ? (byId.get(id) ?? id.split('@')[0]) : '—');
+  const note: MessageLine = { text: '🧪 Tin mẫu từ dữ liệu hiện tại — không phải cảnh báo thật.', subtle: true };
+  const mark = (m: Message): Message => ({ ...m, title: `[Mẫu] ${m.title}`, lines: [...m.lines, note] });
+  const empty = (what: string) =>
+    message({ title: `[Mẫu] ${what}`, lines: [{ text: 'Phạm vi của kênh hiện chưa có dữ liệu phù hợp để làm mẫu.' }, note] });
+
+  if (sample === 'became_red') {
+    const v = views[0];
+    if (!v) return empty('Dự án chuyển sang ĐỎ');
+    const update: Update = v.latestUpdate ?? {
+      id: 'sample',
+      projectId: v.id,
+      at: now.toISOString(),
+      author: v.pl ?? '',
+      authorRole: 'PL',
+      summary: 'Chưa có cập nhật',
+    };
+    return mark(becameRedMessage(deps, v, update, name));
+  }
+  if (sample === 'high_issue') {
+    const issues = views.flatMap((v) => v.openItems.filter((i) => i.type === 'issue').map((i) => [v, i] as const));
+    const pick = issues.find(([, i]) => i.priority === 'high') ?? issues[0];
+    if (!pick) return empty('Vấn đề ưu tiên cao mới');
+    return mark(highIssueMessage(deps, pick[0], pick[1], name));
+  }
+  if (sample === 'hourly') {
+    const all: Channel = { ...ch, events: [...ch.events, 'late_update', 'overdue', 'milestone_soon'] };
+    const pending = collectAlerts(all, views, now, name);
+    if (!pending.length) return empty('Cần chú ý');
+    return mark(hourlyMessage(deps, pending));
+  }
+  if (!views.length) return empty('Tóm tắt dự án');
+  return mark(digestMessage(deps, ch, views, now, name));
 }

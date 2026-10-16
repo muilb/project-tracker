@@ -2,9 +2,9 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
-import { deliver, testMessage } from '../notify/alerts.js';
+import { deliver, sampleMessage, testMessage } from '../notify/alerts.js';
 import { isTeamsWebhookUrl, maskUrl } from '../notify/teams.js';
-import { createChannelSchema, parseBody, patchChannelSchema } from '../schemas.js';
+import { createChannelSchema, parseBody, patchChannelSchema, testSampleSchema } from '../schemas.js';
 import type { Channel, User } from '../types.js';
 
 export const channels = new Hono<AppEnv>();
@@ -114,7 +114,10 @@ channels.post('/:id/test', async (c) => {
   const ch = await load(c, c.req.param('id'));
   ensure(canEdit(c.get('user'), ch), 'Chỉ người tạo kênh hoặc PMO / quản lý mới được gửi thử');
   const notify = c.get('notify');
-  const ok = await deliver(notify, ch, testMessage(ch, notify.webUrl), c.get('now'));
+  const parsed = testSampleSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) throw new HTTPException(400, { message: 'Mẫu tin không hợp lệ' });
+  const msg = await sampleMessage(notify, ch, parsed.data.sample, c.get('now'));
+  const ok = await deliver(notify, ch, msg, c.get('now'));
   const saved = (await c.get('store').getChannel(ch.id))!;
   if (!ok) throw new HTTPException(502, { message: `Gửi thử thất bại: ${saved.lastError}` });
   return c.json({ channel: publicChannel(saved) });

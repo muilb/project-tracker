@@ -173,6 +173,9 @@ export function Login() {
             )}
           </div>
         )}
+        <a className="btn-link public-link" href="/help">
+          Người mới? Xem hướng dẫn sử dụng →
+        </a>
         <a className="btn-link public-link" href="/public">
           Xem trang tình hình dự án (public) →
         </a>

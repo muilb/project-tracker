@@ -812,3 +812,56 @@ code {
   width: auto;
   max-width: 100%;
 }
+
+.proposal-project {
+  margin-bottom: 8px;
+}
+.proposal .span-all {
+  grid-column: 1 / -1;
+}
+.proposal-warning {
+  display: block;
+  margin-top: 6px;
+}
+
+/* --- Help --- */
+.help-section h2 {
+  margin-top: 0;
+}
+.help-section h3 {
+  font-size: 1rem;
+  margin: 1rem 0 0.4rem;
+}
+.help-section p,
+.help-intro p {
+  margin: 0.4rem 0;
+}
+.help-toc ol {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  columns: 2 16rem;
+}
+.help-toc li {
+  margin: 0.2rem 0;
+}
+.help-top {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+.ui-label {
+  white-space: nowrap;
+}
+.faq dt {
+  font-weight: 600;
+  margin-top: 0.75rem;
+}
+.faq dd {
+  margin: 0.2rem 0 0;
+}
+html {
+  scroll-behavior: smooth;
+}
+.help-section {
+  scroll-margin-top: 1rem;
+}

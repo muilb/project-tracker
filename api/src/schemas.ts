@@ -118,6 +118,8 @@ export const createChannelSchema = z
 export const aiKeySchema = z.object({ apiKey: z.string().trim().min(20, 'API key không hợp lệ').max(300) });
 export const aiParseSchema = z.object({
   text: text(4000).min(1, 'Nhập nội dung cần ghi'),
+  /** Used when the note does not name a project. */
+  projectId: z.string().trim().toUpperCase().max(20).optional(),
 });
 
 export const testSampleSchema = z.object({ sample: z.enum(TEST_SAMPLES).default('connect') });

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AiClient, AiOutput, AiRawAction } from '../src/ai/assistant.js';
-import { AiError } from '../src/ai/assistant.js';
+import { AiError, blankAction, type AiClient, type AiOutput, type AiRawAction } from '../src/ai/assistant.js';
 import { buildContext } from '../src/ai/proposals.js';
 import { createApp } from '../src/app.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
@@ -32,22 +31,7 @@ const call = (method: string, path: string, as: string, body?: unknown) =>
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-const action = (a: Partial<AiRawAction>): AiRawAction => ({
-  kind: 'update',
-  projectId: 'P01',
-  health: null,
-  summary: null,
-  needHelp: null,
-  itemType: null,
-  title: null,
-  priority: null,
-  date: null,
-  owner: null,
-  itemId: null,
-  status: null,
-  note: null,
-  ...a,
-});
+const action = (a: Partial<AiRawAction>): AiRawAction => blankAction({ kind: 'update', projectId: 'P01', ...a });
 
 beforeEach(async () => {
   store = new MemoryStore();
@@ -115,10 +99,12 @@ describe('POST /ai/parse', () => {
     await store.putAiConfig({ apiKey: KEY });
     await store.putUser({ id: 'sp@example.com', name: 'Sp', role: 'OTHER', createdAt: now.toISOString() });
     expect((await call('POST', '/ai/parse', 'sp', { text: 'x' })).status).toBe(403);
+    const extract = ai.extract;
     ai.extract = async () => {
       throw new AiError('AI đang quá tải', 503);
     };
     const res = await call('POST', '/ai/parse', 'an', { text: 'x' });
+    ai.extract = extract;
     expect(res.status).toBe(503);
   });
 });
@@ -131,5 +117,128 @@ describe('context', () => {
     expect(ctx).toContain('2026-10-12 Thứ 2');
     const done = snap.items.find((i) => i.status === 'done');
     if (done) expect(ctx).not.toContain(done.id + ' [');
+  });
+});
+
+describe('notes without a project', () => {
+  beforeEach(() => store.putAiConfig({ apiKey: KEY }));
+
+  it('keeps the action and asks the user to pick the project', async () => {
+    output = { actions: [action({ kind: 'update', projectId: '', summary: 'Khách đổi yêu cầu' })], questions: [] };
+    const { proposals } = await (await call('POST', '/ai/parse', 'an', { text: 'khách đổi yêu cầu' })).json();
+    expect(proposals[0]).toMatchObject({ projectId: '', needsProject: true, body: { summary: 'Khách đổi yêu cầu' } });
+    expect(proposals[0].error).toBeUndefined();
+  });
+
+  it('uses the default project chosen on the page', async () => {
+    output = { actions: [action({ kind: 'item', projectId: '', itemType: 'event', title: 'Demo', date: '2026-10-16' })], questions: [] };
+    const res = await call('POST', '/ai/parse', 'an', { text: 'thứ 6 demo', projectId: 'p03' });
+    const { proposals } = await res.json();
+    expect(proposals[0]).toMatchObject({ projectId: 'P03', projectName: expect.any(String) });
+    expect(proposals[0].needsProject).toBeUndefined();
+    expect(calls[0].context).toContain('Dự án mặc định (khi ghi chú không nêu dự án): P03');
+  });
+
+  it('finds the project of a status change from the item id', async () => {
+    const item = (await store.listItems('P01'))[0];
+    output = { actions: [action({ kind: 'item_status', projectId: '', itemId: item.id, status: 'done' })], questions: [] };
+    const { proposals } = await (await call('POST', '/ai/parse', 'an', { text: 'xong rồi' })).json();
+    expect(proposals[0]).toMatchObject({ projectId: 'P01', itemTitle: item.title });
+    expect(proposals[0].error).toBeUndefined();
+  });
+
+  it("marks the writer's own projects in the context", async () => {
+    const snap = await store.snapshot();
+    const me = snap.users.find((u) => u.id === 'an@example.com')!;
+    const own = snap.projects.find((p) => p.pl === me.id || p.gl === me.id)!;
+    expect(buildContext(snap, now, me)).toContain(`★ ${own.id} |`);
+  });
+});
+
+describe('projects and item edits', () => {
+  beforeEach(() => store.putAiConfig({ apiKey: KEY }));
+  const parse = async (as = 'an', text = 'x') => (await call('POST', '/ai/parse', as, { text })).json();
+
+  it('creates a new project and links its milestone, created first', async () => {
+    output = {
+      actions: [
+        action({ kind: 'item', projectId: 'NEW1', itemType: 'milestone', title: 'Release', date: '2026-12-15' }),
+        action({
+          kind: 'project_create',
+          projectId: 'NEW1',
+          name: 'Web bán hàng',
+          customer: 'KH ABC',
+          pl: 'an@example.com',
+          gl: 'ghost@example.com',
+          startDate: '2026-11-01',
+          endDate: '2026-12-31',
+        }),
+      ],
+      questions: [],
+    };
+    const { proposals } = await parse();
+    expect(proposals[0]).toMatchObject({
+      kind: 'project_create',
+      projectId: 'NEW1',
+      newProject: true,
+      body: { name: 'Web bán hàng', customer: 'KH ABC', pl: 'an@example.com', startDate: '2026-11-01', endDate: '2026-12-31' },
+    });
+    expect(proposals[0].body.gl).toBeUndefined();
+    expect(proposals[0].warnings[0]).toContain('ghost@example.com');
+    expect(proposals[1]).toMatchObject({ kind: 'item', projectId: 'NEW1', newProject: true, projectName: 'Web bán hàng' });
+    expect(proposals[1].error).toBeUndefined();
+  });
+
+  it('a project without a name cannot be created', async () => {
+    output = { actions: [action({ kind: 'project_create', projectId: '' })], questions: [] };
+    const { proposals } = await parse();
+    expect(proposals[0].projectId).toBe('NEW1');
+    expect(proposals[0].error).toContain('Tên dự án');
+  });
+
+  it('edits project info with before values, only for allowed people', async () => {
+    output = { actions: [action({ kind: 'project_update', projectId: 'P03', pl: 'long@example.com', endDate: '2026-12-20', state: 'paused' })], questions: [] };
+    let { proposals } = await parse('cuong');
+    expect(proposals[0]).toMatchObject({
+      kind: 'project_update',
+      body: { pl: 'long@example.com', endDate: '2026-12-20', state: 'paused' },
+      before: { pl: 'cuong@example.com', endDate: '2026-11-15', state: 'active' },
+    });
+    expect(proposals[0].error).toBeUndefined();
+    ({ proposals } = await parse('an'));
+    expect(proposals[0].error).toContain('không có quyền');
+  });
+
+  it('a project edit with no real change is flagged', async () => {
+    output = { actions: [action({ kind: 'project_update', projectId: 'P03' })], questions: [] };
+    expect((await parse('cuong')).proposals[0].error).toContain('Không có thay đổi');
+    output = { actions: [action({ kind: 'project_update', projectId: 'P03', pl: 'cuong@example.com', endDate: '2026-12-01' })], questions: [] };
+    expect((await parse('cuong')).proposals[0].body).toEqual({ endDate: '2026-12-01' });
+  });
+
+  it('edits an item: only the changed fields, with before values', async () => {
+    const item = (await store.listItems('P01'))[0];
+    const priority = item.priority === 'high' ? 'low' : 'high';
+    const owner = item.owner === 'hung@example.com' ? 'son@example.com' : 'hung@example.com';
+    output = {
+      actions: [action({ kind: 'item_update', projectId: '', itemId: item.id, date: '2099-01-20', priority, owner, title: item.title })],
+      questions: [],
+    };
+    const { proposals } = await parse();
+    expect(proposals[0]).toMatchObject({
+      kind: 'item_update',
+      projectId: 'P01',
+      itemId: item.id,
+      body: { date: '2099-01-20', priority, owner },
+      before: { date: item.date, priority: item.priority, owner: item.owner },
+    });
+    expect(Object.keys(proposals[0].body)).toEqual(['date', 'priority', 'owner']);
+    expect(proposals[0].error).toBeUndefined();
+  });
+
+  it('flags a bad date on an item edit', async () => {
+    const item = (await store.listItems('P01'))[0];
+    output = { actions: [action({ kind: 'item_update', itemId: item.id, date: 'thứ 3' })], questions: [] };
+    expect((await parse()).proposals[0].error).toContain('YYYY-MM-DD');
   });
 });

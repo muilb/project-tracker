@@ -3,7 +3,7 @@
 //   curl -H 'x-dev-user: lan@example.com' localhost:3001/dashboard
 import { serve } from '@hono/node-server';
 import { MemoryAccounts } from './accounts.js';
-import { claudeClient, type AiClient } from './ai/assistant.js';
+import { blankAction, claudeClient, type AiClient } from './ai/assistant.js';
 import { createApp } from './app.js';
 import type { Message } from './notify/message.js';
 import { createSender } from './notify/sender.js';
@@ -39,24 +39,22 @@ const ai: AiClient = process.env.ANTHROPIC_API_KEY
   ? claudeClient
   : {
       verifyKey: async () => {},
-      extract: async (_key, _ctx, text) => ({
-        actions: [...text.matchAll(/\b(P\d{2})\b[^.\n]*/gi)].map((m) => ({
-          kind: 'update' as const,
-          projectId: m[1],
-          health: /đỏ|red/i.test(m[0]) ? ('red' as const) : /vàng|yellow/i.test(m[0]) ? ('yellow' as const) : null,
-          summary: m[0],
-          needHelp: null,
-          itemType: null,
-          title: null,
-          priority: null,
-          date: null,
-          owner: null,
-          itemId: null,
-          status: null,
-          note: null,
-        })),
-        questions: /\bP\d{2}\b/i.test(text) ? [] : ['(AI giả lập) Ghi chú không nêu mã dự án dạng P01'],
-      }),
+      extract: async (_key, _ctx, text) => {
+        // One update per "P01 …" sentence; a note without a code becomes one update with no project.
+        const found = [...text.matchAll(/\b(P\d{2})\b[^.\n]*/gi)].map((m) => ({ id: m[1], text: m[0] }));
+        const parts = found.length ? found : [{ id: '', text }];
+        return {
+          actions: parts.map((part) =>
+            blankAction({
+              kind: 'update',
+              projectId: part.id,
+              health: /đỏ|red/i.test(part.text) ? 'red' : /vàng|yellow/i.test(part.text) ? 'yellow' : null,
+              summary: part.text,
+            }),
+          ),
+          questions: [],
+        };
+      },
     };
 if (process.env.ANTHROPIC_API_KEY) await store.putAiConfig({ apiKey: process.env.ANTHROPIC_API_KEY });
 const app = createApp({

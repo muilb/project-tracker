@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
+import { AskPanel } from './AiAsk';
 import { api, useApi } from '../api';
 import { ErrorBox, Section } from '../components/ui';
 import { l, lang } from '../i18n';
@@ -41,9 +42,69 @@ function target(p: Proposal): { method: 'post' | 'patch'; path: string } {
   }
 }
 
+type Tab = 'entry' | 'ask';
+
+/** "✦ AI": ask questions about the data (everyone) or enter changes in plain text (PL and above). */
 export function AiEntryPage() {
   const { isAdmin, me } = useSession();
   const status = useApi<{ configured: boolean; model: string }>('/settings/ai');
+  const canEnter = me.role !== 'OTHER';
+  const [params, setParams] = useSearchParams();
+  const tab: Tab = canEnter && params.get('tab') !== 'ask' ? 'entry' : 'ask';
+
+  return (
+    <div className="stack narrow">
+      <div className="page-head">
+        <h1>✦ AI</h1>
+        {canEnter && (
+          <div className="segmented" role="tablist" aria-label="AI">
+            {(['entry', 'ask'] as Tab[]).map((t) => (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={tab === t}
+                className={tab === t ? 'active' : ''}
+                onClick={() => setParams(t === 'ask' ? { tab: 'ask' } : {}, { replace: true })}
+              >
+                {t === 'entry' ? l('Nhập dữ liệu', 'データ入力') : l('Hỏi về dữ liệu', 'データについて質問')}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <ErrorBox error={status.error} />
+      {status.data && !status.data.configured ? <NotConfigured isAdmin={isAdmin} /> : tab === 'ask' ? <AskPanel /> : <EntryPanel />}
+    </div>
+  );
+}
+
+function NotConfigured({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div className="info-box">
+      {isAdmin ? (
+        <>
+          {lang === 'ja' ? (
+            <>
+              Claude の API キーが未設定です。<Link to="/settings">設定 → AI</Link> で追加してください。
+            </>
+          ) : (
+            <>
+              Chưa có API key Claude. Vào <Link to="/settings">Cài đặt → AI</Link> để thêm.
+            </>
+          )}
+        </>
+      ) : (
+        l(
+          'PMO chưa cài API key AI. Nhờ PMO vào Cài đặt → AI để bật tính năng này.',
+          'PMO が AI の API キーを未設定です。PMO に「設定 → AI」で有効にしてもらってください。',
+        )
+      )}
+    </div>
+  );
+}
+
+function EntryPanel() {
+  const { me } = useSession();
   const projectList = useApi<{ projects: ProjectView[] }>('/projects');
   const userList = useApi<{ users: User[] }>('/users');
   const users = userList.data?.users ?? [];
@@ -160,36 +221,8 @@ export function AiEntryPage() {
   const selectedCount = rows?.filter((r) => r.selected).length ?? 0;
   const savedCount = rows?.filter((r) => r.result === 'ok').length ?? 0;
 
-  if (status.data && !status.data.configured)
-    return (
-      <div className="stack narrow">
-        <h1>{l('Nhập bằng AI', 'AI入力')}</h1>
-        <div className="info-box">
-          {isAdmin ? (
-            <>
-              {lang === 'ja' ? (
-                <>
-                  Claude の API キーが未設定です。<Link to="/settings">設定 → AI</Link> で追加してください。
-                </>
-              ) : (
-                <>
-                  Chưa có API key Claude. Vào <Link to="/settings">Cài đặt → AI</Link> để thêm.
-                </>
-              )}
-            </>
-          ) : (
-            l(
-              'PMO chưa cài API key AI. Nhờ PMO vào Cài đặt → AI để bật tính năng này.',
-              'PMO が AI の API キーを未設定です。PMO に「設定 → AI」で有効にしてもらってください。',
-            )
-          )}
-        </div>
-      </div>
-    );
-
   return (
-    <div className="stack narrow">
-      <h1>{l('Nhập bằng AI', 'AI入力')}</h1>
+    <div className="stack">
       <form className="card form" onSubmit={parse}>
         <label>
           {l(
@@ -210,7 +243,7 @@ export function AiEntryPage() {
             ))}
           </select>
         </label>
-        <ErrorBox error={error ?? status.error} />
+        <ErrorBox error={error} />
         <div className="actions gap">
           {!text && (
             <button type="button" className="btn" onClick={() => setText(EXAMPLE)}>

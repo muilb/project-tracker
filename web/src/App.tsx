@@ -98,7 +98,6 @@ function usePendingCount(enabled: boolean) {
 
 function Layout({ children }: { children: React.ReactNode }) {
   const { me, isAdmin, canManageUsers } = useSession();
-  const canUseAi = me.role !== 'OTHER';
   const navigate = useNavigate();
   const pendingCount = usePendingCount(canManageUsers);
   return (
@@ -113,7 +112,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               {l('Tổng quan', 'ダッシュボード')}
             </NavLink>
             <NavLink to="/projects">{l('Dự án', 'プロジェクト')}</NavLink>
-            {canUseAi && <NavLink to="/ai">✦ {l('Nhập bằng AI', 'AI入力')}</NavLink>}
+            <NavLink to="/ai">✦ AI</NavLink>
             <NavLink to="/channels">{l('Kênh thông báo', '通知チャネル')}</NavLink>
             {canManageUsers && (
               <NavLink to="/users">

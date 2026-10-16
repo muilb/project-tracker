@@ -5,6 +5,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { l } from '../i18n.js';
+import { ASK_SYSTEM, type AskMessage } from './ask.js';
 import { HEALTHS, ITEM_STATUSES, ITEM_TYPES, PRIORITIES, PROJECT_STATES } from '../types.js';
 
 export const AI_ACTION_KINDS = ['update', 'item', 'item_status', 'item_update', 'project_create', 'project_update'] as const;
@@ -116,6 +117,14 @@ export interface AiClient {
   /** Throws AiError when the key is rejected. */
   verifyKey(apiKey: string): Promise<void>;
   extract(apiKey: string, context: string, text: string): Promise<AiOutput>;
+  /** Read-only answer over the data in `context`; `messages` ends with the user's question. */
+  ask(apiKey: string, context: string, messages: AskMessage[]): Promise<AskAnswer>;
+}
+
+export interface AskAnswer {
+  answer: string;
+  /** The answer hit the length limit. */
+  truncated: boolean;
 }
 
 const SYSTEM = `Bạn là trợ lý nhập liệu cho hệ thống theo dõi dự án của một công ty phần mềm Việt Nam.
@@ -150,6 +159,11 @@ function mapApiError(e: unknown): never {
   if (e instanceof Anthropic.RateLimitError)
     throw new AiError(
       l('AI đang quá tải hoặc hết hạn mức, thử lại sau ít phút', 'AI が混雑しているか利用上限に達しました。数分後に再試行してください'),
+      503,
+    );
+  if (e instanceof Anthropic.APIConnectionTimeoutError)
+    throw new AiError(
+      l('AI trả lời quá lâu, hãy hỏi cụ thể hơn rồi thử lại', 'AI の応答に時間がかかりすぎました。質問を具体的にして再試行してください'),
       503,
     );
   if (e instanceof Anthropic.APIConnectionError)
@@ -196,5 +210,34 @@ export const claudeClient: AiClient = {
     if (!parsed?.success)
       throw new AiError(l('AI trả về kết quả không đọc được, thử lại', 'AI の応答を読み取れませんでした。再試行してください'), 502);
     return fromWire(parsed.data);
+  },
+
+  async ask(apiKey, context, messages) {
+    // No retry: one attempt has to fit in API Gateway's 30 s.
+    const client = new Anthropic({ apiKey, maxRetries: 0, timeout: 24_000 });
+    let response;
+    try {
+      response = await client.messages.create({
+        model: AI_MODEL,
+        max_tokens: 4000,
+        output_config: { effort: 'low' },
+        // The data block is the same for every follow-up question, so it is cached.
+        system: [
+          { type: 'text', text: ASK_SYSTEM },
+          { type: 'text', text: context, cache_control: { type: 'ephemeral' } },
+        ],
+        messages,
+      });
+    } catch (e) {
+      mapApiError(e);
+    }
+    if (response.stop_reason === 'refusal')
+      throw new AiError(l('AI từ chối trả lời câu hỏi này', 'AI がこの質問への回答を拒否しました'), 400);
+    const answer = response.content
+      .flatMap((b) => (b.type === 'text' ? [b.text] : []))
+      .join('')
+      .trim();
+    if (!answer) throw new AiError(l('AI không trả lời, thử hỏi lại', 'AI から回答がありません。もう一度お試しください'), 502);
+    return { answer, truncated: response.stop_reason === 'max_tokens' };
   },
 };

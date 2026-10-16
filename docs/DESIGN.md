@@ -97,6 +97,7 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | POST | `/channels/:id/test` | Gửi tin thử. Body `{ sample }`: `connect` (mặc định), hoặc mẫu tin thật lấy từ dữ liệu hiện tại trong phạm vi kênh: `became_red`, `high_issue`, `hourly`, `daily_digest`. Tiêu đề có `[Mẫu]`, không đánh dấu đã gửi nên không ảnh hưởng cảnh báo thật |
 | GET / PUT / DELETE | `/settings/ai` | Trạng thái API key Claude (`configured`, `model`). Cài (`PUT { apiKey }`, được kiểm tra với Claude trước khi lưu) hoặc gỡ: PMO / quản lý. Key không bao giờ được trả về |
 | POST | `/ai/parse` | PL trở lên. Body `{ text, projectId? }` (≤ 4000 ký tự; `projectId` = dự án mặc định khi ghi chú không nêu dự án). Không xác định được dự án thì đề xuất vẫn được trả về với `needsProject: true` để người dùng chọn. Trả về `proposals` (đề xuất `update` / `item` / `item_status` / `item_update` / `project_create` / `project_update`, đã kiểm tra hợp lệ, có `error` nếu không ghi được) và `questions`. **Không ghi gì** — web hiển thị để người dùng sửa / bỏ chọn, rồi tự gọi các endpoint ở trên |
+| POST | `/ai/ask` | Mọi người đã đăng nhập. Body `{ messages }`: hội thoại xen kẽ `user` / `assistant`, kết thúc bằng câu hỏi, tối đa 20 tin. Trả về `{ answer, truncated }`. Chỉ đọc |
 
 Ví dụ tạo dự án:
 
@@ -122,7 +123,7 @@ POST /projects
 |---|---|---|
 | `/login` | Mọi người | Đăng nhập, đăng ký, xác nhận email, quên mật khẩu (gọi thẳng Cognito) |
 | `/` Tổng quan | Đã đăng nhập | Ô số liệu, dự án cần chú ý, mốc / sự kiện sắp tới, vấn đề cần xử lý, trễ cập nhật, theo GL. PL / GL / người hỗ trợ mặc định xem "Dự án của tôi", PMO / quản lý xem "Tất cả" |
-| `/ai` Nhập bằng AI | PL trở lên | Viết ghi chú tự do → AI đề xuất cập nhật, thêm / sửa / đổi trạng thái mục, tạo / sửa dự án → sửa, chọn rồi ghi. Cập nhật lưu kèm nguyên văn ghi chú (`rawText`) |
+| `/ai` ✦ AI | Đã đăng nhập (tab Nhập dữ liệu: PL trở lên) | Tab **Hỏi về dữ liệu** (`?tab=ask`): hỏi đáp chỉ đọc, giữ hội thoại trong trang. Tab **Nhập dữ liệu**: viết ghi chú tự do → AI đề xuất cập nhật, thêm / sửa / đổi trạng thái mục, tạo / sửa dự án → sửa, chọn rồi ghi. Cập nhật lưu kèm nguyên văn ghi chú (`rawText`) |
 | `/help` Hướng dẫn | Mọi người (không cần đăng nhập) | Hướng dẫn sử dụng cho người mới: tài khoản, vai trò, trạng thái, cập nhật, mục, AI, dự án, thông báo, trang public, PMO, hỏi đáp. Cập nhật khi giao diện đổi |
 | `/projects` | Đã đăng nhập | Danh sách, lọc theo tình trạng / phạm vi, tìm kiếm |
 | `/projects/new`, `/projects/:id/edit` | PL trở lên / người có quyền sửa | Form dự án |
@@ -178,3 +179,11 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 - API key lưu ở `CONFIG/AI` trong DynamoDB, PMO / quản lý cài ở Cài đặt → AI. Nên đặt giới hạn chi tiêu trên console.anthropic.com. Chi phí Haiku 5.5 rất nhỏ (khoảng vài nghìn token mỗi lần, $0.10 / 1M token vào).
 - AI giữ ngôn ngữ của ghi chú (tiếng Việt, tiếng Nhật…) cho tóm tắt / tiêu đề; câu hỏi làm rõ viết theo ngôn ngữ giao diện của người viết.
 - Thời gian chờ Claude 12 giây (thử lại 1 lần) để nằm trong giới hạn 30 giây của API Gateway.
+
+## Hỏi AI về dữ liệu — `api/src/ai/ask.ts`
+
+- Mỗi câu hỏi gửi kèm toàn bộ bức tranh: lịch 3 tuần, người dùng, mọi dự án (dự án đã đóng chỉ một dòng) với trạng thái, mức khẩn, trễ cập nhật **do hệ thống tính sẵn**, mục đang mở, mục đóng trong 60 ngày, tối đa 15 cập nhật trong 60 ngày. AI không tự tính lại các con số đó.
+- Không có công cụ ghi: endpoint chỉ trả lời văn bản. Dữ liệu người dùng nhập được đánh dấu là dữ liệu, không phải chỉ dẫn.
+- Khối dữ liệu đặt sau prompt hệ thống, có `cache_control`, nên các câu hỏi tiếp trong vài phút đọc từ cache.
+- Một lần gọi, không thử lại, chờ tối đa 24 giây (giới hạn 30 giây của API Gateway). Trả lời tối đa 4000 token; bị cắt thì `truncated: true`.
+- Hội thoại chỉ nằm trong trang web (không lưu); web gửi tối đa 19 tin gần nhất.

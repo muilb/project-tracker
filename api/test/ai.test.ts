@@ -9,6 +9,7 @@ import {
   type AiOutput,
   type AiRawAction,
 } from '../src/ai/assistant.js';
+import { buildAskContext, type AskMessage } from '../src/ai/ask.js';
 import { buildContext } from '../src/ai/proposals.js';
 import { createApp } from '../src/app.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
@@ -21,6 +22,7 @@ const KEY = 'sk-ant-api03-test-key-0123456789abcdef';
 let store: MemoryStore;
 let output: AiOutput;
 let calls: { key: string; context: string; text: string }[];
+let asked: { key: string; context: string; messages: AskMessage[] }[];
 const ai: AiClient = {
   async verifyKey(key) {
     if (key !== KEY) throw new AiError('API key Claude không hợp lệ', 400);
@@ -28,6 +30,10 @@ const ai: AiClient = {
   async extract(key, context, text) {
     calls.push({ key, context, text });
     return output;
+  },
+  async ask(key, context, messages) {
+    asked.push({ key, context, messages });
+    return { answer: 'P03 đang Đỏ.', truncated: false };
   },
 };
 
@@ -45,6 +51,7 @@ beforeEach(async () => {
   store = new MemoryStore();
   await loadSample(store, now);
   calls = [];
+  asked = [];
   output = { actions: [], questions: [] };
 });
 
@@ -298,5 +305,75 @@ describe('structured output schema', () => {
       supporters: null,
       frequencyHours: null,
     });
+  });
+});
+
+describe('AI questions (read-only)', () => {
+  const ask = (as: string, messages: AskMessage[], language?: string) =>
+    app().request('/ai/ask', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-dev-user': `${as}@example.com`,
+        ...(language ? { 'accept-language': language } : {}),
+      },
+      body: JSON.stringify({ messages }),
+    });
+
+  it('needs the AI key', async () => {
+    const res = await ask('an', [{ role: 'user', content: 'Dự án nào đang đỏ?' }]);
+    expect(res.status).toBe(400);
+    expect(asked).toHaveLength(0);
+  });
+
+  it('answers with the data as context, for any signed-in user', async () => {
+    await store.putAiConfig({ apiKey: KEY });
+    const before = JSON.stringify(await store.snapshot());
+    const res = await ask('newcomer', [{ role: 'user', content: 'Dự án nào đang đỏ?' }]);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ answer: 'P03 đang Đỏ.', truncated: false });
+    const { key, context, messages } = asked[0];
+    expect(key).toBe(KEY);
+    expect(messages).toEqual([{ role: 'user', content: 'Dự án nào đang đỏ?' }]);
+    expect(context).toContain('### P03 · Nâng cấp ERP');
+    expect(context).toContain('Trạng thái: Đỏ');
+    expect(context).toContain('UAT chưa bắt đầu'); // latest update summary
+    expect(context).toContain('Cần thêm 1 dev Java'); // needHelp
+    expect(context).toMatch(/TRỄ cập nhật|cập nhật đúng hạn/);
+    expect(context).toContain('Ngôn ngữ giao diện của người hỏi: tiếng Việt');
+    // Read-only: only the new user's own record appears.
+    const after = await store.snapshot();
+    expect(JSON.stringify({ ...after, users: [] })).toBe(JSON.stringify({ ...JSON.parse(before), users: [] }));
+  });
+
+  it('keeps follow-up questions and tells the model the UI language', async () => {
+    await store.putAiConfig({ apiKey: KEY });
+    const messages: AskMessage[] = [
+      { role: 'user', content: 'P03 thế nào?' },
+      { role: 'assistant', content: 'P03 đang Đỏ.' },
+      { role: 'user', content: 'Còn P05?' },
+    ];
+    expect((await ask('an', messages, 'ja')).status).toBe(200);
+    expect(asked[0].messages).toEqual(messages);
+    expect(asked[0].context).toContain('tiếng Nhật');
+  });
+
+  it('rejects a conversation that does not end with a question', async () => {
+    await store.putAiConfig({ apiKey: KEY });
+    const res = await ask('an', [
+      { role: 'user', content: 'P03?' },
+      { role: 'assistant', content: 'Đỏ.' },
+    ]);
+    expect(res.status).toBe(400);
+  });
+
+  it('leaves out old updates and keeps closed projects to one line', async () => {
+    const snap = await store.snapshot();
+    const old = { ...snap.updates[0], id: 'old', at: new Date(now.getTime() - 90 * 86_400_000).toISOString(), summary: 'Cập nhật rất cũ' };
+    const closed = { ...snap.projects[0], id: 'P99', name: 'Dự án đã đóng', state: 'closed' as const };
+    const context = buildAskContext({ ...snap, updates: [...snap.updates, old], projects: [...snap.projects, closed] }, now);
+    expect(context).not.toContain('Cập nhật rất cũ');
+    const block = context.split('\n### ').find((b) => b.startsWith('P99'))!;
+    expect(block.trim().split('\n')).toHaveLength(1);
   });
 });

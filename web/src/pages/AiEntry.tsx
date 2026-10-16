@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { api, useApi } from '../api';
 import { ErrorBox, Section } from '../components/ui';
+import { l, lang } from '../i18n';
 import { HEALTH_LABEL, ITEM_STATUS_LABEL, PRIORITY_LABEL, STATE_LABEL, TYPE_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { ProjectView, Proposal, User } from '../types';
@@ -9,17 +10,20 @@ import type { ProjectView, Proposal, User } from '../types';
 type Row = { p: Proposal; selected: boolean; result?: 'ok' | string };
 type Option = { id: string; label: string };
 
-const EXAMPLE =
+const EXAMPLE = l(
   'P03 tuần này vàng, khách đổi yêu cầu màn hình báo cáo, cần thêm 1 dev từ tuần sau. Thứ 6 demo cho khách. Lỗi đăng nhập của P01 đã xử lý xong.\n' +
-  'Dự án mới: Web bán hàng cho KH ABC, PL An, GL Hùng, chạy từ 1/11 đến 31/12, release 15/12.';
+    'Dự án mới: Web bán hàng cho KH ABC, PL An, GL Hùng, chạy từ 1/11 đến 31/12, release 15/12.',
+  'P03 は今週「黄」。顧客がレポート画面の要件を変更したため、来週から開発者を 1 名追加したい。金曜に顧客デモ。P01 のログイン不具合は対応完了。\n' +
+    '新規プロジェクト: ABC 社向け EC サイト、PL は An さん、GL は Hùng さん、期間 11/1〜12/31、リリース 12/15。',
+);
 
 const KIND_TITLE: Record<Proposal['kind'], string> = {
-  update: 'Cập nhật tình hình',
-  item: 'Thêm mục',
-  item_status: 'Đổi trạng thái',
-  item_update: 'Sửa mục',
-  project_create: 'Tạo dự án mới',
-  project_update: 'Sửa thông tin dự án',
+  update: l('Cập nhật tình hình', '状況報告'),
+  item: l('Thêm mục', '項目追加'),
+  item_status: l('Đổi trạng thái', 'ステータス変更'),
+  item_update: l('Sửa mục', '項目編集'),
+  project_create: l('Tạo dự án mới', '新規プロジェクト作成'),
+  project_update: l('Sửa thông tin dự án', 'プロジェクト情報の編集'),
 };
 
 function target(p: Proposal): { method: 'post' | 'patch'; path: string } {
@@ -36,8 +40,6 @@ function target(p: Proposal): { method: 'post' | 'patch'; path: string } {
       return { method: 'patch', path: `/projects/${p.projectId}/items/${p.itemId}` };
   }
 }
-
-const PROJECT_ERROR = 'Không tìm thấy dự án';
 
 export function AiEntryPage() {
   const { isAdmin, me } = useSession();
@@ -62,7 +64,7 @@ export function AiEntryPage() {
   const projectOptions: Option[] = [
     ...(rows ?? [])
       .filter((r) => r.p.kind === 'project_create' && r.result !== 'ok')
-      .map((r) => ({ id: r.p.projectId, label: `${r.p.projectName || 'Dự án mới'} (mới)` })),
+      .map((r) => ({ id: r.p.projectId, label: `${r.p.projectName || l('Dự án mới', '新規プロジェクト')} ${l('(mới)', '（新規）')}` })),
     ...projects.map((p) => ({ id: p.id, label: `${p.id} · ${p.name}` })),
   ];
 
@@ -92,7 +94,9 @@ export function AiEntryPage() {
     const next = [...rows];
     const created = new Map<string, { id: string; name: string }>(); // NEW1 → the real project
     // New projects first, so the items / updates for them know the real id.
-    const order = next.map((_, i) => i).sort((a, b) => Number(next[b].p.kind === 'project_create') - Number(next[a].p.kind === 'project_create'));
+    const order = next
+      .map((_, i) => i)
+      .sort((a, b) => Number(next[b].p.kind === 'project_create') - Number(next[a].p.kind === 'project_create'));
     for (const i of order) {
       const row = next[i];
       if (!row.selected || row.result === 'ok') continue;
@@ -100,7 +104,13 @@ export function AiEntryPage() {
       if (p.newProject && p.kind !== 'project_create') {
         const real = created.get(p.projectId);
         if (!real) {
-          next[i] = { ...row, result: 'Dự án mới chưa được tạo — chọn cả đề xuất "Tạo dự án mới"' };
+          next[i] = {
+            ...row,
+            result: l(
+              'Dự án mới chưa được tạo — chọn cả đề xuất "Tạo dự án mới"',
+              '新規プロジェクトが作成されていません — 「新規プロジェクト作成」の提案も選択してください',
+            ),
+          };
           continue;
         }
         p = { ...p, projectId: real.id, projectName: real.name, newProject: undefined };
@@ -130,7 +140,7 @@ export function AiEntryPage() {
         if (j !== i) return r;
         const fresh = rs.find((x) => x.p.kind === 'project_create' && x.p.projectId === id);
         // A wrong project from the AI is fixed by picking one; other errors stay.
-        const error = r.p.error?.startsWith(PROJECT_ERROR) ? undefined : r.p.error;
+        const error = r.p.badProject ? undefined : r.p.error;
         return {
           ...r,
           p: {
@@ -139,6 +149,7 @@ export function AiEntryPage() {
             projectName: fresh ? fresh.p.projectName : projects.find((x) => x.id === id)?.name,
             newProject: fresh ? true : undefined,
             needsProject: !id || undefined,
+            badProject: undefined,
             error,
           },
           selected: !!id && !error,
@@ -152,14 +163,25 @@ export function AiEntryPage() {
   if (status.data && !status.data.configured)
     return (
       <div className="stack narrow">
-        <h1>Nhập bằng AI</h1>
+        <h1>{l('Nhập bằng AI', 'AI入力')}</h1>
         <div className="info-box">
           {isAdmin ? (
             <>
-              Chưa có API key Claude. Vào <Link to="/settings">Cài đặt → AI</Link> để thêm.
+              {lang === 'ja' ? (
+                <>
+                  Claude の API キーが未設定です。<Link to="/settings">設定 → AI</Link> で追加してください。
+                </>
+              ) : (
+                <>
+                  Chưa có API key Claude. Vào <Link to="/settings">Cài đặt → AI</Link> để thêm.
+                </>
+              )}
             </>
           ) : (
-            'PMO chưa cài API key AI. Nhờ PMO vào Cài đặt → AI để bật tính năng này.'
+            l(
+              'PMO chưa cài API key AI. Nhờ PMO vào Cài đặt → AI để bật tính năng này.',
+              'PMO が AI の API キーを未設定です。PMO に「設定 → AI」で有効にしてもらってください。',
+            )
           )}
         </div>
       </div>
@@ -167,23 +189,20 @@ export function AiEntryPage() {
 
   return (
     <div className="stack narrow">
-      <h1>Nhập bằng AI</h1>
+      <h1>{l('Nhập bằng AI', 'AI入力')}</h1>
       <form className="card form" onSubmit={parse}>
         <label>
-          Viết như nhắn tin — AI tách thành cập nhật, vấn đề / sự kiện / mốc, sửa mục, tạo hoặc sửa dự án để bạn duyệt trước khi ghi
-          <textarea
-            rows={6}
-            required
-            maxLength={4000}
-            value={text}
-            placeholder={EXAMPLE}
-            onChange={(e) => setText(e.target.value)}
-          />
+          {l(
+            'Viết như nhắn tin — AI tách thành cập nhật, vấn đề / sự kiện / mốc, sửa mục, tạo hoặc sửa dự án để bạn duyệt trước khi ghi',
+            'チャットのように書くだけで、AI が状況報告・課題 / イベント / マイルストーン・項目の編集・プロジェクトの作成 / 編集に分けます。登録前に内容を確認できます',
+          )}
+          <textarea rows={6} required maxLength={4000} value={text} placeholder={EXAMPLE} onChange={(e) => setText(e.target.value)} />
         </label>
         <label>
-          Dự án mặc định <small className="muted">(dùng khi ghi chú không nêu dự án)</small>
+          {l('Dự án mặc định', 'デフォルトプロジェクト')}{' '}
+          <small className="muted">{l('(dùng khi ghi chú không nêu dự án)', '（メモにプロジェクトがない場合に使用）')}</small>
           <select value={defaultProject} onChange={(e) => setDefaultProject(e.target.value)}>
-            <option value="">— AI tự nhận diện —</option>
+            <option value="">{l('— AI tự nhận diện —', '— AI が自動判別 —')}</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.id} · {p.name}
@@ -195,18 +214,18 @@ export function AiEntryPage() {
         <div className="actions gap">
           {!text && (
             <button type="button" className="btn" onClick={() => setText(EXAMPLE)}>
-              Dùng ví dụ
+              {l('Dùng ví dụ', '例を使う')}
             </button>
           )}
           <button className="btn btn-primary" disabled={!!busy}>
-            {busy === 'parse' ? 'AI đang đọc…' : 'Phân tích'}
+            {busy === 'parse' ? l('AI đang đọc…', 'AI が解析中…') : l('Phân tích', '解析')}
           </button>
         </div>
       </form>
 
       {questions.length > 0 && (
         <div className="info-box">
-          <b>AI cần làm rõ:</b>
+          <b>{l('AI cần làm rõ:', 'AI からの確認事項:')}</b>
           <ul>
             {questions.map((q) => (
               <li key={q}>{q}</li>
@@ -216,8 +235,8 @@ export function AiEntryPage() {
       )}
 
       {rows && (
-        <Section title={`Đề xuất (${rows.length})`}>
-          {rows.length === 0 && <p className="muted">Không có gì để ghi.</p>}
+        <Section title={`${l('Đề xuất', '提案')} (${rows.length})`}>
+          {rows.length === 0 && <p className="muted">{l('Không có gì để ghi.', '登録する内容はありません。')}</p>}
           <div className="stack">
             {rows.map((row, i) => (
               <ProposalCard
@@ -233,9 +252,9 @@ export function AiEntryPage() {
           </div>
           {rows.length > 0 && (
             <div className="actions gap">
-              {savedCount > 0 && <span className="muted">Đã ghi {savedCount} mục.</span>}
+              {savedCount > 0 && <span className="muted">{l(`Đã ghi ${savedCount} mục.`, `${savedCount} 件登録しました。`)}</span>}
               <button className="btn btn-primary" disabled={!!busy || selectedCount === 0} onClick={save}>
-                {busy === 'save' ? 'Đang ghi…' : `Ghi ${selectedCount} mục đã chọn`}
+                {busy === 'save' ? l('Đang ghi…', '登録中…') : l(`Ghi ${selectedCount} mục đã chọn`, `選択した ${selectedCount} 件を登録`)}
               </button>
             </div>
           )}
@@ -255,26 +274,26 @@ type FieldDef = {
 };
 
 const PROJECT_FIELDS: FieldDef[] = [
-  { key: 'name', label: 'Tên dự án', kind: 'text' },
-  { key: 'customer', label: 'Khách hàng', kind: 'text' },
+  { key: 'name', label: l('Tên dự án', 'プロジェクト名'), kind: 'text' },
+  { key: 'customer', label: l('Khách hàng', '顧客'), kind: 'text' },
   { key: 'pl', label: 'PL', kind: 'user' },
   { key: 'gl', label: 'GL', kind: 'user' },
-  { key: 'supporters', label: 'Người hỗ trợ', kind: 'users' },
-  { key: 'startDate', label: 'Bắt đầu', kind: 'date' },
-  { key: 'endDate', label: 'Kết thúc', kind: 'date' },
-  { key: 'state', label: 'Trạng thái dự án', kind: 'select', options: STATE_LABEL },
-  { key: 'updateFrequencyHours', label: 'Tần suất cập nhật (giờ)', kind: 'number' },
+  { key: 'supporters', label: l('Người hỗ trợ', 'サポーター'), kind: 'users' },
+  { key: 'startDate', label: l('Bắt đầu', '開始日'), kind: 'date' },
+  { key: 'endDate', label: l('Kết thúc', '終了日'), kind: 'date' },
+  { key: 'state', label: l('Trạng thái dự án', 'プロジェクトの状況'), kind: 'select', options: STATE_LABEL },
+  { key: 'updateFrequencyHours', label: l('Tần suất cập nhật (giờ)', '報告頻度（時間）'), kind: 'number' },
 ];
 const NEW_PROJECT_KEYS = ['name', 'customer', 'pl', 'gl', 'supporters', 'startDate', 'endDate'];
 
 const ITEM_FIELDS: FieldDef[] = [
-  { key: 'title', label: 'Nội dung', kind: 'text' },
-  { key: 'type', label: 'Loại', kind: 'select', options: TYPE_LABEL },
-  { key: 'date', label: 'Ngày / hạn xử lý', kind: 'date' },
-  { key: 'priority', label: 'Ưu tiên', kind: 'select', options: PRIORITY_LABEL },
-  { key: 'owner', label: 'Phụ trách', kind: 'user' },
-  { key: 'status', label: 'Trạng thái', kind: 'select', options: ITEM_STATUS_LABEL },
-  { key: 'note', label: 'Ghi chú', kind: 'text' },
+  { key: 'title', label: l('Nội dung', '内容'), kind: 'text' },
+  { key: 'type', label: l('Loại', '種類'), kind: 'select', options: TYPE_LABEL },
+  { key: 'date', label: l('Ngày / hạn xử lý', '日付 / 対応期限'), kind: 'date' },
+  { key: 'priority', label: l('Ưu tiên', '優先度'), kind: 'select', options: PRIORITY_LABEL },
+  { key: 'owner', label: l('Phụ trách', '担当者'), kind: 'user' },
+  { key: 'status', label: l('Trạng thái', 'ステータス'), kind: 'select', options: ITEM_STATUS_LABEL },
+  { key: 'note', label: l('Ghi chú', 'メモ'), kind: 'text' },
 ];
 const NEW_ITEM_KEYS = ['title', 'type', 'date', 'priority', 'owner'];
 
@@ -284,7 +303,7 @@ function display(f: FieldDef, v: unknown, users: User[]): string {
   if (f.kind === 'user') return userName(String(v));
   if (f.kind === 'users') return (v as string[]).map(userName).join(', ');
   if (f.kind === 'select') return f.options?.[String(v)] ?? String(v);
-  if (f.kind === 'date') return String(v).split('-').reverse().join('/');
+  if (f.kind === 'date') return lang === 'ja' ? String(v).replaceAll('-', '/') : String(v).split('-').reverse().join('/');
   return String(v);
 }
 
@@ -323,7 +342,7 @@ function FieldEditor({
         else if (f.kind === 'user')
           input = (
             <select disabled={disabled} value={String(v ?? '')} onChange={(e) => set(f.key, e.target.value)}>
-              <option value="">— không —</option>
+              <option value="">{l('— không —', '— なし —')}</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
@@ -345,7 +364,11 @@ function FieldEditor({
           <label key={f.key} className={f.kind === 'text' ? 'span-all' : undefined}>
             {f.label}
             {input}
-            {before && <small className="muted">Hiện tại: {display(f, before[f.key], users)}</small>}
+            {before && (
+              <small className="muted">
+                {l('Hiện tại', '現在')}: {display(f, before[f.key], users)}
+              </small>
+            )}
           </label>
         );
       })}
@@ -376,7 +399,8 @@ function ProposalCard({
   // Updates and new items can be moved to another project; edits belong to what they edit.
   const movable = (p.kind === 'update' || p.kind === 'item') && !done;
   const fieldsOf = (all: FieldDef[], keys: string[]) => all.filter((f) => keys.includes(f.key));
-  const title = p.kind === 'item' ? `Thêm ${TYPE_LABEL[p.body.type].toLowerCase()}` : KIND_TITLE[p.kind];
+  const title =
+    p.kind === 'item' ? l(`Thêm ${TYPE_LABEL[p.body.type].toLowerCase()}`, `${TYPE_LABEL[p.body.type]}を追加`) : KIND_TITLE[p.kind];
 
   return (
     <div className={`card proposal${row.selected ? ' selected' : ''}`}>
@@ -388,7 +412,7 @@ function ProposalCard({
             <>
               {' · '}
               {p.newProject ? (
-                `${p.projectName ?? ''} (mới)`
+                `${p.projectName ?? ''} ${l('(mới)', '（新規）')}`
               ) : (
                 <Link to={`/projects/${p.projectId}`}>
                   {p.projectId}
@@ -404,33 +428,37 @@ function ProposalCard({
             </>
           )}
         </span>
-        {done && <span className="ok-text">✓ Đã ghi</span>}
+        {done && <span className="ok-text">{l('✓ Đã ghi', '✓ 登録済み')}</span>}
       </label>
       {movable && (
         <label className="proposal-project">
-          Dự án
+          {l('Dự án', 'プロジェクト')}
           <select value={p.projectId} onChange={(e) => onProject(e.target.value)}>
-            <option value="">— Chọn dự án —</option>
+            <option value="">{l('— Chọn dự án —', '— プロジェクトを選択 —')}</option>
             {projectOptions.map((x) => (
               <option key={x.id} value={x.id}>
                 {x.label}
               </option>
             ))}
           </select>
-          {p.needsProject && <small className="warn-text">Ghi chú không nêu dự án — chọn dự án để ghi.</small>}
+          {p.needsProject && (
+            <small className="warn-text">
+              {l('Ghi chú không nêu dự án — chọn dự án để ghi.', 'メモにプロジェクトが書かれていません — 登録先を選んでください。')}
+            </small>
+          )}
         </label>
       )}
 
       {p.kind === 'update' && (
         <div className="form">
           <label>
-            Trạng thái
+            {l('Trạng thái', '状態')}
             <select
               disabled={done}
               value={p.body.health ?? ''}
               onChange={(e) => onChange({ ...p, body: { ...p.body, health: (e.target.value || undefined) as typeof p.body.health } })}
             >
-              <option value="">— không đổi —</option>
+              <option value="">{l('— không đổi —', '— 変更なし —')}</option>
               {(['green', 'yellow', 'red'] as const).map((h) => (
                 <option key={h} value={h}>
                   {HEALTH_LABEL[h]}
@@ -439,12 +467,21 @@ function ProposalCard({
             </select>
           </label>
           <label>
-            Tình hình
-            <textarea rows={2} disabled={done} value={p.body.summary} onChange={(e) => onChange({ ...p, body: { ...p.body, summary: e.target.value } })} />
+            {l('Tình hình', '状況')}
+            <textarea
+              rows={2}
+              disabled={done}
+              value={p.body.summary}
+              onChange={(e) => onChange({ ...p, body: { ...p.body, summary: e.target.value } })}
+            />
           </label>
           <label>
-            Cần hỗ trợ
-            <input disabled={done} value={p.body.needHelp ?? ''} onChange={(e) => onChange({ ...p, body: { ...p.body, needHelp: e.target.value || undefined } })} />
+            {l('Cần hỗ trợ', '支援依頼')}
+            <input
+              disabled={done}
+              value={p.body.needHelp ?? ''}
+              onChange={(e) => onChange({ ...p, body: { ...p.body, needHelp: e.target.value || undefined } })}
+            />
           </label>
         </div>
       )}
@@ -504,7 +541,7 @@ function ProposalCard({
             {p.itemTitle ? ` · ${p.itemTitle}` : ''}
           </p>
           <label>
-            Trạng thái mới
+            {l('Trạng thái mới', '新しいステータス')}
             <select
               disabled={done}
               value={p.body.status}
@@ -517,7 +554,11 @@ function ProposalCard({
               ))}
             </select>
           </label>
-          {p.body.note && <small className="muted">Ghi chú: {p.body.note}</small>}
+          {p.body.note && (
+            <small className="muted">
+              {l('Ghi chú', 'メモ')}: {p.body.note}
+            </small>
+          )}
         </div>
       )}
 
@@ -526,7 +567,7 @@ function ProposalCard({
           ⚠ {w}
         </small>
       ))}
-      {p.error && <ErrorBox error={`Không ghi được: ${p.error}`} />}
+      {p.error && <ErrorBox error={`${l('Không ghi được', '登録できません')}: ${p.error}`} />}
       {row.result && row.result !== 'ok' && <ErrorBox error={row.result} />}
     </div>
   );

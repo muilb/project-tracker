@@ -1,20 +1,34 @@
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import { TEST_SAMPLES } from './notify/alerts.js';
+import { l, LANGS } from './i18n.js';
 import { isDate } from './time.js';
-import { ALERT_EVENTS, CHANNEL_KINDS, HEALTHS, ITEM_STATUSES, ITEM_TYPES, PRIORITIES, PROJECT_STATES, ROLES, SCOPE_TYPES } from './types.js';
+import {
+  ALERT_EVENTS,
+  CHANNEL_KINDS,
+  HEALTHS,
+  ITEM_STATUSES,
+  ITEM_TYPES,
+  PRIORITIES,
+  PROJECT_STATES,
+  ROLES,
+  SCOPE_TYPES,
+} from './types.js';
+
+/** A message evaluated per request, so it follows the caller's language. */
+const msg = (vi: string, ja: string) => ({ error: () => l(vi, ja) });
 
 const email = z
   .string()
   .trim()
   .toLowerCase()
-  .pipe(z.email({ message: 'Email không hợp lệ' }));
-const date = z.string().refine(isDate, 'Ngày phải có dạng YYYY-MM-DD');
+  .pipe(z.email(msg('Email không hợp lệ', 'メールアドレスが正しくありません')));
+const date = z.string().refine(isDate, msg('Ngày phải có dạng YYYY-MM-DD', '日付は YYYY-MM-DD 形式で入力してください'));
 const text = (max: number) => z.string().trim().max(max);
 const optText = (max: number) => text(max).optional();
 
 const projectFields = {
-  name: text(200).min(1, 'Tên dự án không được trống'),
+  name: text(200).min(1, msg('Tên dự án không được trống', 'プロジェクト名を入力してください')),
   customer: optText(200),
   gl: email.optional(),
   pl: email.optional(),
@@ -22,7 +36,13 @@ const projectFields = {
   pmo: email.optional(),
   startDate: date.optional(),
   endDate: date.optional(),
-  updateFrequencyHours: z.number().int().min(1).max(24 * 60).nullable().optional(),
+  updateFrequencyHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .nullable()
+    .optional(),
   publicVisible: z.boolean().optional(),
   publicName: optText(200),
 };
@@ -31,19 +51,20 @@ export const createProjectSchema = z.object({
   id: z
     .string()
     .trim()
-    .regex(/^[A-Za-z0-9_-]{2,20}$/, 'Mã dự án chỉ gồm chữ, số, - và _ (2–20 ký tự)')
+    .regex(
+      /^[A-Za-z0-9_-]{2,20}$/,
+      msg('Mã dự án chỉ gồm chữ, số, - và _ (2–20 ký tự)', 'プロジェクトコードは英数字・-・_ の 2〜20 文字です'),
+    )
     .transform((s) => s.toUpperCase())
     .optional(),
   ...projectFields,
 });
 
-export const patchProjectSchema = z
-  .object({ ...projectFields, state: z.enum(PROJECT_STATES).optional() })
-  .partial();
+export const patchProjectSchema = z.object({ ...projectFields, state: z.enum(PROJECT_STATES).optional() }).partial();
 
 export const createUpdateSchema = z.object({
   health: z.enum(HEALTHS).optional(),
-  summary: text(4000).min(1, 'Nội dung tình hình không được trống'),
+  summary: text(4000).min(1, msg('Nội dung tình hình không được trống', '状況の内容を入力してください')),
   needHelp: optText(2000),
   rawText: optText(8000),
   at: z.iso.datetime({ offset: true }).optional(),
@@ -51,7 +72,7 @@ export const createUpdateSchema = z.object({
 
 const itemFields = {
   type: z.enum(ITEM_TYPES),
-  title: text(500).min(1, 'Nội dung không được trống'),
+  title: text(500).min(1, msg('Nội dung không được trống', '内容を入力してください')),
   priority: z.enum(PRIORITIES).default('medium'),
   date,
   owner: email.optional(),
@@ -91,18 +112,20 @@ export const settingsSchema = z.object({
 });
 
 const channelFields = {
-  name: text(100).min(1, 'Tên kênh không được trống'),
-  webhookUrl: z.string().trim().url('URL webhook không hợp lệ').max(2000).optional(),
+  name: text(100).min(1, msg('Tên kênh không được trống', 'チャネル名を入力してください')),
+  webhookUrl: z.string().trim().url(msg('URL webhook không hợp lệ', 'Webhook URL が正しくありません')).max(2000).optional(),
   scope: z
     .object({
       type: z.enum(SCOPE_TYPES),
       gl: email.optional(),
       projects: z.array(z.string().trim().toUpperCase()).max(100).optional(),
     })
-    .refine((s) => s.type !== 'gl' || !!s.gl, 'Chọn GL cho phạm vi theo nhóm')
-    .refine((s) => s.type !== 'projects' || !!s.projects?.length, 'Chọn ít nhất một dự án'),
-  events: z.array(z.enum(ALERT_EVENTS)).min(1, 'Chọn ít nhất một loại thông báo'),
+    .refine((s) => s.type !== 'gl' || !!s.gl, msg('Chọn GL cho phạm vi theo nhóm', 'GL別の対象範囲では GL を選択してください'))
+    .refine((s) => s.type !== 'projects' || !!s.projects?.length, msg('Chọn ít nhất một dự án', 'プロジェクトを 1 つ以上選択してください')),
+  events: z.array(z.enum(ALERT_EVENTS)).min(1, msg('Chọn ít nhất một loại thông báo', '通知の種類を 1 つ以上選択してください')),
   quietHours: z.boolean().default(true),
+  /** Language of the messages sent to this channel. */
+  lang: z.enum(LANGS).optional(),
 };
 
 export const createChannelSchema = z
@@ -112,12 +135,20 @@ export const createChannelSchema = z
     /** Telegram: code the user sent to the bot, used to find the chat. */
     connectCode: z.string().trim().max(40).optional(),
   })
-  .refine((b) => b.kind !== 'teams' || !!b.webhookUrl, { message: 'Nhập URL webhook của Teams', path: ['webhookUrl'] })
-  .refine((b) => b.kind !== 'telegram' || !!b.connectCode, { message: 'Thiếu mã kết nối Telegram', path: ['connectCode'] });
+  .refine((b) => b.kind !== 'teams' || !!b.webhookUrl, {
+    ...msg('Nhập URL webhook của Teams', 'Teams の Webhook URL を入力してください'),
+    path: ['webhookUrl'],
+  })
+  .refine((b) => b.kind !== 'telegram' || !!b.connectCode, {
+    ...msg('Thiếu mã kết nối Telegram', 'Telegram の接続コードがありません'),
+    path: ['connectCode'],
+  });
 
-export const aiKeySchema = z.object({ apiKey: z.string().trim().min(20, 'API key không hợp lệ').max(300) });
+export const aiKeySchema = z.object({
+  apiKey: z.string().trim().min(20, msg('API key không hợp lệ', 'API キーが正しくありません')).max(300),
+});
 export const aiParseSchema = z.object({
-  text: text(4000).min(1, 'Nhập nội dung cần ghi'),
+  text: text(4000).min(1, msg('Nhập nội dung cần ghi', '入力する内容を書いてください')),
   /** Used when the note does not name a project. */
   projectId: z.string().trim().toUpperCase().max(20).optional(),
 });
@@ -125,16 +156,14 @@ export const aiParseSchema = z.object({
 export const testSampleSchema = z.object({ sample: z.enum(TEST_SAMPLES).default('connect') });
 
 export const telegramBotSchema = z.object({ token: z.string().trim().min(10).max(200) });
-export const patchChannelSchema = z
-  .object({ ...channelFields, quietHours: z.boolean(), enabled: z.boolean() })
-  .partial();
+export const patchChannelSchema = z.object({ ...channelFields, quietHours: z.boolean(), enabled: z.boolean() }).partial();
 
 export async function parseBody<T extends z.ZodType>(req: { json(): Promise<unknown> }, schema: T): Promise<z.infer<T>> {
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    throw new HTTPException(400, { message: 'Body phải là JSON' });
+    throw new HTTPException(400, { message: l('Body phải là JSON', 'Body は JSON である必要があります') });
   }
   const res = schema.safeParse(body);
   if (!res.success) {

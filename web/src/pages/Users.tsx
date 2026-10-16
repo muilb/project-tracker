@@ -5,6 +5,7 @@ import { ErrorBox, Section } from '../components/ui';
 import { fmtDateTime } from '../format';
 import { ROLE_LABEL } from '../labels';
 import { useSession } from '../session';
+import { l } from '../i18n';
 
 export function UsersPage() {
   const { users, reloadUsers, canManageUsers, me } = useSession();
@@ -17,7 +18,7 @@ export function UsersPage() {
   const [approveRole, setApproveRole] = useState<Record<string, Role | ''>>({});
   const [info, setInfo] = useState<string>();
 
-  if (!canManageUsers) return <ErrorBox error="Chỉ PMO / MNG mới quản lý người dùng" />;
+  if (!canManageUsers) return <ErrorBox error={l('Chỉ PMO / MNG mới quản lý người dùng', 'ユーザー管理は PMO / MNG のみ行えます')} />;
 
   async function decide(email: string, action: 'approve' | 'reject') {
     setError(undefined);
@@ -25,7 +26,14 @@ export function UsersPage() {
     try {
       const role = approveRole[email];
       await api.post(`/users/pending/${encodeURIComponent(email)}/${action}`, action === 'approve' && role ? { role } : {});
-      setInfo(action === 'approve' ? `Đã duyệt ${email}. Người này đăng nhập được ngay bằng mật khẩu đã đặt.` : `Đã từ chối ${email}.`);
+      setInfo(
+        action === 'approve'
+          ? l(
+              `Đã duyệt ${email}. Người này đăng nhập được ngay bằng mật khẩu đã đặt.`,
+              `${email} を承認しました。設定済みのパスワードですぐにログインできます。`,
+            )
+          : l(`Đã từ chối ${email}.`, `${email} を却下しました。`),
+      );
       pending.reload();
       reloadUsers();
       window.dispatchEvent(new Event('pending-changed'));
@@ -59,22 +67,25 @@ export function UsersPage() {
 
   return (
     <div className="stack narrow">
-      <h1>Người dùng</h1>
+      <h1>{l('Người dùng', 'ユーザー')}</h1>
       <ErrorBox error={error ?? pending.error} />
       {info && <div className="info-box">{info}</div>}
       {!!pending.data?.pending.length && (
-        <Section title={`Chờ duyệt (${pending.data.pending.length})`}>
+        <Section title={`${l('Chờ duyệt', '承認待ち')} (${pending.data.pending.length})`}>
           <p className="muted">
-            Những người đã đăng ký nhưng chưa xác nhận email (thư xác nhận thường bị mail công ty chặn). Duyệt để họ đăng nhập được ngay.
+            {l(
+              'Những người đã đăng ký nhưng chưa xác nhận email (thư xác nhận thường bị mail công ty chặn). Duyệt để họ đăng nhập được ngay.',
+              '登録済みでメール未確認の人です（確認メールは社内メールでブロックされがちです）。承認するとすぐにログインできます。',
+            )}
           </p>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Họ tên</th>
+                  <th>{l('Họ tên', '氏名')}</th>
                   <th>Email</th>
-                  <th>Đăng ký lúc</th>
-                  <th>Vai trò khi duyệt</th>
+                  <th>{l('Đăng ký lúc', '登録日時')}</th>
+                  <th>{l('Vai trò khi duyệt', '承認時のロール')}</th>
                   <th />
                 </tr>
               </thead>
@@ -88,9 +99,11 @@ export function UsersPage() {
                       <select
                         value={approveRole[p.email] ?? ''}
                         onChange={(e) => setApproveRole({ ...approveRole, [p.email]: e.target.value as Role | '' })}
-                        aria-label={`Vai trò của ${p.email}`}
+                        aria-label={l(`Vai trò của ${p.email}`, `${p.email} のロール`)}
                       >
-                        <option value="">Mặc định (theo ADMIN_EMAILS, nếu không có thì PL)</option>
+                        <option value="">
+                          {l('Mặc định (theo ADMIN_EMAILS, nếu không có thì PL)', '既定（ADMIN_EMAILS に従う。なければ PL）')}
+                        </option>
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
                             {ROLE_LABEL[r]}
@@ -100,10 +113,16 @@ export function UsersPage() {
                     </td>
                     <td className="nowrap">
                       <button className="btn btn-primary" onClick={() => decide(p.email, 'approve')}>
-                        Duyệt
+                        {l('Duyệt', '承認')}
                       </button>{' '}
-                      <button className="btn" onClick={() => confirm(`Từ chối và xoá đăng ký của ${p.email}?`) && decide(p.email, 'reject')}>
-                        Từ chối
+                      <button
+                        className="btn"
+                        onClick={() =>
+                          confirm(l(`Từ chối và xoá đăng ký của ${p.email}?`, `${p.email} の登録を却下して削除しますか？`)) &&
+                          decide(p.email, 'reject')
+                        }
+                      >
+                        {l('Từ chối', '却下')}
                       </button>
                     </td>
                   </tr>
@@ -113,18 +132,18 @@ export function UsersPage() {
           </div>
         </Section>
       )}
-      <Section title="Thêm người dùng trước khi họ đăng nhập">
+      <Section title={l('Thêm người dùng trước khi họ đăng nhập', 'ログイン前にユーザーを追加')}>
         <form className="form inline-form" onSubmit={add}>
           <label className="grow">
             Email
             <input type="email" required value={id} onChange={(e) => setId(e.target.value)} />
           </label>
           <label className="grow">
-            Họ tên
+            {l('Họ tên', '氏名')}
             <input required value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label>
-            Vai trò
+            {l('Vai trò', 'ロール')}
             <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>
@@ -133,10 +152,13 @@ export function UsersPage() {
               ))}
             </select>
           </label>
-          <button className="btn btn-primary">Thêm</button>
+          <button className="btn btn-primary">{l('Thêm', '追加')}</button>
         </form>
         <p className="muted">
-          Người đăng nhập lần đầu được tạo tự động với vai trò PL. Khi họ đăng ký bằng đúng email này, vai trò ở đây được giữ nguyên.
+          {l(
+            'Người đăng nhập lần đầu được tạo tự động với vai trò PL. Khi họ đăng ký bằng đúng email này, vai trò ở đây được giữ nguyên.',
+            '初回ログインしたユーザーはロール PL で自動作成されます。同じメールで登録した場合は、ここで設定したロールが維持されます。',
+          )}
         </p>
       </Section>
       <section className="card">
@@ -144,9 +166,9 @@ export function UsersPage() {
           <table>
             <thead>
               <tr>
-                <th>Họ tên</th>
+                <th>{l('Họ tên', '氏名')}</th>
                 <th>Email</th>
-                <th>Vai trò</th>
+                <th>{l('Vai trò', 'ロール')}</th>
               </tr>
             </thead>
             <tbody>
@@ -158,9 +180,9 @@ export function UsersPage() {
                     <select
                       value={u.role}
                       disabled={u.id === me.id}
-                      title={u.id === me.id ? 'Không tự đổi vai trò của chính mình' : undefined}
+                      title={u.id === me.id ? l('Không tự đổi vai trò của chính mình', '自分自身のロールは変更できません') : undefined}
                       onChange={(e) => changeRole(u.id, e.target.value as Role)}
-                      aria-label={`Vai trò của ${u.name}`}
+                      aria-label={l(`Vai trò của ${u.name}`, `${u.name} のロール`)}
                     >
                       {ROLES.map((r) => (
                         <option key={r} value={r}>

@@ -1,3 +1,4 @@
+import { l } from './i18n';
 export interface AppConfig {
   apiUrl: string;
   region?: string;
@@ -16,7 +17,7 @@ export async function loadConfig(): Promise<AppConfig> {
     config = { apiUrl: '/api', devAuth: true };
   } else {
     const res = await fetch('/config.json', { cache: 'no-store' });
-    if (!res.ok) throw new Error('Không tải được cấu hình (config.json)');
+    if (!res.ok) throw new Error(l('Không tải được cấu hình (config.json)', '設定（config.json）を読み込めません'));
     config = (await res.json()) as AppConfig;
   }
   return config;

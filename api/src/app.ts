@@ -5,6 +5,7 @@ import { MemoryAccounts, type Accounts } from './accounts.js';
 import { claudeClient, type AiClient } from './ai/assistant.js';
 import { parseInitialRoles, requireUser, type AuthConfig } from './auth.js';
 import type { AppEnv } from './env.js';
+import { langFromHeader, withLang } from './i18n.js';
 import type { Sender } from './notify/sender.js';
 import { telegramClient, type TelegramClient } from './notify/telegram.js';
 import { admin } from './routes/admin.js';
@@ -48,6 +49,7 @@ export function createApp({
   const app = new Hono<AppEnv>();
 
   app.use('*', cors());
+  app.use('*', (c, next) => withLang(langFromHeader(c.req.header('accept-language')), next));
   app.use('*', async (c, next) => {
     c.set('store', store);
     c.set('now', clock());
@@ -62,7 +64,7 @@ export function createApp({
   app.onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
     console.error(err);
-    return c.json({ error: 'Lỗi hệ thống' }, 500);
+    return c.json({ error: langFromHeader(c.req.header('accept-language')) === 'ja' ? 'システムエラー' : 'Lỗi hệ thống' }, 500);
   });
   app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
@@ -85,9 +87,7 @@ export function createApp({
   app.get('/dashboard', async (c) => {
     const { scope, gl } = c.req.query();
     const snap = await store.snapshot();
-    return c.json(
-      buildDashboard(snap, c.get('now'), c.get('user'), { scope: scope === 'mine' ? 'mine' : 'all', gl: gl || undefined }),
-    );
+    return c.json(buildDashboard(snap, c.get('now'), c.get('user'), { scope: scope === 'mine' ? 'mine' : 'all', gl: gl || undefined }));
   });
   app.route('/', admin);
   app.route('/', aiRoutes);

@@ -5,6 +5,7 @@ import { fmtDateTime, fmtDay, fmtDaysLeft, fmtHours } from '../format';
 import { PRIORITY_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { Dashboard as DashboardData, DashboardItem } from '../types';
+import { l } from '../i18n';
 
 export function Dashboard() {
   const { me, users, name } = useSession();
@@ -27,18 +28,18 @@ export function Dashboard() {
   return (
     <div className="stack">
       <div className="page-head">
-        <h1>Tổng quan</h1>
+        <h1>{l('Tổng quan', 'ダッシュボード')}</h1>
         <div className="filters">
-          <div className="segmented" role="group" aria-label="Phạm vi">
+          <div className="segmented" role="group" aria-label={l('Phạm vi', '対象範囲')}>
             <button className={scope === 'mine' ? 'active' : ''} onClick={() => set('scope', 'mine')}>
-              Dự án của tôi
+              {l('Dự án của tôi', '自分のプロジェクト')}
             </button>
             <button className={scope === 'all' ? 'active' : ''} onClick={() => set('scope', 'all')}>
-              Tất cả
+              {l('Tất cả', 'すべて')}
             </button>
           </div>
-          <select value={gl} onChange={(e) => set('gl', e.target.value)} aria-label="Lọc theo GL">
-            <option value="">Mọi GL</option>
+          <select value={gl} onChange={(e) => set('gl', e.target.value)} aria-label={l('Lọc theo GL', 'GLで絞り込み')}>
+            <option value="">{l('Mọi GL', 'すべての GL')}</option>
             {gls.map((u) => (
               <option key={u.id} value={u.id}>
                 GL {u.name}
@@ -47,29 +48,36 @@ export function Dashboard() {
           </select>
           {me.role !== 'OTHER' && (
             <Link className="btn btn-primary" to="/projects/new">
-              ＋ Tạo dự án
+              ＋ {l('Tạo dự án', 'プロジェクト作成')}
             </Link>
           )}
         </div>
       </div>
       <ErrorBox error={error} />
       {!data ? (
-        <p className="loading">{loading ? 'Đang tải…' : ''}</p>
+        <p className="loading">{loading ? l('Đang tải…', '読み込み中…') : ''}</p>
       ) : (
         <>
           <div className="kpis">
-            <Kpi label="Đang chạy" value={data.kpis.active} />
-            <Kpi label="Đỏ" value={data.kpis.red} tone="red" />
-            <Kpi label="Vàng" value={data.kpis.yellow} tone="yellow" />
-            <Kpi label="Xanh" value={data.kpis.green} tone="green" />
-            <Kpi label="⏰ Trễ cập nhật" value={data.kpis.lateUpdates} />
-            <Kpi label="▲ Vấn đề ưu tiên cao" value={data.kpis.highIssues} />
-            <Kpi label="⚠ Mục quá hạn" value={data.kpis.overdueItems} />
+            <Kpi label={l('Đang chạy', '進行中')} value={data.kpis.active} />
+            <Kpi label={l('Đỏ', '赤')} value={data.kpis.red} tone="red" />
+            <Kpi label={l('Vàng', '黄')} value={data.kpis.yellow} tone="yellow" />
+            <Kpi label={l('Xanh', '緑')} value={data.kpis.green} tone="green" />
+            <Kpi label={l('⏰ Trễ cập nhật', '⏰ 報告遅れ')} value={data.kpis.lateUpdates} />
+            <Kpi label={l('▲ Vấn đề ưu tiên cao', '▲ 優先度「高」の課題')} value={data.kpis.highIssues} />
+            <Kpi label={l('⚠ Mục quá hạn', '⚠ 期限超過')} value={data.kpis.overdueItems} />
           </div>
 
-          <Section title="Cần chú ý" extra={<span className="muted">Cập nhật lúc {fmtDateTime(data.generatedAt)}</span>}>
+          <Section
+            title={l('Cần chú ý', '要注意')}
+            extra={
+              <span className="muted">
+                {l('Cập nhật lúc', '更新時刻')} {fmtDateTime(data.generatedAt)}
+              </span>
+            }
+          >
             {data.attention.length === 0 ? (
-              <Empty>Không có dự án cần chú ý 🎉</Empty>
+              <Empty>{l('Không có dự án cần chú ý 🎉', '要注意のプロジェクトはありません 🎉')}</Empty>
             ) : (
               <ul className="rows">
                 {data.attention.map((p) => (
@@ -101,29 +109,32 @@ export function Dashboard() {
           </Section>
 
           <div className="grid-2">
-            <Section title={`Mốc & sự kiện ${data.upcomingDays} ngày tới`}>
-              <ItemList items={data.upcoming} empty="Không có mốc / sự kiện sắp tới" />
+            <Section title={l(`Mốc & sự kiện ${data.upcomingDays} ngày tới`, `今後 ${data.upcomingDays} 日のマイルストーン・イベント`)}>
+              <ItemList items={data.upcoming} empty={l('Không có mốc / sự kiện sắp tới', '近日のマイルストーン・イベントはありません')} />
             </Section>
-            <Section title="Vấn đề cần xử lý">
-              <ItemList items={data.priorityItems} empty="Không có vấn đề quá hạn, ưu tiên cao hay sắp tới hạn" />
+            <Section title={l('Vấn đề cần xử lý', '対応が必要な課題')}>
+              <ItemList
+                items={data.priorityItems}
+                empty={l('Không có vấn đề quá hạn, ưu tiên cao hay sắp tới hạn', '期限超過・優先度「高」・期限間近の課題はありません')}
+              />
             </Section>
           </div>
 
-          <Section title="Chưa cập nhật kịp thời – cần nhắc">
+          <Section title={l('Chưa cập nhật kịp thời – cần nhắc', '報告遅れ – 要リマインド')}>
             {data.lateUpdates.length === 0 ? (
-              <Empty>Tất cả dự án đều cập nhật đúng hạn</Empty>
+              <Empty>{l('Tất cả dự án đều cập nhật đúng hạn', 'すべてのプロジェクトが期限内に報告しています')}</Empty>
             ) : (
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Dự án</th>
-                      <th>Trễ</th>
-                      <th>Cập nhật cuối</th>
+                      <th>{l('Dự án', 'プロジェクト')}</th>
+                      <th>{l('Trễ', '遅れ')}</th>
+                      <th>{l('Cập nhật cuối', '最終報告')}</th>
                       <th>PL</th>
                       <th>GL</th>
-                      <th>Hỗ trợ</th>
-                      <th>Tần suất</th>
+                      <th>{l('Hỗ trợ', 'サポーター')}</th>
+                      <th>{l('Tần suất', '頻度')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -151,18 +162,18 @@ export function Dashboard() {
           </Section>
 
           {data.byGl.length > 1 && (
-            <Section title="Tình hình theo GL">
+            <Section title={l('Tình hình theo GL', 'GL別状況')}>
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
                       <th>GL</th>
-                      <th className="bar-col">Trạng thái</th>
-                      <th className="num">Đỏ</th>
-                      <th className="num">Vàng</th>
-                      <th className="num">Xanh</th>
-                      <th className="num">Trễ CN</th>
-                      <th className="num">Tổng</th>
+                      <th className="bar-col">{l('Trạng thái', '状態')}</th>
+                      <th className="num">{l('Đỏ', '赤')}</th>
+                      <th className="num">{l('Vàng', '黄')}</th>
+                      <th className="num">{l('Xanh', '緑')}</th>
+                      <th className="num">{l('Trễ CN', '報告遅れ')}</th>
+                      <th className="num">{l('Tổng', '合計')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -170,7 +181,7 @@ export function Dashboard() {
                       <tr key={r.gl}>
                         <td>
                           <button className="btn-link" onClick={() => set('gl', r.gl)} disabled={!r.gl}>
-                            {r.gl ? name(r.gl) : '(chưa có GL)'}
+                            {r.gl ? name(r.gl) : l('(chưa có GL)', '（GL 未設定）')}
                           </button>
                         </td>
                         <td className="bar-col">
@@ -188,13 +199,13 @@ export function Dashboard() {
               </div>
               <div className="legend">
                 <span>
-                  <span className="dot tone-red" /> Đỏ
+                  <span className="dot tone-red" /> {l('Đỏ', '赤')}
                 </span>
                 <span>
-                  <span className="dot tone-yellow" /> Vàng
+                  <span className="dot tone-yellow" /> {l('Vàng', '黄')}
                 </span>
                 <span>
-                  <span className="dot tone-green" /> Xanh
+                  <span className="dot tone-green" /> {l('Xanh', '緑')}
                 </span>
               </div>
             </Section>
@@ -219,7 +230,7 @@ function ItemList({ items, empty }: { items: DashboardItem[]; empty: string }) {
           <span className="item-main">
             <Link to={`/projects/${i.projectId}`}>{i.title}</Link>
             <small className="muted">
-              {i.projectId} · {i.projectName} · ưu tiên {PRIORITY_LABEL[i.priority].toLowerCase()}
+              {i.projectId} · {i.projectName} · {l('ưu tiên', '優先度')} {PRIORITY_LABEL[i.priority].toLowerCase()}
             </small>
           </span>
         </li>

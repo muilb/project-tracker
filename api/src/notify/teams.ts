@@ -1,4 +1,5 @@
 // Microsoft Teams delivery through a Workflows "post to a channel when a webhook request is received" URL.
+import { l } from '../i18n.js';
 import type { Message } from './message.js';
 
 /** Hosts used by Teams Workflows (Power Automate) and the legacy incoming webhooks. */
@@ -35,7 +36,7 @@ export async function postTeams(url: string, payload: unknown): Promise<void> {
   });
   if (!res.ok) {
     const text = (await res.text().catch(() => '')).slice(0, 200);
-    throw new Error(`Teams trả về HTTP ${res.status}${text ? `: ${text}` : ''}`);
+    throw new Error(`${l('Teams trả về', 'Teams の応答:')} HTTP ${res.status}${text ? `: ${text}` : ''}`);
   }
 }
 

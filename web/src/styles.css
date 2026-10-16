@@ -115,6 +115,31 @@ h2 {
   font-size: 0.9rem;
 }
 
+.auth-lang {
+  display: flex;
+  justify-content: center;
+}
+.lang-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.lang-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 0.2rem 0.5rem;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.lang-switch button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .container {
   max-width: 1200px;
   margin: 0 auto;

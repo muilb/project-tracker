@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from './env.js';
+import { l } from './i18n.js';
 import { ROLES, type Project, type Role, type User } from './types.js';
 
 export interface AuthConfig {
@@ -45,7 +46,7 @@ function identity(c: Parameters<MiddlewareHandler<AppEnv>>[0], config: AuthConfi
 export function requireUser(config: AuthConfig): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const id = identity(c, config);
-    if (!id) throw new HTTPException(401, { message: 'Chưa đăng nhập' });
+    if (!id) throw new HTTPException(401, { message: l('Chưa đăng nhập', 'ログインしていません') });
     const store = c.get('store');
     const email = id.email.trim().toLowerCase();
     let user = await store.getUser(email);
@@ -73,6 +74,6 @@ export const can = {
   editProject: (u: User, p: Project) => can.admin(u) || p.gl === u.id || p.pl === u.id,
 };
 
-export function ensure(allowed: boolean, message = 'Không có quyền thực hiện thao tác này') {
+export function ensure(allowed: boolean, message = l('Không có quyền thực hiện thao tác này', 'この操作を行う権限がありません')) {
   if (!allowed) throw new HTTPException(403, { message });
 }

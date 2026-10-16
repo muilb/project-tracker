@@ -3,6 +3,8 @@ import { ALERT_EVENTS, type AlertEvent, type Channel, type ChannelKind, type Cha
 import { api, useApi } from '../api';
 import { Empty, ErrorBox, Section } from '../components/ui';
 import { fmtDateTime } from '../format';
+import { l, lang, type Lang } from '../i18n';
+import { LANG_LABEL, LANGS } from '../labels';
 import { useSession } from '../session';
 import type { TestSample } from '../../../api/src/notify/alerts';
 import type { ProjectView } from '../types';
@@ -11,21 +13,21 @@ type PublicChannel = Omit<Channel, 'webhookUrl'> & { webhookUrlMasked?: string }
 type BotStatus = { configured: boolean; username?: string };
 
 const EVENT_LABEL: Record<AlertEvent, string> = {
-  became_red: 'Dự án chuyển sang Đỏ (ngay lập tức)',
-  high_issue: 'Vấn đề ưu tiên Cao mới (ngay lập tức)',
-  overdue: 'Mục quá hạn (mỗi ngày một lần)',
-  late_update: 'Trễ cập nhật (nhắc mỗi 24 giờ)',
-  milestone_soon: 'Mốc / sự kiện vào ngày mai',
-  daily_digest: 'Tóm tắt lúc 8h sáng',
+  became_red: l('Dự án chuyển sang Đỏ (ngay lập tức)', 'プロジェクトが「赤」に（即時）'),
+  high_issue: l('Vấn đề ưu tiên Cao mới (ngay lập tức)', '優先度「高」の新しい課題（即時）'),
+  overdue: l('Mục quá hạn (mỗi ngày một lần)', '期限超過の項目（1 日 1 回）'),
+  late_update: l('Trễ cập nhật (nhắc mỗi 24 giờ)', '報告遅れ（24 時間ごとにリマインド）'),
+  milestone_soon: l('Mốc / sự kiện vào ngày mai', '明日のマイルストーン / イベント'),
+  daily_digest: l('Tóm tắt lúc 8h sáng', '朝 8 時のサマリー'),
 };
 const KIND_LABEL: Record<ChannelKind, string> = { telegram: 'Telegram', teams: 'Teams' };
 
 const SAMPLE_LABEL: Record<TestSample, string> = {
-  connect: 'Tin kết nối',
-  became_red: 'Mẫu: dự án chuyển Đỏ',
-  high_issue: 'Mẫu: vấn đề ưu tiên Cao',
-  hourly: 'Mẫu: nhắc mỗi giờ',
-  daily_digest: 'Mẫu: tóm tắt 8h sáng',
+  connect: l('Tin kết nối', '接続メッセージ'),
+  became_red: l('Mẫu: dự án chuyển Đỏ', 'サンプル: プロジェクトが「赤」に'),
+  high_issue: l('Mẫu: vấn đề ưu tiên Cao', 'サンプル: 優先度「高」の課題'),
+  hourly: l('Mẫu: nhắc mỗi giờ', 'サンプル: 毎時リマインド'),
+  daily_digest: l('Mẫu: tóm tắt 8h sáng', 'サンプル: 朝 8 時のサマリー'),
 };
 
 /** "Gửi thử" with a choice of sample: real alert formats filled with the channel's current data. */
@@ -34,7 +36,11 @@ function TestSender({ onSend }: { onSend: (sample: TestSample) => Promise<void> 
   const [busy, setBusy] = useState(false);
   return (
     <div className="test-sender">
-      <select aria-label="Mẫu tin thử" value={sample} onChange={(e) => setSample(e.target.value as TestSample)}>
+      <select
+        aria-label={l('Mẫu tin thử', 'テストメッセージの種類')}
+        value={sample}
+        onChange={(e) => setSample(e.target.value as TestSample)}
+      >
         {(Object.keys(SAMPLE_LABEL) as TestSample[]).map((k) => (
           <option key={k} value={k}>
             {SAMPLE_LABEL[k]}
@@ -50,7 +56,7 @@ function TestSender({ onSend }: { onSend: (sample: TestSample) => Promise<void> 
           setBusy(false);
         }}
       >
-        {busy ? 'Đang gửi…' : 'Gửi thử'}
+        {busy ? l('Đang gửi…', '送信中…') : l('Gửi thử', 'テスト送信')}
       </button>
     </div>
   );
@@ -79,10 +85,10 @@ export function ChannelsPage() {
   return (
     <div className="stack narrow">
       <div className="page-head">
-        <h1>Kênh thông báo</h1>
+        <h1>{l('Kênh thông báo', '通知チャネル')}</h1>
         {!editing && (
           <button className="btn btn-primary" onClick={() => setEditing('new')}>
-            ＋ Đăng ký kênh
+            {l('＋ Đăng ký kênh', '＋ チャネル登録')}
           </button>
         )}
       </div>
@@ -104,9 +110,14 @@ export function ChannelsPage() {
 
       <section className="card">
         {!data ? (
-          <p className="loading">Đang tải…</p>
+          <p className="loading">{l('Đang tải…', '読み込み中…')}</p>
         ) : data.channels.length === 0 ? (
-          <Empty>Chưa có kênh nào. Bấm “Đăng ký kênh” để nhận cảnh báo qua Telegram hoặc Teams.</Empty>
+          <Empty>
+            {l(
+              'Chưa có kênh nào. Bấm “Đăng ký kênh” để nhận cảnh báo qua Telegram hoặc Teams.',
+              'チャネルはまだありません。「チャネル登録」から Telegram または Teams でアラートを受け取れます。',
+            )}
+          </Empty>
         ) : (
           <ul className="rows">
             {data.channels.map((ch) => (
@@ -116,37 +127,56 @@ export function ChannelsPage() {
                     <span className="badge">{KIND_LABEL[ch.kind]}</span>
                     <b>{ch.name}</b>
                     <span className={`badge ${ch.enabled ? 'tone-green' : ''}`}>
-                      <span aria-hidden>{ch.enabled ? '●' : '○'}</span> {ch.enabled ? 'Đang bật' : 'Đã tắt'}
+                      <span aria-hidden>{ch.enabled ? '●' : '○'}</span> {ch.enabled ? l('Đang bật', '有効') : l('Đã tắt', '無効')}
                     </span>
                     <span className="muted">{scopeLabel(ch.scope, name)}</span>
                   </div>
-                  <p className="row-text">{ch.events.map((e) => EVENT_LABEL[e].replace(/ \(.*\)$/, '')).join(' · ')}</p>
+                  <p className="row-text">{ch.events.map((e) => EVENT_LABEL[e].replace(/\s*[(（].*[)）]$/, '')).join(' · ')}</p>
                   <small className="muted">
-                    {ch.kind === 'telegram' ? `Nhóm Telegram: ${ch.telegramChatTitle ?? ch.telegramChatId}` : ch.webhookUrlMasked} · tạo bởi{' '}
-                    {name(ch.createdBy)}
-                    {ch.quietHours ? ' · yên lặng 22h–7h' : ''}
-                    {ch.lastSentAt ? ` · gửi lần cuối ${fmtDateTime(ch.lastSentAt)}` : ''}
+                    {ch.kind === 'telegram'
+                      ? `${l('Nhóm Telegram', 'Telegram グループ')}: ${ch.telegramChatTitle ?? ch.telegramChatId}`
+                      : ch.webhookUrlMasked}{' '}
+                    · {l('tạo bởi', '作成者')} {name(ch.createdBy)} · {LANG_LABEL[ch.lang ?? 'vi']}
+                    {ch.quietHours ? l(' · yên lặng 22h–7h', ' · 夜間停止 22:00–07:00') : ''}
+                    {ch.lastSentAt ? ` · ${l('gửi lần cuối', '最終送信')} ${fmtDateTime(ch.lastSentAt)}` : ''}
                   </small>
-                  {ch.lastError && <div className="warn">⚠ Lỗi gửi gần nhất: {ch.lastError}</div>}
+                  {ch.lastError && (
+                    <div className="warn">
+                      ⚠ {l('Lỗi gửi gần nhất', '直近の送信エラー')}: {ch.lastError}
+                    </div>
+                  )}
                 </div>
                 <div className="row-side actions-col">
-                  <TestSender onSend={(sample) => act(() => api.post(`/channels/${ch.id}/test`, { sample }), `Đã gửi "${SAMPLE_LABEL[sample]}" tới "${ch.name}"`)} />
+                  <TestSender
+                    onSend={(sample) =>
+                      act(
+                        () => api.post(`/channels/${ch.id}/test`, { sample }),
+                        l(`Đã gửi "${SAMPLE_LABEL[sample]}" tới "${ch.name}"`, `「${ch.name}」に「${SAMPLE_LABEL[sample]}」を送信しました`),
+                      )
+                    }
+                  />
                   <button className="btn" onClick={() => setEditing(ch)}>
-                    Sửa
-                  </button>
-                  <button
-                    className="btn"
-                    onClick={() => act(() => api.patch(`/channels/${ch.id}`, { enabled: !ch.enabled }), ch.enabled ? 'Đã tắt kênh' : 'Đã bật kênh')}
-                  >
-                    {ch.enabled ? 'Tắt' : 'Bật'}
+                    {l('Sửa', '編集')}
                   </button>
                   <button
                     className="btn"
                     onClick={() =>
-                      confirm(`Xoá kênh "${ch.name}"?`) && act(() => api.del(`/channels/${ch.id}`), `Đã xoá kênh "${ch.name}"`)
+                      act(
+                        () => api.patch(`/channels/${ch.id}`, { enabled: !ch.enabled }),
+                        ch.enabled ? l('Đã tắt kênh', 'チャネルを無効にしました') : l('Đã bật kênh', 'チャネルを有効にしました'),
+                      )
                     }
                   >
-                    Xoá
+                    {ch.enabled ? l('Tắt', '無効化') : l('Bật', '有効化')}
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() =>
+                      confirm(l(`Xoá kênh "${ch.name}"?`, `チャネル「${ch.name}」を削除しますか？`)) &&
+                      act(() => api.del(`/channels/${ch.id}`), l(`Đã xoá kênh "${ch.name}"`, `チャネル「${ch.name}」を削除しました`))
+                    }
+                  >
+                    {l('Xoá', '削除')}
                   </button>
                 </div>
               </li>
@@ -159,9 +189,9 @@ export function ChannelsPage() {
 }
 
 function scopeLabel(scope: ChannelScope, name: (id?: string) => string) {
-  if (scope.type === 'gl') return `Nhóm GL ${name(scope.gl)}`;
-  if (scope.type === 'projects') return `Dự án: ${(scope.projects ?? []).join(', ')}`;
-  return 'Tất cả dự án';
+  if (scope.type === 'gl') return l(`Nhóm GL ${name(scope.gl)}`, `GL ${name(scope.gl)} のチーム`);
+  if (scope.type === 'projects') return `${l('Dự án', 'プロジェクト')}: ${(scope.projects ?? []).join(', ')}`;
+  return l('Tất cả dự án', 'すべてのプロジェクト');
 }
 
 const CODE_KEY = 'telegram-connect-code';
@@ -219,6 +249,7 @@ function ChannelForm({
   const [picked, setPicked] = useState<string[]>(channel?.scope.projects ?? []);
   const [events, setEvents] = useState<AlertEvent[]>(channel?.events ?? [...ALERT_EVENTS]);
   const [quietHours, setQuiet] = useState(channel?.quietHours ?? true);
+  const [msgLang, setMsgLang] = useState<Lang>(channel?.lang ?? lang);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const connectLine = `/connect@${bot?.username ?? 'bot'} ${code}`;
@@ -231,13 +262,25 @@ function ChannelForm({
       scopeType === 'gl' ? { type: 'gl', gl } : scopeType === 'projects' ? { type: 'projects', projects: picked } : { type: 'all' };
     try {
       if (channel) {
-        await api.patch(`/channels/${channel.id}`, { name: chName, scope, events, quietHours, ...(url ? { webhookUrl: url } : {}) });
-        onSaved(`Đã lưu kênh "${chName}"`);
+        await api.patch(`/channels/${channel.id}`, {
+          name: chName,
+          scope,
+          events,
+          quietHours,
+          lang: msgLang,
+          ...(url ? { webhookUrl: url } : {}),
+        });
+        onSaved(l(`Đã lưu kênh "${chName}"`, `チャネル「${chName}」を保存しました`));
       } else {
         const target = kind === 'telegram' ? { connectCode: code } : { webhookUrl: url };
-        await api.post('/channels', { kind, name: chName, scope, events, quietHours, ...target });
+        await api.post('/channels', { kind, name: chName, scope, events, quietHours, lang: msgLang, ...target });
         if (kind === 'telegram') forgetConnectCode();
-        onSaved(`Đã kết nối "${chName}" — kiểm tra tin thử trong ${KIND_LABEL[kind]}`);
+        onSaved(
+          l(
+            `Đã kết nối "${chName}" — kiểm tra tin thử trong ${KIND_LABEL[kind]}`,
+            `「${chName}」を接続しました — ${KIND_LABEL[kind]} でテストメッセージを確認してください`,
+          ),
+        );
       }
     } catch (err) {
       setError((err as Error).message);
@@ -251,10 +294,12 @@ function ChannelForm({
 
   return (
     <form className="card form" onSubmit={submit}>
-      <h2>{channel ? `Sửa kênh "${channel.name}"` : 'Đăng ký kênh thông báo'}</h2>
+      <h2>
+        {channel ? l(`Sửa kênh "${channel.name}"`, `チャネル「${channel.name}」を編集`) : l('Đăng ký kênh thông báo', '通知チャネルの登録')}
+      </h2>
 
       {!channel && (
-        <div className="segmented" role="group" aria-label="Loại kênh">
+        <div className="segmented" role="group" aria-label={l('Loại kênh', 'チャネルの種類')}>
           {(['telegram', 'teams'] as ChannelKind[]).map((k) => (
             <button type="button" key={k} className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
               {KIND_LABEL[k]}
@@ -264,41 +309,69 @@ function ChannelForm({
       )}
 
       <label>
-        Tên kênh (để nhận biết)
-        <input required value={chName} placeholder="VD: Nhóm Hùng – dự án" onChange={(e) => setName(e.target.value)} />
+        {l('Tên kênh (để nhận biết)', 'チャネル名（識別用）')}
+        <input
+          required
+          value={chName}
+          placeholder={l('VD: Nhóm Hùng – dự án', '例: Hùng チーム – プロジェクト')}
+          onChange={(e) => setName(e.target.value)}
+        />
       </label>
 
       {!channel && kind === 'telegram' && (
         <fieldset>
-          <legend>Kết nối nhóm Telegram</legend>
+          <legend>{l('Kết nối nhóm Telegram', 'Telegram グループに接続')}</legend>
           {telegramBlocked ? (
             <div className="error-box">
-              Chưa cài bot Telegram.{' '}
+              {l('Chưa cài bot Telegram.', 'Telegram ボットが未設定です。')}{' '}
               {isAdmin ? (
-                <>
-                  Vào <a href="/settings">Cài đặt → Bot Telegram</a> để cài.
-                </>
+                lang === 'ja' ? (
+                  <>
+                    <a href="/settings">設定 → Telegram ボット</a>で設定してください。
+                  </>
+                ) : (
+                  <>
+                    Vào <a href="/settings">Cài đặt → Bot Telegram</a> để cài.
+                  </>
+                )
               ) : (
-                'Nhờ PMO cài bot ở trang Cài đặt.'
+                l('Nhờ PMO cài bot ở trang Cài đặt.', 'PMO に「設定」画面でボットを設定してもらってください。')
               )}
             </div>
           ) : (
             <ol className="howto">
               <li>
-                Trong Telegram, mở nhóm muốn nhận thông báo → <b>Add members</b> → thêm <b>@{bot?.username}</b>. (Muốn nhận riêng cho mình thì
-                mở chat với @{bot?.username} và bấm <b>Start</b>.)
+                {lang === 'ja' ? (
+                  <>
+                    Telegram で通知を受け取るグループを開き → <b>Add members</b> → <b>@{bot?.username}</b>{' '}
+                    を追加します。（自分だけで受け取る場合は @{bot?.username} とのチャットを開いて <b>Start</b> を押します。）
+                  </>
+                ) : (
+                  <>
+                    Trong Telegram, mở nhóm muốn nhận thông báo → <b>Add members</b> → thêm <b>@{bot?.username}</b>. (Muốn nhận riêng cho
+                    mình thì mở chat với @{bot?.username} và bấm <b>Start</b>.)
+                  </>
+                )}
               </li>
               <li>
-                Gửi vào nhóm đúng dòng sau:
+                {l('Gửi vào nhóm đúng dòng sau:', 'グループに次の 1 行をそのまま送信します:')}
                 <div className="copy-line">
                   <code>{connectLine}</code>
                   <button type="button" className="btn" onClick={() => navigator.clipboard?.writeText(connectLine)}>
-                    Copy
+                    {l('Copy', 'コピー')}
                   </button>
                 </div>
               </li>
               <li>
-                Quay lại đây, bấm <b>Kết nối &amp; gửi tin thử</b>.
+                {lang === 'ja' ? (
+                  <>
+                    この画面に戻り、<b>接続してテスト送信</b>を押します。
+                  </>
+                ) : (
+                  <>
+                    Quay lại đây, bấm <b>Kết nối &amp; gửi tin thử</b>.
+                  </>
+                )}
               </li>
             </ol>
           )}
@@ -307,8 +380,12 @@ function ChannelForm({
 
       {kind === 'teams' && (
         <label>
-          URL webhook của Teams Workflows{' '}
-          {channel && <small className="muted">(để trống = giữ URL hiện tại: {channel.webhookUrlMasked})</small>}
+          {l('URL webhook của Teams Workflows', 'Teams Workflows の Webhook URL')}{' '}
+          {channel && (
+            <small className="muted">
+              {l(`(để trống = giữ URL hiện tại: ${channel.webhookUrlMasked})`, `（空欄 = 現在の URL のまま: ${channel.webhookUrlMasked}）`)}
+            </small>
+          )}
           <input
             type="url"
             required={!channel}
@@ -318,28 +395,33 @@ function ChannelForm({
           />
           {!channel && (
             <small className="muted">
-              Trong kênh Teams: ⋯ → Workflows → mẫu “Send webhook alerts to a channel” → Save → copy URL. Cần quyền Power Automate.
+              {l(
+                'Trong kênh Teams: ⋯ → Workflows → mẫu “Send webhook alerts to a channel” → Save → copy URL. Cần quyền Power Automate.',
+                'Teams のチャネルで ⋯ → Workflows → テンプレート「Send webhook alerts to a channel」→ Save → URL をコピー。Power Automate の権限が必要です。',
+              )}
             </small>
           )}
         </label>
       )}
 
       <fieldset>
-        <legend>Phạm vi dự án</legend>
+        <legend>{l('Phạm vi dự án', '対象範囲')}</legend>
         <div className="checks">
           <label className="check">
-            <input type="radio" name="scope" checked={scopeType === 'all'} onChange={() => setScopeType('all')} /> Tất cả dự án
+            <input type="radio" name="scope" checked={scopeType === 'all'} onChange={() => setScopeType('all')} />{' '}
+            {l('Tất cả dự án', 'すべてのプロジェクト')}
           </label>
           <label className="check">
-            <input type="radio" name="scope" checked={scopeType === 'gl'} onChange={() => setScopeType('gl')} /> Theo nhóm GL
+            <input type="radio" name="scope" checked={scopeType === 'gl'} onChange={() => setScopeType('gl')} /> {l('Theo nhóm GL', 'GL別')}
           </label>
           <label className="check">
-            <input type="radio" name="scope" checked={scopeType === 'projects'} onChange={() => setScopeType('projects')} /> Chọn dự án
+            <input type="radio" name="scope" checked={scopeType === 'projects'} onChange={() => setScopeType('projects')} />{' '}
+            {l('Chọn dự án', 'プロジェクトを選択')}
           </label>
         </div>
         {scopeType === 'gl' && (
           <select required value={gl} onChange={(e) => setGl(e.target.value)} aria-label="GL">
-            <option value="">— chọn GL —</option>
+            <option value="">{l('— chọn GL —', '— GL を選択 —')}</option>
             {users
               .filter((u) => u.role === 'GL')
               .map((u) => (
@@ -353,7 +435,11 @@ function ChannelForm({
           <div className="checks">
             {(projects?.projects ?? []).map((p) => (
               <label key={p.id} className="check">
-                <input type="checkbox" checked={picked.includes(p.id)} onChange={(e) => setPicked(toggle(picked, p.id, e.target.checked))} />
+                <input
+                  type="checkbox"
+                  checked={picked.includes(p.id)}
+                  onChange={(e) => setPicked(toggle(picked, p.id, e.target.checked))}
+                />
                 {p.id} · {p.name}
               </label>
             ))}
@@ -362,7 +448,7 @@ function ChannelForm({
       </fieldset>
 
       <fieldset>
-        <legend>Nhận thông báo khi</legend>
+        <legend>{l('Nhận thông báo khi', '通知するタイミング')}</legend>
         <div className="checks column">
           {ALERT_EVENTS.map((ev) => (
             <label key={ev} className="check">
@@ -373,17 +459,30 @@ function ChannelForm({
         </div>
       </fieldset>
       <label className="check">
-        <input type="checkbox" checked={quietHours} onChange={(e) => setQuiet(e.target.checked)} /> Không gửi nhắc nhở từ 22h đến 7h (cảnh báo
-        Đỏ và vấn đề Cao vẫn gửi ngay)
+        <input type="checkbox" checked={quietHours} onChange={(e) => setQuiet(e.target.checked)} />{' '}
+        {l(
+          'Không gửi nhắc nhở từ 22h đến 7h (cảnh báo Đỏ và vấn đề Cao vẫn gửi ngay)',
+          '夜間停止: 22:00〜07:00 はリマインドを送らない（「赤」と優先度「高」の課題は即時送信）',
+        )}
+      </label>
+      <label>
+        {l('Ngôn ngữ tin nhắn', 'メッセージの言語')}
+        <select value={msgLang} onChange={(e) => setMsgLang(e.target.value as Lang)}>
+          {LANGS.map((k) => (
+            <option key={k} value={k}>
+              {LANG_LABEL[k]}
+            </option>
+          ))}
+        </select>
       </label>
 
       <ErrorBox error={error} />
       <div className="actions gap">
         <button type="button" className="btn" onClick={onCancel}>
-          Huỷ
+          {l('Huỷ', 'キャンセル')}
         </button>
         <button className="btn btn-primary" disabled={busy || !!telegramBlocked}>
-          {busy ? 'Đang gửi tin thử…' : channel ? 'Lưu' : 'Kết nối & gửi tin thử'}
+          {busy ? l('Đang gửi tin thử…', 'テスト送信中…') : channel ? l('Lưu', '保存') : l('Kết nối & gửi tin thử', '接続してテスト送信')}
         </button>
       </div>
     </form>

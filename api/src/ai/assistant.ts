@@ -4,6 +4,7 @@
 // REST endpoints (same validation, permissions and alerts as manual entry).
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
+import { l } from '../i18n.js';
 import { HEALTHS, ITEM_STATUSES, ITEM_TYPES, PRIORITIES, PROJECT_STATES } from '../types.js';
 
 export const AI_ACTION_KINDS = ['update', 'item', 'item_status', 'item_update', 'project_create', 'project_update'] as const;
@@ -86,16 +87,26 @@ Quy tắc:
 - Nếu ghi chú nói một vấn đề đã có "xong", "đã xử lý", "hoãn"… thì dùng item_status, không tạo item mới trùng.
 - Người (owner, pl, gl, supporters) phải là email trong danh sách người dùng; không khớp thì để null và nêu trong questions.
 - Các trường không dùng cho loại thao tác đó đặt null.
-- Viết summary, title, note, name, questions bằng tiếng Việt (giữ nguyên tên riêng).
+- Viết summary, title, note, name bằng ngôn ngữ của ghi chú (tiếng Việt, tiếng Nhật…; giữ nguyên tên riêng). Viết questions bằng ngôn ngữ giao diện cho trong ngữ cảnh.
 - Không có gì để ghi thì trả actions rỗng và giải thích trong questions.`;
 
 function mapApiError(e: unknown): never {
   if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError)
-    throw new AiError('API key Claude không hợp lệ hoặc không có quyền (Cài đặt → AI)', 400);
-  if (e instanceof Anthropic.NotFoundError) throw new AiError(`Tài khoản không dùng được model ${AI_MODEL}`, 400);
-  if (e instanceof Anthropic.RateLimitError) throw new AiError('AI đang quá tải hoặc hết hạn mức, thử lại sau ít phút', 503);
-  if (e instanceof Anthropic.APIConnectionError) throw new AiError('Không kết nối được tới Claude API, thử lại sau', 503);
-  if (e instanceof Anthropic.APIError) throw new AiError(`Claude API lỗi ${e.status ?? ''}: ${e.message}`, 502);
+    throw new AiError(
+      l('API key Claude không hợp lệ hoặc không có quyền (Cài đặt → AI)', 'Claude の API キーが無効か権限がありません（設定 → AI）'),
+      400,
+    );
+  if (e instanceof Anthropic.NotFoundError)
+    throw new AiError(l(`Tài khoản không dùng được model ${AI_MODEL}`, `このアカウントではモデル ${AI_MODEL} を利用できません`), 400);
+  if (e instanceof Anthropic.RateLimitError)
+    throw new AiError(
+      l('AI đang quá tải hoặc hết hạn mức, thử lại sau ít phút', 'AI が混雑しているか利用上限に達しました。数分後に再試行してください'),
+      503,
+    );
+  if (e instanceof Anthropic.APIConnectionError)
+    throw new AiError(l('Không kết nối được tới Claude API, thử lại sau', 'Claude API に接続できません。後で再試行してください'), 503);
+  if (e instanceof Anthropic.APIError)
+    throw new AiError(l('Claude API lỗi', 'Claude API エラー') + ` ${e.status ?? ''}: ${e.message}`, 502);
   throw e;
 }
 
@@ -123,8 +134,9 @@ export const claudeClient: AiClient = {
     } catch (e) {
       mapApiError(e);
     }
-    if (response.stop_reason === 'refusal') throw new AiError('AI từ chối xử lý nội dung này', 400);
-    if (response.stop_reason === 'max_tokens') throw new AiError('Ghi chú quá dài, hãy chia nhỏ rồi thử lại', 400);
+    if (response.stop_reason === 'refusal') throw new AiError(l('AI từ chối xử lý nội dung này', 'AI がこの内容の処理を拒否しました'), 400);
+    if (response.stop_reason === 'max_tokens')
+      throw new AiError(l('Ghi chú quá dài, hãy chia nhỏ rồi thử lại', 'メモが長すぎます。分割して再試行してください'), 400);
     const json = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
     let parsed;
     try {
@@ -132,7 +144,8 @@ export const claudeClient: AiClient = {
     } catch {
       parsed = undefined;
     }
-    if (!parsed?.success) throw new AiError('AI trả về kết quả không đọc được, thử lại', 502);
+    if (!parsed?.success)
+      throw new AiError(l('AI trả về kết quả không đọc được, thử lại', 'AI の応答を読み取れませんでした。再試行してください'), 502);
     return parsed.data;
   },
 };

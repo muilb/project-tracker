@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
+import { l } from '../i18n.js';
 import { notifyBecameRed, notifyHighIssue } from '../notify/alerts.js';
 import { buildProjectView, compareItems, toItemView } from '../rules.js';
 import { createItemSchema, createProjectSchema, createUpdateSchema, parseBody, patchItemSchema, patchProjectSchema } from '../schemas.js';
@@ -14,7 +15,7 @@ export const projects = new Hono<AppEnv>();
 
 async function loadProject(store: Store, id: string): Promise<Project> {
   const p = await store.getProject(id.toUpperCase());
-  if (!p) throw new HTTPException(404, { message: `Không tìm thấy dự án ${id}` });
+  if (!p) throw new HTTPException(404, { message: l(`Không tìm thấy dự án ${id}`, `プロジェクト ${id} が見つかりません`) });
   return p;
 }
 
@@ -31,7 +32,8 @@ async function alert(fn: () => Promise<void>) {
 async function checkUsers(store: Store, ids: (string | undefined)[]) {
   const known = new Set((await store.listUsers()).map((u) => u.id));
   const missing = ids.filter((id): id is string => !!id && !known.has(id));
-  if (missing.length) throw new HTTPException(400, { message: `Người dùng chưa tồn tại: ${missing.join(', ')}` });
+  if (missing.length)
+    throw new HTTPException(400, { message: l('Người dùng chưa tồn tại: ', '未登録のユーザーです: ') + missing.join(', ') });
 }
 
 projects.get('/', async (c) => {
@@ -54,7 +56,7 @@ projects.get('/', async (c) => {
 projects.post('/', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
-  ensure(can.createProject(me), 'Chỉ PL trở lên mới được tạo dự án');
+  ensure(can.createProject(me), l('Chỉ PL trở lên mới được tạo dự án', 'プロジェクトの作成は PL 以上のみ行えます'));
   const body = await parseBody(c.req, createProjectSchema);
   const now = c.get('now').toISOString();
 
@@ -80,7 +82,10 @@ projects.post('/', async (c) => {
   try {
     await store.createProject(project);
   } catch (e) {
-    if (e instanceof ConflictError) throw new HTTPException(409, { message: `Mã dự án ${project.id} đã tồn tại` });
+    if (e instanceof ConflictError)
+      throw new HTTPException(409, {
+        message: l(`Mã dự án ${project.id} đã tồn tại`, `プロジェクトコード ${project.id} は既に存在します`),
+      });
     throw e;
   }
   return c.json({ project }, 201);
@@ -90,11 +95,7 @@ projects.get('/:id', async (c) => {
   const store = c.get('store');
   const now = c.get('now');
   const project = await loadProject(store, c.req.param('id'));
-  const [updates, items, settings] = await Promise.all([
-    store.listUpdates(project.id),
-    store.listItems(project.id),
-    store.getSettings(),
-  ]);
+  const [updates, items, settings] = await Promise.all([store.listUpdates(project.id), store.listItems(project.id), store.getSettings()]);
   return c.json({
     project: buildProjectView(project, updates, items, settings, now),
     updates: updates.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50),
@@ -106,7 +107,10 @@ projects.patch('/:id', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
   const project = await loadProject(store, c.req.param('id'));
-  ensure(can.editProject(me, project), 'Chỉ PMO, quản lý, GL hoặc PL của dự án mới được sửa');
+  ensure(
+    can.editProject(me, project),
+    l('Chỉ PMO, quản lý, GL hoặc PL của dự án mới được sửa', 'プロジェクトの編集は PMO・管理者・そのプロジェクトの GL / PL のみ行えます'),
+  );
   const body = await parseBody(c.req, patchProjectSchema);
   await checkUsers(store, [body.gl, body.pl, body.pmo, ...(body.supporters ?? [])]);
   const updated: Project = { ...project, ...body, updatedAt: c.get('now').toISOString() };
@@ -127,11 +131,7 @@ projects.post('/:id/updates', async (c) => {
   const project = await loadProject(store, c.req.param('id'));
   const body = await parseBody(c.req, createUpdateSchema);
   const now = c.get('now');
-  const [updates, items, settings] = await Promise.all([
-    store.listUpdates(project.id),
-    store.listItems(project.id),
-    store.getSettings(),
-  ]);
+  const [updates, items, settings] = await Promise.all([store.listUpdates(project.id), store.listItems(project.id), store.getSettings()]);
   const before = buildProjectView(project, updates, items, settings, now);
   const update: Update = {
     id: randomUUID().slice(0, 8),
@@ -185,7 +185,7 @@ projects.patch('/:id/items/:itemId', async (c) => {
   const store = c.get('store');
   const project = await loadProject(store, c.req.param('id'));
   const item = await store.getItem(project.id, c.req.param('itemId').toUpperCase());
-  if (!item) throw new HTTPException(404, { message: 'Không tìm thấy vấn đề / sự kiện' });
+  if (!item) throw new HTTPException(404, { message: l('Không tìm thấy vấn đề / sự kiện', '課題 / イベントが見つかりません') });
   const body = await parseBody(c.req, patchItemSchema);
   await checkUsers(store, [body.owner]);
   const updated: Item = { ...item, ...body, updatedAt: c.get('now').toISOString() };

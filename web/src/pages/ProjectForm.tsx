@@ -6,6 +6,7 @@ import { ErrorBox } from '../components/ui';
 import { STATE_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { ProjectDetail, ProjectView } from '../types';
+import { l } from '../i18n';
 
 interface FormState {
   id: string;
@@ -116,25 +117,29 @@ export function ProjectForm() {
       <div className="page-head">
         <div>
           <Link to={editing ? `/projects/${id}` : '/projects'} className="muted">
-            ← Quay lại
+            ← {l('Quay lại', '戻る')}
           </Link>
-          <h1>{editing ? `Sửa dự án ${id}` : 'Tạo dự án mới'}</h1>
+          <h1>{editing ? l(`Sửa dự án ${id}`, `プロジェクト編集 ${id}`) : l('Tạo dự án mới', '新規プロジェクト作成')}</h1>
         </div>
       </div>
       <form className="card form" onSubmit={submit}>
         <div className="form-grid">
           {!editing && (
             <label>
-              Mã dự án
-              <input value={f.id} placeholder="Để trống để tự sinh (P08…)" onChange={(e) => set('id', e.target.value)} />
+              {l('Mã dự án', 'プロジェクトコード')}
+              <input
+                value={f.id}
+                placeholder={l('Để trống để tự sinh (P08…)', '空欄で自動採番（P08…）')}
+                onChange={(e) => set('id', e.target.value)}
+              />
             </label>
           )}
           <label className="span-2">
-            Tên dự án *
+            {l('Tên dự án *', 'プロジェクト名 *')}
             <input required value={f.name} onChange={(e) => set('name', e.target.value)} />
           </label>
           <label>
-            Khách hàng
+            {l('Khách hàng', '顧客')}
             <input value={f.customer} onChange={(e) => set('customer', e.target.value)} />
           </label>
           <label>
@@ -152,33 +157,33 @@ export function ProjectForm() {
             </select>
           </label>
           <label>
-            PMO theo dõi
+            {l('PMO theo dõi', '担当 PMO')}
             <select value={f.pmo} onChange={(e) => set('pmo', e.target.value)}>
               <option value="">—</option>
               {people((r) => r === 'PMO')}
             </select>
           </label>
           <label>
-            Bắt đầu
+            {l('Bắt đầu', '開始日')}
             <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
           </label>
           <label>
-            Kết thúc
+            {l('Kết thúc', '終了日')}
             <input type="date" value={f.endDate} onChange={(e) => set('endDate', e.target.value)} />
           </label>
           <label>
-            Tần suất cập nhật riêng (giờ)
+            {l('Tần suất cập nhật riêng (giờ)', '個別の報告頻度（時間）')}
             <input
               type="number"
               min={1}
-              placeholder="Để trống = theo trạng thái"
+              placeholder={l('Để trống = theo trạng thái', '空欄 = 状態に応じて自動')}
               value={f.updateFrequencyHours}
               onChange={(e) => set('updateFrequencyHours', e.target.value)}
             />
           </label>
           {editing && (
             <label>
-              Tình trạng
+              {l('Tình trạng', '状況')}
               <select value={f.state} onChange={(e) => set('state', e.target.value as ProjectState)}>
                 {Object.entries(STATE_LABEL).map(([k, v]) => (
                   <option key={k} value={k}>
@@ -191,7 +196,7 @@ export function ProjectForm() {
         </div>
 
         <fieldset>
-          <legend>Người hỗ trợ cập nhật (thay PL / GL khi vắng)</legend>
+          <legend>{l('Người hỗ trợ cập nhật (thay PL / GL khi vắng)', '報告サポーター（PL / GL 不在時に代理）')}</legend>
           <div className="checks">
             {users
               .filter((u) => u.id !== f.pl && u.id !== f.gl)
@@ -200,9 +205,7 @@ export function ProjectForm() {
                   <input
                     type="checkbox"
                     checked={f.supporters.includes(u.id)}
-                    onChange={(e) =>
-                      set('supporters', e.target.checked ? [...f.supporters, u.id] : f.supporters.filter((s) => s !== u.id))
-                    }
+                    onChange={(e) => set('supporters', e.target.checked ? [...f.supporters, u.id] : f.supporters.filter((s) => s !== u.id))}
                   />
                   {u.name}
                 </label>
@@ -211,22 +214,31 @@ export function ProjectForm() {
         </fieldset>
 
         <fieldset>
-          <legend>Trang public</legend>
+          <legend>{l('Trang public', '公開ページ')}</legend>
           <label className="check">
-            <input type="checkbox" checked={f.publicVisible} onChange={(e) => set('publicVisible', e.target.checked)} /> Hiện dự án này
-            trên trang public
+            <input type="checkbox" checked={f.publicVisible} onChange={(e) => set('publicVisible', e.target.checked)} />{' '}
+            {l('Hiện dự án này trên trang public', 'このプロジェクトを公開ページに表示')}
           </label>
           <label>
-            Tên hiển thị trên trang public
-            <input value={f.publicName} placeholder="Để trống = dùng tên dự án" onChange={(e) => set('publicName', e.target.value)} />
+            {l('Tên hiển thị trên trang public', '公開ページでの表示名')}
+            <input
+              value={f.publicName}
+              placeholder={l('Để trống = dùng tên dự án', '空欄 = プロジェクト名を使用')}
+              onChange={(e) => set('publicName', e.target.value)}
+            />
           </label>
         </fieldset>
 
-        <p className="muted">Người cần chọn chưa có trong danh sách? Nhờ PMO thêm ở trang Người dùng, hoặc để họ đăng nhập một lần.</p>
+        <p className="muted">
+          {l(
+            'Người cần chọn chưa có trong danh sách? Nhờ PMO thêm ở trang Người dùng, hoặc để họ đăng nhập một lần.',
+            '選びたい人が一覧にいない場合は、PMO に「ユーザー」画面で追加してもらうか、本人に一度ログインしてもらってください。',
+          )}
+        </p>
         <ErrorBox error={error} />
         <div className="actions">
           <button className="btn btn-primary" disabled={busy}>
-            {busy ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo dự án'}
+            {busy ? l('Đang lưu…', '保存中…') : editing ? l('Lưu thay đổi', '変更を保存') : l('Tạo dự án', 'プロジェクト作成')}
           </button>
         </div>
       </form>

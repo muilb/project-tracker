@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Health, ItemType, Urgency } from '../../../api/src/types';
 import { fmtHours } from '../format';
+import { l, lang, setLang } from '../i18n';
 import { HEALTH_LABEL, TYPE_ICON, TYPE_LABEL, URGENCY_LABEL } from '../labels';
 
 // Status colors always come with a symbol and a text label, never color alone.
@@ -36,9 +37,9 @@ export function Warnings({ lateHours, overdueItems, highIssues }: { lateHours: n
   if (!lateHours && !overdueItems && !highIssues) return null;
   return (
     <span className="warnings">
-      {lateHours > 0 && <span className="warn">⏰ Trễ cập nhật {fmtHours(lateHours)}</span>}
-      {overdueItems > 0 && <span className="warn">⚠ {overdueItems} mục quá hạn</span>}
-      {highIssues > 0 && <span className="warn">▲ {highIssues} vấn đề ưu tiên cao</span>}
+      {lateHours > 0 && <span className="warn">⏰ {l(`Trễ cập nhật ${fmtHours(lateHours)}`, `報告遅れ ${fmtHours(lateHours)}`)}</span>}
+      {overdueItems > 0 && <span className="warn">⚠ {l(`${overdueItems} mục quá hạn`, `期限超過 ${overdueItems}件`)}</span>}
+      {highIssues > 0 && <span className="warn">▲ {l(`${highIssues} vấn đề ưu tiên cao`, `優先度「高」の課題 ${highIssues}件`)}</span>}
     </span>
   );
 }
@@ -85,12 +86,26 @@ export function HealthBar({ red, yellow, green }: Record<Health, number>) {
     ['green', green],
   ];
   return (
-    <div className="hbar" role="img" aria-label={`Đỏ ${red}, Vàng ${yellow}, Xanh ${green}`}>
+    <div className="hbar" role="img" aria-label={l(`Đỏ ${red}, Vàng ${yellow}, Xanh ${green}`, `赤 ${red}、黄 ${yellow}、緑 ${green}`)}>
       {segs
         .filter(([, n]) => n > 0)
         .map(([h, n]) => (
-          <div key={h} className={`hbar-seg fill-${h}`} style={{ flexGrow: n }} title={`${HEALTH_LABEL[h]}: ${n} dự án`} />
+          <div key={h} className={`hbar-seg fill-${h}`} style={{ flexGrow: n }} title={`${HEALTH_LABEL[h]}: ${n}${l(' dự án', '件')}`} />
         ))}
     </div>
+  );
+}
+
+/** "VI | 日本語" switch; the page reloads in the chosen language. */
+export function LangSwitch() {
+  return (
+    <span className="lang-switch" role="group" aria-label="Ngôn ngữ / 言語">
+      <button type="button" className={lang === 'vi' ? 'active' : ''} aria-pressed={lang === 'vi'} onClick={() => setLang('vi')}>
+        VI
+      </button>
+      <button type="button" className={lang === 'ja' ? 'active' : ''} aria-pressed={lang === 'ja'} onClick={() => setLang('ja')}>
+        日本語
+      </button>
+    </span>
   );
 }

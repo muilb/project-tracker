@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
 import { auth } from '../auth';
+import { LangSwitch } from '../components/ui';
+import { lang } from '../i18n';
+import { HelpPageJa } from './HelpJa';
 
 // User manual for newcomers. Public (no login needed) so people can read it before signing up.
-// Keep it in step with the UI labels when pages change.
+// Keep it in step with the UI labels when pages change, and HelpJa.tsx (Japanese) in step with it.
 
 const SECTIONS: [id: string, title: string][] = [
   ['bat-dau', '1. Bắt đầu: tài khoản & đăng nhập'],
@@ -35,6 +38,7 @@ function H({ id, children }: { id: string; children: ReactNode }) {
 const B = ({ children }: { children: ReactNode }) => <b className="ui-label">{children}</b>;
 
 export function HelpPage() {
+  if (lang === 'ja') return <HelpPageJa />;
   const signedIn = auth.isSignedIn();
   return (
     <main className="container narrow stack help">
@@ -43,16 +47,19 @@ export function HelpPage() {
           <h1>Hướng dẫn sử dụng</h1>
           <p className="muted">Hệ thống Theo dõi dự án — thay cho file Excel theo dõi dự án.</p>
         </div>
-        <a className="btn" href={signedIn ? '/' : '/login'}>
-          {signedIn ? '← Về hệ thống' : 'Đăng nhập'}
-        </a>
+        <div className="filters">
+          <LangSwitch />
+          <a className="btn" href={signedIn ? '/' : '/login'}>
+            {signedIn ? '← Về hệ thống' : 'Đăng nhập'}
+          </a>
+        </div>
       </div>
 
       <div className="card help-intro">
         <p>
-          <b>Hệ thống giúp gì?</b> Mỗi dự án có <b>trạng thái</b> (Xanh / Vàng / Đỏ), <b>lịch sử cập nhật</b> và danh sách <b>vấn đề, sự kiện,
-          mốc</b>. Hệ thống tự tính dự án nào <b>trễ cập nhật</b>, việc nào <b>quá hạn</b>, và <b>tự nhắn Telegram</b> cho nhóm khi có chuyện cần
-          chú ý.
+          <b>Hệ thống giúp gì?</b> Mỗi dự án có <b>trạng thái</b> (Xanh / Vàng / Đỏ), <b>lịch sử cập nhật</b> và danh sách{' '}
+          <b>vấn đề, sự kiện, mốc</b>. Hệ thống tự tính dự án nào <b>trễ cập nhật</b>, việc nào <b>quá hạn</b>, và <b>tự nhắn Telegram</b>{' '}
+          cho nhóm khi có chuyện cần chú ý.
         </p>
         <p>
           <b>Người mới chỉ cần nhớ 3 việc:</b>
@@ -87,8 +94,8 @@ export function HelpPage() {
             Hệ thống gửi <b>mã xác nhận</b> qua email → nhập mã ở màn hình <B>Xác nhận email</B>.
           </li>
           <li>
-            <b>Không nhận được email?</b> (mail công ty hay chặn thư tự động) → báo PMO. PMO vào <B>Người dùng → Chờ duyệt</B> để duyệt tài khoản
-            cho bạn, sau đó bạn đăng nhập bình thường.
+            <b>Không nhận được email?</b> (mail công ty hay chặn thư tự động) → báo PMO. PMO vào <B>Người dùng → Chờ duyệt</B> để duyệt tài
+            khoản cho bạn, sau đó bạn đăng nhập bình thường.
           </li>
         </ol>
         <h3>Đăng nhập & mật khẩu</h3>
@@ -98,8 +105,13 @@ export function HelpPage() {
             <B>Quên mật khẩu</B> gửi mã đặt lại qua email. Nếu email không tới, nhờ người quản trị hệ thống đặt lại mật khẩu giúp.
           </li>
           <li>Dùng được trên điện thoại: mở cùng địa chỉ web bằng trình duyệt.</li>
+          <li>
+            Đổi ngôn ngữ hiển thị (tiếng Việt / tiếng Nhật) bằng nút <B>VI / 日本語</B> ở góc trên bên phải (trang đăng nhập: ở cuối).
+          </li>
         </ul>
-        <p className="muted">Lần đầu đăng nhập bạn có vai trò mặc định là PL. Nếu cần vai trò khác (GL, PMO…), nhờ PMO đổi ở trang Người dùng.</p>
+        <p className="muted">
+          Lần đầu đăng nhập bạn có vai trò mặc định là PL. Nếu cần vai trò khác (GL, PMO…), nhờ PMO đổi ở trang Người dùng.
+        </p>
       </H>
 
       <H id="vai-tro">
@@ -116,7 +128,9 @@ export function HelpPage() {
               <tr>
                 <td>PL</td>
                 <td>Trưởng dự án</td>
-                <td>Xem tất cả; cập nhật tình hình, thêm / sửa vấn đề, sự kiện, mốc; tạo dự án mới; sửa dự án mình là PL; dùng Nhập bằng AI</td>
+                <td>
+                  Xem tất cả; cập nhật tình hình, thêm / sửa vấn đề, sự kiện, mốc; tạo dự án mới; sửa dự án mình là PL; dùng Nhập bằng AI
+                </td>
               </tr>
               <tr>
                 <td>GL</td>
@@ -166,8 +180,8 @@ export function HelpPage() {
           </li>
         </ul>
         <p>
-          Trạng thái hiển thị là mức <b>xấu nhất</b> trong: trạng thái PL / GL / người hỗ trợ khai, đánh giá của PMO, và việc quá hạn (có mục quá
-          hạn thì ít nhất là Vàng).
+          Trạng thái hiển thị là mức <b>xấu nhất</b> trong: trạng thái PL / GL / người hỗ trợ khai, đánh giá của PMO, và việc quá hạn (có
+          mục quá hạn thì ít nhất là Vàng).
         </p>
         <h3>Mức khẩn cấp</h3>
         <ul className="howto">
@@ -187,16 +201,16 @@ export function HelpPage() {
           <li>Có mốc / sự kiện trong 3 ngày tới: mỗi ngày.</li>
           <li>Dự án có thể đặt tần suất riêng (ở trang sửa dự án). PMO đổi các mức chung ở Cài đặt.</li>
           <li>
-            "Trễ" được tính từ lần cập nhật gần nhất của <b>PL / GL / người hỗ trợ</b>. Cập nhật của PMO hay quản lý không tính là cập nhật đúng
-            hạn.
+            "Trễ" được tính từ lần cập nhật gần nhất của <b>PL / GL / người hỗ trợ</b>. Cập nhật của PMO hay quản lý không tính là cập nhật
+            đúng hạn.
           </li>
         </ul>
       </H>
 
       <H id="tong-quan">
         <p>
-          Trang đầu tiên sau khi đăng nhập. Nút <B>Dự án của tôi</B> / <B>Tất cả</B> chọn phạm vi (PL, GL mặc định xem dự án của mình; PMO, quản lý
-          xem tất cả). Có thể <B>Lọc theo GL</B>.
+          Trang đầu tiên sau khi đăng nhập. Nút <B>Dự án của tôi</B> / <B>Tất cả</B> chọn phạm vi (PL, GL mặc định xem dự án của mình; PMO,
+          quản lý xem tất cả). Có thể <B>Lọc theo GL</B>.
         </p>
         <ul className="howto">
           <li>
@@ -224,12 +238,12 @@ export function HelpPage() {
       <H id="du-an">
         <ul className="howto">
           <li>
-            Trang <B>Dự án</B>: danh sách có trạng thái, tình hình mới nhất, lần cập nhật cuối, việc kế tiếp. Lọc theo tình trạng (Đang chạy / Tạm
-            dừng / Đã đóng / Tất cả), phạm vi, và ô tìm kiếm (mã, tên, khách hàng, người).
+            Trang <B>Dự án</B>: danh sách có trạng thái, tình hình mới nhất, lần cập nhật cuối, việc kế tiếp. Lọc theo tình trạng (Đang chạy
+            / Tạm dừng / Đã đóng / Tất cả), phạm vi, và ô tìm kiếm (mã, tên, khách hàng, người).
           </li>
           <li>
-            Trang <b>chi tiết dự án</b> gồm: thông tin chung (khách hàng, GL, PL, người hỗ trợ, thời gian, tần suất, hạn cập nhật kế tiếp), khung{' '}
-            <B>Cập nhật tình hình</B>, <B>Vấn đề · Sự kiện · Mốc</B> và <B>Lịch sử cập nhật</B>.
+            Trang <b>chi tiết dự án</b> gồm: thông tin chung (khách hàng, GL, PL, người hỗ trợ, thời gian, tần suất, hạn cập nhật kế tiếp),
+            khung <B>Cập nhật tình hình</B>, <B>Vấn đề · Sự kiện · Mốc</B> và <B>Lịch sử cập nhật</B>.
           </li>
           <li>
             Phần thông tin hiện riêng <B>Trạng thái PL/GL khai</B> và <B>PMO đánh giá</B> để biết trạng thái cuối đến từ đâu.
@@ -293,8 +307,8 @@ export function HelpPage() {
         </div>
         <ul className="howto">
           <li>
-            Ở trang dự án, khung <B>Vấn đề · Sự kiện · Mốc</B> → <B>＋ Thêm</B>: chọn loại, nội dung, ngày, <b>ưu tiên</b> (Cao / Trung bình / Thấp),
-            người phụ trách.
+            Ở trang dự án, khung <B>Vấn đề · Sự kiện · Mốc</B> → <B>＋ Thêm</B>: chọn loại, nội dung, ngày, <b>ưu tiên</b> (Cao / Trung bình
+            / Thấp), người phụ trách.
           </li>
           <li>
             Trạng thái mục: <b>Mở → Đang xử lý → Xong</b>, hoặc <b>Hoãn</b>. Nhớ chuyển sang Xong khi đã xử lý, nếu không mục sẽ thành{' '}
@@ -307,8 +321,8 @@ export function HelpPage() {
 
       <H id="ai">
         <p>
-          Menu <B>✦ Nhập bằng AI</B> (PL trở lên): gõ tình hình như nhắn tin, AI tách thành các thao tác. <b>AI không tự ghi gì</b>: bạn xem từng
-          đề xuất, sửa, bỏ chọn cái không muốn, rồi bấm <B>Ghi … mục đã chọn</B>.
+          Menu <B>✦ Nhập bằng AI</B> (PL trở lên): gõ tình hình như nhắn tin, AI tách thành các thao tác. <b>AI không tự ghi gì</b>: bạn xem
+          từng đề xuất, sửa, bỏ chọn cái không muốn, rồi bấm <B>Ghi … mục đã chọn</B>.
         </p>
         <h3>AI làm được</h3>
         <div className="table-wrap">
@@ -350,7 +364,10 @@ export function HelpPage() {
         <h3>Mẹo</h3>
         <ul className="howto">
           <li>Một ghi chú có thể nói về nhiều dự án; AI tạo nhiều đề xuất.</li>
-          <li>Nêu mã (P03), tên hoặc khách hàng của dự án. Không nêu thì chọn <B>Dự án mặc định</B> trước khi phân tích, hoặc chọn dự án trên từng thẻ.</li>
+          <li>
+            Nêu mã (P03), tên hoặc khách hàng của dự án. Không nêu thì chọn <B>Dự án mặc định</B> trước khi phân tích, hoặc chọn dự án trên
+            từng thẻ.
+          </li>
           <li>Ngày kiểu "thứ 6", "tuần sau", "cuối tháng" được AI tự đổi ra ngày cụ thể — kiểm tra lại trên thẻ.</li>
           <li>Sửa dự án / sửa mục hiện "Hiện tại: …" cạnh giá trị mới để so sánh.</li>
           <li>⚠ màu đỏ trên thẻ là cảnh báo (ví dụ không tìm thấy người); khung đỏ "Không ghi được" là đề xuất bị chặn.</li>
@@ -361,22 +378,23 @@ export function HelpPage() {
       <H id="tao-du-an">
         <ul className="howto">
           <li>
-            Trang <B>Dự án</B> → <B>＋ Tạo dự án</B> (PL trở lên). Nhập tên, khách hàng, GL, PL, người hỗ trợ, ngày bắt đầu / kết thúc. Mã dự án để
-            trống sẽ tự sinh (P08, P09…).
+            Trang <B>Dự án</B> → <B>＋ Tạo dự án</B> (PL trở lên). Nhập tên, khách hàng, GL, PL, người hỗ trợ, ngày bắt đầu / kết thúc. Mã
+            dự án để trống sẽ tự sinh (P08, P09…).
           </li>
           <li>
-            Người chọn làm GL / PL / hỗ trợ phải có trong danh sách người dùng. Chưa có? Nhờ họ đăng nhập một lần, hoặc nhờ PMO thêm ở trang Người
-            dùng.
+            Người chọn làm GL / PL / hỗ trợ phải có trong danh sách người dùng. Chưa có? Nhờ họ đăng nhập một lần, hoặc nhờ PMO thêm ở trang
+            Người dùng.
           </li>
           <li>
             <b>Tần suất cập nhật</b>: để trống = theo trạng thái (7 / 3 / 1 ngày). Đặt số giờ nếu dự án cần theo dõi sát hơn.
           </li>
           <li>
-            <b>Trang public</b>: mặc định dự án hiện trên trang public với tên dự án; có thể đặt tên public khác, hoặc bỏ chọn <B>Hiện dự án này trên trang public</B> để ẩn khỏi trang public.
+            <b>Trang public</b>: mặc định dự án hiện trên trang public với tên dự án; có thể đặt tên public khác, hoặc bỏ chọn{' '}
+            <B>Hiện dự án này trên trang public</B> để ẩn khỏi trang public.
           </li>
           <li>
-            Sửa: mở dự án → <B>Sửa dự án</B> (PMO, quản lý, GL / PL của dự án). Có thể đổi trạng thái dự án: Đang chạy / Tạm dừng / Đã đóng. Dự án tạm
-            dừng, đã đóng không bị nhắc.
+            Sửa: mở dự án → <B>Sửa dự án</B> (PMO, quản lý, GL / PL của dự án). Có thể đổi trạng thái dự án: Đang chạy / Tạm dừng / Đã đóng.
+            Dự án tạm dừng, đã đóng không bị nhắc.
           </li>
         </ul>
       </H>
@@ -386,11 +404,12 @@ export function HelpPage() {
         <h3>Kết nối nhóm Telegram</h3>
         <ol className="howto">
           <li>
-            Trong Telegram, thêm bot của hệ thống vào nhóm (tên bot hiện ở trang <B>Kênh thông báo</B>). Nhận riêng: chat với bot và bấm Start.
+            Trong Telegram, thêm bot của hệ thống vào nhóm (tên bot hiện ở trang <B>Kênh thông báo</B>). Nhận riêng: chat với bot và bấm
+            Start.
           </li>
           <li>
-            Trên web: <B>Kênh thông báo</B> → <B>＋ Đăng ký kênh</B> → Telegram. Đặt tên, chọn <B>Phạm vi dự án</B> (tất cả / nhóm của một GL /
-            chọn dự án) và các loại thông báo.
+            Trên web: <B>Kênh thông báo</B> → <B>＋ Đăng ký kênh</B> → Telegram. Đặt tên, chọn <B>Phạm vi dự án</B> (tất cả / nhóm của một
+            GL / chọn dự án) và các loại thông báo.
           </li>
           <li>
             Bấm <b>Copy</b> dòng <code>/connect@tên_bot PT-XXXXX</code>, gửi dòng đó vào nhóm Telegram <b>sau khi đã thêm bot</b>.
@@ -411,23 +430,26 @@ export function HelpPage() {
             <b>8h sáng</b>: tóm tắt trong ngày.
           </li>
           <li>Giờ yên lặng 22h–7h: không gửi tin nhắc mỗi giờ (tin Đỏ và vấn đề Cao vẫn gửi ngay). Có thể tắt cho từng kênh.</li>
+          <li>
+            <B>Ngôn ngữ tin nhắn</B>: mỗi kênh chọn tiếng Việt hoặc tiếng Nhật (mặc định theo ngôn ngữ của người đăng ký). Sửa kênh để đổi.
+          </li>
         </ul>
         <h3>Gửi thử</h3>
         <p>
-          Ở mỗi kênh, chọn mẫu tin (kết nối, chuyển Đỏ, vấn đề Cao, nhắc mỗi giờ, tóm tắt 8h) rồi bấm <B>Gửi thử</B> để xem trước tin thật trông thế
-          nào. Tin mẫu có chữ <b>[Mẫu]</b> và không ảnh hưởng thông báo thật. Kênh có thể <B>Sửa</B>, <B>Tắt</B> hoặc <B>Xoá</B>.
+          Ở mỗi kênh, chọn mẫu tin (kết nối, chuyển Đỏ, vấn đề Cao, nhắc mỗi giờ, tóm tắt 8h) rồi bấm <B>Gửi thử</B> để xem trước tin thật
+          trông thế nào. Tin mẫu có chữ <b>[Mẫu]</b> và không ảnh hưởng thông báo thật. Kênh có thể <B>Sửa</B>, <B>Tắt</B> hoặc <B>Xoá</B>.
         </p>
         <p className="muted">Teams cũng được hỗ trợ (dán URL webhook của Workflows) khi công ty cho phép dùng Power Automate.</p>
       </H>
 
       <H id="public">
         <p>
-          <a href="/public">Trang public</a> ai cũng xem được, không cần đăng nhập: số dự án theo mức khẩn cấp, các dự án khẩn cấp / cần chú ý,
-          mốc và sự kiện sắp tới. Tự làm mới mỗi phút — có thể mở trên màn hình chung.
+          <a href="/public">Trang public</a> ai cũng xem được, không cần đăng nhập: số dự án theo mức khẩn cấp, các dự án khẩn cấp / cần chú
+          ý, mốc và sự kiện sắp tới. Tự làm mới mỗi phút — có thể mở trên màn hình chung.
         </p>
         <p>
-          Trang public <b>không</b> hiện khách hàng, tên người, nội dung vấn đề hay phần "cần hỗ trợ". Dự án có thể dùng tên public riêng hoặc ẩn
-          hẳn.
+          Trang public <b>không</b> hiện khách hàng, tên người, nội dung vấn đề hay phần "cần hỗ trợ". Dự án có thể dùng tên public riêng
+          hoặc ẩn hẳn.
         </p>
       </H>
 
@@ -435,16 +457,16 @@ export function HelpPage() {
         <h3>Người dùng (PMO / MNG)</h3>
         <ul className="howto">
           <li>
-            <B>Chờ duyệt</B>: các tài khoản đã đăng ký nhưng chưa xác nhận email. Chọn vai trò rồi duyệt, hoặc xoá đăng ký lạ. Menu Người dùng có số
-            đỏ khi có người chờ.
+            <B>Chờ duyệt</B>: các tài khoản đã đăng ký nhưng chưa xác nhận email. Chọn vai trò rồi duyệt, hoặc xoá đăng ký lạ. Menu Người
+            dùng có số đỏ khi có người chờ.
           </li>
           <li>Đổi vai trò, sửa tên; thêm trước người chưa đăng nhập để gán vào dự án.</li>
         </ul>
         <h3>Cài đặt (PMO / quản lý)</h3>
         <ul className="howto">
           <li>
-            <b>AI (Claude)</b>: dán API key (lấy ở console.anthropic.com). Key lưu trên máy chủ, không hiển thị lại. Nên đặt giới hạn chi tiêu trên
-            console.
+            <b>AI (Claude)</b>: dán API key (lấy ở console.anthropic.com). Key lưu trên máy chủ, không hiển thị lại. Nên đặt giới hạn chi
+            tiêu trên console.
           </li>
           <li>
             <b>Bot Telegram</b>: tạo bot với @BotFather (<code>/newbot</code>) rồi dán token. Token lộ ra ngoài thì <code>/revoke</code> ở
@@ -458,7 +480,9 @@ export function HelpPage() {
       <H id="hoi-dap">
         <dl className="faq">
           <dt>Tôi không nhận được email xác nhận / đặt lại mật khẩu.</dt>
-          <dd>Kiểm tra thư rác. Mail công ty có thể chặn thư tự động — báo PMO duyệt tài khoản, hoặc nhờ quản trị hệ thống đặt lại mật khẩu.</dd>
+          <dd>
+            Kiểm tra thư rác. Mail công ty có thể chặn thư tự động — báo PMO duyệt tài khoản, hoặc nhờ quản trị hệ thống đặt lại mật khẩu.
+          </dd>
           <dt>Dự án của tôi bị báo "trễ cập nhật" dù PMO vừa cập nhật.</dt>
           <dd>Chỉ cập nhật của PL / GL / người hỗ trợ mới tính. Hãy tự cập nhật tình hình.</dd>
           <dt>Dự án đang Xanh mà hiện Vàng?</dt>

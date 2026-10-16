@@ -43,7 +43,7 @@ ai.post('/ai/parse', async (c) => {
   const snap = await store.snapshot();
   try {
     const out = await c.get('ai').extract(config.apiKey, buildContext(snap, c.get('now'), c.get('user'), projectId), text);
-    return c.json(toProposals(out, snap, projectId));
+    return c.json(toProposals(out, snap, c.get('user'), projectId));
   } catch (e) {
     if (e instanceof AiError) throw new HTTPException(e.status, { message: e.message });
     throw e;

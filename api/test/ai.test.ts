@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AiClient, AiOutput, AiRawAction } from '../src/ai/assistant.js';
-import { AiError } from '../src/ai/assistant.js';
+import { AiError, blankAction, type AiClient, type AiOutput, type AiRawAction } from '../src/ai/assistant.js';
 import { buildContext } from '../src/ai/proposals.js';
 import { createApp } from '../src/app.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
@@ -32,22 +31,7 @@ const call = (method: string, path: string, as: string, body?: unknown) =>
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-const action = (a: Partial<AiRawAction>): AiRawAction => ({
-  kind: 'update',
-  projectId: 'P01',
-  health: null,
-  summary: null,
-  needHelp: null,
-  itemType: null,
-  title: null,
-  priority: null,
-  date: null,
-  owner: null,
-  itemId: null,
-  status: null,
-  note: null,
-  ...a,
-});
+const action = (a: Partial<AiRawAction>): AiRawAction => blankAction({ kind: 'update', projectId: 'P01', ...a });
 
 beforeEach(async () => {
   store = new MemoryStore();
@@ -168,5 +152,93 @@ describe('notes without a project', () => {
     const me = snap.users.find((u) => u.id === 'an@example.com')!;
     const own = snap.projects.find((p) => p.pl === me.id || p.gl === me.id)!;
     expect(buildContext(snap, now, me)).toContain(`★ ${own.id} |`);
+  });
+});
+
+describe('projects and item edits', () => {
+  beforeEach(() => store.putAiConfig({ apiKey: KEY }));
+  const parse = async (as = 'an', text = 'x') => (await call('POST', '/ai/parse', as, { text })).json();
+
+  it('creates a new project and links its milestone, created first', async () => {
+    output = {
+      actions: [
+        action({ kind: 'item', projectId: 'NEW1', itemType: 'milestone', title: 'Release', date: '2026-12-15' }),
+        action({
+          kind: 'project_create',
+          projectId: 'NEW1',
+          name: 'Web bán hàng',
+          customer: 'KH ABC',
+          pl: 'an@example.com',
+          gl: 'ghost@example.com',
+          startDate: '2026-11-01',
+          endDate: '2026-12-31',
+        }),
+      ],
+      questions: [],
+    };
+    const { proposals } = await parse();
+    expect(proposals[0]).toMatchObject({
+      kind: 'project_create',
+      projectId: 'NEW1',
+      newProject: true,
+      body: { name: 'Web bán hàng', customer: 'KH ABC', pl: 'an@example.com', startDate: '2026-11-01', endDate: '2026-12-31' },
+    });
+    expect(proposals[0].body.gl).toBeUndefined();
+    expect(proposals[0].warnings[0]).toContain('ghost@example.com');
+    expect(proposals[1]).toMatchObject({ kind: 'item', projectId: 'NEW1', newProject: true, projectName: 'Web bán hàng' });
+    expect(proposals[1].error).toBeUndefined();
+  });
+
+  it('a project without a name cannot be created', async () => {
+    output = { actions: [action({ kind: 'project_create', projectId: '' })], questions: [] };
+    const { proposals } = await parse();
+    expect(proposals[0].projectId).toBe('NEW1');
+    expect(proposals[0].error).toContain('Tên dự án');
+  });
+
+  it('edits project info with before values, only for allowed people', async () => {
+    output = { actions: [action({ kind: 'project_update', projectId: 'P03', pl: 'long@example.com', endDate: '2026-12-20', state: 'paused' })], questions: [] };
+    let { proposals } = await parse('cuong');
+    expect(proposals[0]).toMatchObject({
+      kind: 'project_update',
+      body: { pl: 'long@example.com', endDate: '2026-12-20', state: 'paused' },
+      before: { pl: 'cuong@example.com', endDate: '2026-11-15', state: 'active' },
+    });
+    expect(proposals[0].error).toBeUndefined();
+    ({ proposals } = await parse('an'));
+    expect(proposals[0].error).toContain('không có quyền');
+  });
+
+  it('a project edit with no real change is flagged', async () => {
+    output = { actions: [action({ kind: 'project_update', projectId: 'P03' })], questions: [] };
+    expect((await parse('cuong')).proposals[0].error).toContain('Không có thay đổi');
+    output = { actions: [action({ kind: 'project_update', projectId: 'P03', pl: 'cuong@example.com', endDate: '2026-12-01' })], questions: [] };
+    expect((await parse('cuong')).proposals[0].body).toEqual({ endDate: '2026-12-01' });
+  });
+
+  it('edits an item: only the changed fields, with before values', async () => {
+    const item = (await store.listItems('P01'))[0];
+    const priority = item.priority === 'high' ? 'low' : 'high';
+    const owner = item.owner === 'hung@example.com' ? 'son@example.com' : 'hung@example.com';
+    output = {
+      actions: [action({ kind: 'item_update', projectId: '', itemId: item.id, date: '2099-01-20', priority, owner, title: item.title })],
+      questions: [],
+    };
+    const { proposals } = await parse();
+    expect(proposals[0]).toMatchObject({
+      kind: 'item_update',
+      projectId: 'P01',
+      itemId: item.id,
+      body: { date: '2099-01-20', priority, owner },
+      before: { date: item.date, priority: item.priority, owner: item.owner },
+    });
+    expect(Object.keys(proposals[0].body)).toEqual(['date', 'priority', 'owner']);
+    expect(proposals[0].error).toBeUndefined();
+  });
+
+  it('flags a bad date on an item edit', async () => {
+    const item = (await store.listItems('P01'))[0];
+    output = { actions: [action({ kind: 'item_update', itemId: item.id, date: 'thứ 3' })], questions: [] };
+    expect((await parse()).proposals[0].error).toContain('YYYY-MM-DD');
   });
 });

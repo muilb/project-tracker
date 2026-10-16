@@ -3,7 +3,7 @@
 //   curl -H 'x-dev-user: lan@example.com' localhost:3001/dashboard
 import { serve } from '@hono/node-server';
 import { MemoryAccounts } from './accounts.js';
-import { claudeClient, type AiClient } from './ai/assistant.js';
+import { blankAction, claudeClient, type AiClient } from './ai/assistant.js';
 import { createApp } from './app.js';
 import type { Message } from './notify/message.js';
 import { createSender } from './notify/sender.js';
@@ -44,21 +44,14 @@ const ai: AiClient = process.env.ANTHROPIC_API_KEY
         const found = [...text.matchAll(/\b(P\d{2})\b[^.\n]*/gi)].map((m) => ({ id: m[1], text: m[0] }));
         const parts = found.length ? found : [{ id: '', text }];
         return {
-          actions: parts.map((part) => ({
-            kind: 'update' as const,
-            projectId: part.id,
-            health: /đỏ|red/i.test(part.text) ? ('red' as const) : /vàng|yellow/i.test(part.text) ? ('yellow' as const) : null,
-            summary: part.text,
-            needHelp: null,
-            itemType: null,
-            title: null,
-            priority: null,
-            date: null,
-            owner: null,
-            itemId: null,
-            status: null,
-            note: null,
-          })),
+          actions: parts.map((part) =>
+            blankAction({
+              kind: 'update',
+              projectId: part.id,
+              health: /đỏ|red/i.test(part.text) ? 'red' : /vàng|yellow/i.test(part.text) ? 'yellow' : null,
+              summary: part.text,
+            }),
+          ),
           questions: [],
         };
       },

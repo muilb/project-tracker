@@ -1,11 +1,17 @@
 import { createItemSchema, createUpdateSchema, patchItemSchema } from '../schemas.js';
 import type { Snapshot } from '../store/store.js';
 import { vnDate } from '../time.js';
-import type { Health, ItemStatus, ItemType, Priority, User } from '../types.js';
+import type { Health, ItemStatus, ItemType, Priority, Project, User } from '../types.js';
 import type { AiOutput, AiRawAction } from './assistant.js';
 
 /** A change the AI suggests; the web posts `body` to the matching REST endpoint once the user confirms. */
-export type Proposal = { projectId: string; projectName?: string; error?: string } & (
+export type Proposal = {
+  /** Empty when the note did not say which project; the user picks one on the web (`needsProject`). */
+  projectId: string;
+  projectName?: string;
+  needsProject?: boolean;
+  error?: string;
+} & (
   | { kind: 'update'; body: { health?: Health; summary: string; needHelp?: string } }
   | { kind: 'item'; body: { type: ItemType; title: string; priority: Priority; date: string; owner?: string } }
   | { kind: 'item_status'; itemId: string; itemTitle?: string; body: { status: ItemStatus; note?: string } }
@@ -23,10 +29,13 @@ function calendar(now: Date, days: number): string {
 }
 
 /** What the model needs to resolve names and relative dates: open projects, their open items, people, calendar. */
-export function buildContext(snap: Snapshot, now: Date, me: User): string {
+export function buildContext(snap: Snapshot, now: Date, me: User, defaultProjectId?: string): string {
   const projects = snap.projects.filter((p) => p.state !== 'closed').sort((a, b) => a.id.localeCompare(b.id));
+  const mine = (p: Project) => p.pl === me.id || p.gl === me.id || p.pmo === me.id || p.supporters.includes(me.id);
+  const def = projects.find((p) => p.id === defaultProjectId);
   const lines = [
     `Hôm nay: ${vnDate(now)} (${WEEKDAYS[new Date(vnDate(now)).getUTCDay()]}). Người viết ghi chú: ${me.name} <${me.id}>.`,
+    def ? `Dự án mặc định (khi ghi chú không nêu dự án): ${def.id} ${def.name}` : 'Dự án mặc định: không có',
     '',
     '<lich_3_tuan>',
     calendar(now, 21),
@@ -35,7 +44,7 @@ export function buildContext(snap: Snapshot, now: Date, me: User): string {
     '<du_an>',
   ];
   for (const p of projects) {
-    lines.push(`${p.id} | ${p.name}${p.customer ? ` | khách: ${p.customer}` : ''}${p.pl ? ` | PL: ${p.pl}` : ''}${p.gl ? ` | GL: ${p.gl}` : ''}`);
+    lines.push(`${mine(p) ? '★ ' : ''}${p.id} | ${p.name}${p.customer ? ` | khách: ${p.customer}` : ''}${p.pl ? ` | PL: ${p.pl}` : ''}${p.gl ? ` | GL: ${p.gl}` : ''}`);
     const items = snap.items
       .filter((i) => i.projectId === p.id && i.status !== 'done' && i.status !== 'postponed')
       .sort((a, b) => a.date.localeCompare(b.date))
@@ -51,10 +60,21 @@ export function buildContext(snap: Snapshot, now: Date, me: User): string {
 const firstIssue = (e: { issues: { path: PropertyKey[]; message: string }[] }) =>
   e.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ');
 
-function toProposal(a: AiRawAction, snap: Snapshot): Proposal {
-  const projectId = a.projectId.trim().toUpperCase();
+function toProposal(a: AiRawAction, snap: Snapshot, defaultProjectId?: string): Proposal {
+  let projectId = a.projectId.trim().toUpperCase() || (defaultProjectId ?? '');
+  if (a.kind === 'item_status') {
+    // The item id is unique, so it also tells which project the note meant.
+    const item = snap.items.find((i) => i.id === (a.itemId ?? '').trim().toUpperCase());
+    if (item) projectId = item.projectId;
+  }
   const project = snap.projects.find((p) => p.id === projectId);
-  const base = { projectId, projectName: project?.name, error: project ? undefined : `Không tìm thấy dự án ${projectId}` };
+  const needsProject = !projectId && a.kind !== 'item_status';
+  const base = {
+    projectId,
+    projectName: project?.name,
+    needsProject: needsProject || undefined,
+    error: project || needsProject ? undefined : projectId ? `Không tìm thấy dự án ${projectId}` : 'Không xác định được dự án',
+  };
   const users = new Set(snap.users.map((u) => u.id));
   const opt = (s: string | null) => (s?.trim() ? s.trim() : undefined);
 
@@ -90,6 +110,7 @@ function toProposal(a: AiRawAction, snap: Snapshot): Proposal {
   };
 }
 
-export function toProposals(out: AiOutput, snap: Snapshot): { proposals: Proposal[]; questions: string[] } {
-  return { proposals: out.actions.map((a) => toProposal(a, snap)), questions: out.questions.filter((q) => q.trim()) };
+export function toProposals(out: AiOutput, snap: Snapshot, defaultProjectId?: string): { proposals: Proposal[]; questions: string[] } {
+  const known = snap.projects.some((p) => p.id === defaultProjectId) ? defaultProjectId : undefined;
+  return { proposals: out.actions.map((a) => toProposal(a, snap, known)), questions: out.questions.filter((q) => q.trim()) };
 }

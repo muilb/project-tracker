@@ -39,24 +39,29 @@ const ai: AiClient = process.env.ANTHROPIC_API_KEY
   ? claudeClient
   : {
       verifyKey: async () => {},
-      extract: async (_key, _ctx, text) => ({
-        actions: [...text.matchAll(/\b(P\d{2})\b[^.\n]*/gi)].map((m) => ({
-          kind: 'update' as const,
-          projectId: m[1],
-          health: /đỏ|red/i.test(m[0]) ? ('red' as const) : /vàng|yellow/i.test(m[0]) ? ('yellow' as const) : null,
-          summary: m[0],
-          needHelp: null,
-          itemType: null,
-          title: null,
-          priority: null,
-          date: null,
-          owner: null,
-          itemId: null,
-          status: null,
-          note: null,
-        })),
-        questions: /\bP\d{2}\b/i.test(text) ? [] : ['(AI giả lập) Ghi chú không nêu mã dự án dạng P01'],
-      }),
+      extract: async (_key, _ctx, text) => {
+        // One update per "P01 …" sentence; a note without a code becomes one update with no project.
+        const found = [...text.matchAll(/\b(P\d{2})\b[^.\n]*/gi)].map((m) => ({ id: m[1], text: m[0] }));
+        const parts = found.length ? found : [{ id: '', text }];
+        return {
+          actions: parts.map((part) => ({
+            kind: 'update' as const,
+            projectId: part.id,
+            health: /đỏ|red/i.test(part.text) ? ('red' as const) : /vàng|yellow/i.test(part.text) ? ('yellow' as const) : null,
+            summary: part.text,
+            needHelp: null,
+            itemType: null,
+            title: null,
+            priority: null,
+            date: null,
+            owner: null,
+            itemId: null,
+            status: null,
+            note: null,
+          })),
+          questions: [],
+        };
+      },
     };
 if (process.env.ANTHROPIC_API_KEY) await store.putAiConfig({ apiKey: process.env.ANTHROPIC_API_KEY });
 const app = createApp({

@@ -115,10 +115,12 @@ describe('POST /ai/parse', () => {
     await store.putAiConfig({ apiKey: KEY });
     await store.putUser({ id: 'sp@example.com', name: 'Sp', role: 'OTHER', createdAt: now.toISOString() });
     expect((await call('POST', '/ai/parse', 'sp', { text: 'x' })).status).toBe(403);
+    const extract = ai.extract;
     ai.extract = async () => {
       throw new AiError('AI đang quá tải', 503);
     };
     const res = await call('POST', '/ai/parse', 'an', { text: 'x' });
+    ai.extract = extract;
     expect(res.status).toBe(503);
   });
 });
@@ -131,5 +133,40 @@ describe('context', () => {
     expect(ctx).toContain('2026-10-12 Thứ 2');
     const done = snap.items.find((i) => i.status === 'done');
     if (done) expect(ctx).not.toContain(done.id + ' [');
+  });
+});
+
+describe('notes without a project', () => {
+  beforeEach(() => store.putAiConfig({ apiKey: KEY }));
+
+  it('keeps the action and asks the user to pick the project', async () => {
+    output = { actions: [action({ kind: 'update', projectId: '', summary: 'Khách đổi yêu cầu' })], questions: [] };
+    const { proposals } = await (await call('POST', '/ai/parse', 'an', { text: 'khách đổi yêu cầu' })).json();
+    expect(proposals[0]).toMatchObject({ projectId: '', needsProject: true, body: { summary: 'Khách đổi yêu cầu' } });
+    expect(proposals[0].error).toBeUndefined();
+  });
+
+  it('uses the default project chosen on the page', async () => {
+    output = { actions: [action({ kind: 'item', projectId: '', itemType: 'event', title: 'Demo', date: '2026-10-16' })], questions: [] };
+    const res = await call('POST', '/ai/parse', 'an', { text: 'thứ 6 demo', projectId: 'p03' });
+    const { proposals } = await res.json();
+    expect(proposals[0]).toMatchObject({ projectId: 'P03', projectName: expect.any(String) });
+    expect(proposals[0].needsProject).toBeUndefined();
+    expect(calls[0].context).toContain('Dự án mặc định (khi ghi chú không nêu dự án): P03');
+  });
+
+  it('finds the project of a status change from the item id', async () => {
+    const item = (await store.listItems('P01'))[0];
+    output = { actions: [action({ kind: 'item_status', projectId: '', itemId: item.id, status: 'done' })], questions: [] };
+    const { proposals } = await (await call('POST', '/ai/parse', 'an', { text: 'xong rồi' })).json();
+    expect(proposals[0]).toMatchObject({ projectId: 'P01', itemTitle: item.title });
+    expect(proposals[0].error).toBeUndefined();
+  });
+
+  it("marks the writer's own projects in the context", async () => {
+    const snap = await store.snapshot();
+    const me = snap.users.find((u) => u.id === 'an@example.com')!;
+    const own = snap.projects.find((p) => p.pl === me.id || p.gl === me.id)!;
+    expect(buildContext(snap, now, me)).toContain(`★ ${own.id} |`);
   });
 });

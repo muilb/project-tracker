@@ -812,3 +812,7 @@ code {
   width: auto;
   max-width: 100%;
 }
+
+.proposal-project {
+  margin-bottom: 8px;
+}

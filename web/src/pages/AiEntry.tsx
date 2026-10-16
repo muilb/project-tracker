@@ -4,7 +4,7 @@ import { api, useApi } from '../api';
 import { ErrorBox, Section, TypeIcon } from '../components/ui';
 import { HEALTH_LABEL, ITEM_STATUS_LABEL, PRIORITY_LABEL, TYPE_LABEL } from '../labels';
 import { useSession } from '../session';
-import type { Proposal } from '../types';
+import type { ProjectView, Proposal } from '../types';
 
 type Row = { p: Proposal; selected: boolean; result?: 'ok' | string };
 
@@ -18,8 +18,15 @@ function target(p: Proposal): { method: 'post' | 'patch'; path: string } {
 }
 
 export function AiEntryPage() {
-  const { isAdmin } = useSession();
+  const { isAdmin, me } = useSession();
   const status = useApi<{ configured: boolean; model: string }>('/settings/ai');
+  const projectList = useApi<{ projects: ProjectView[] }>('/projects');
+  // The writer's own projects first: those are the likely defaults.
+  const projects = [...(projectList.data?.projects ?? [])].sort((a, b) => {
+    const mine = (p: ProjectView) => (p.pl === me.id || p.gl === me.id || p.supporters.includes(me.id) ? 0 : 1);
+    return mine(a) - mine(b) || a.id.localeCompare(b.id);
+  });
+  const [defaultProject, setDefaultProject] = useState('');
   const [text, setText] = useState('');
   const [rows, setRows] = useState<Row[]>();
   const [questions, setQuestions] = useState<string[]>([]);
@@ -33,8 +40,11 @@ export function AiEntryPage() {
     setError(undefined);
     setRows(undefined);
     try {
-      const r = await api.post<{ proposals: Proposal[]; questions: string[] }>('/ai/parse', { text });
-      setRows(r.proposals.map((p) => ({ p, selected: !p.error })));
+      const r = await api.post<{ proposals: Proposal[]; questions: string[] }>('/ai/parse', {
+        text,
+        projectId: defaultProject || undefined,
+      });
+      setRows(r.proposals.map((p) => ({ p, selected: !p.error && !p.needsProject })));
       setQuestions(r.questions);
       setSourceText(text);
     } catch (err) {
@@ -64,6 +74,25 @@ export function AiEntryPage() {
   }
 
   const update = (i: number, p: Proposal) => setRows((rs) => rs?.map((r, j) => (j === i ? { ...r, p } : r)));
+  const setProject = (i: number, id: string) =>
+    setRows((rs) =>
+      rs?.map((r, j) =>
+        j === i
+          ? {
+              ...r,
+              p: {
+                ...r.p,
+                projectId: id,
+                projectName: projects.find((x) => x.id === id)?.name,
+                needsProject: !id || undefined,
+                // A wrong project from the AI is fixed by picking one; other errors stay.
+                error: r.p.error?.startsWith('Không tìm thấy dự án') ? undefined : r.p.error,
+              },
+              selected: !!id && !(r.p.error && !r.p.error.startsWith('Không tìm thấy dự án')),
+            }
+          : r,
+      ),
+    );
   const toggle = (i: number) => setRows((rs) => rs?.map((r, j) => (j === i ? { ...r, selected: !r.selected } : r)));
   const selectedCount = rows?.filter((r) => r.selected).length ?? 0;
   const savedCount = rows?.filter((r) => r.result === 'ok').length ?? 0;
@@ -99,6 +128,17 @@ export function AiEntryPage() {
             onChange={(e) => setText(e.target.value)}
           />
         </label>
+        <label>
+          Dự án mặc định <small className="muted">(dùng khi ghi chú không nêu dự án)</small>
+          <select value={defaultProject} onChange={(e) => setDefaultProject(e.target.value)}>
+            <option value="">— AI tự nhận diện —</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id} · {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <ErrorBox error={error ?? status.error} />
         <div className="actions gap">
           {!text && (
@@ -128,7 +168,14 @@ export function AiEntryPage() {
           {rows.length === 0 && <p className="muted">Không có gì để ghi.</p>}
           <div className="stack">
             {rows.map((row, i) => (
-              <ProposalCard key={i} row={row} onToggle={() => toggle(i)} onChange={(p) => update(i, p)} />
+              <ProposalCard
+                key={i}
+                row={row}
+                projects={projects}
+                onToggle={() => toggle(i)}
+                onChange={(p) => update(i, p)}
+                onProject={(id) => setProject(i, id)}
+              />
             ))}
           </div>
           {rows.length > 0 && (
@@ -145,24 +192,56 @@ export function AiEntryPage() {
   );
 }
 
-function ProposalCard({ row, onToggle, onChange }: { row: Row; onToggle: () => void; onChange: (p: Proposal) => void }) {
+function ProposalCard({
+  row,
+  projects,
+  onToggle,
+  onChange,
+  onProject,
+}: {
+  row: Row;
+  projects: ProjectView[];
+  onToggle: () => void;
+  onChange: (p: Proposal) => void;
+  onProject: (id: string) => void;
+}) {
   const { p } = row;
   const done = row.result === 'ok';
-  const locked = done || !!p.error;
+  const locked = done || !!p.error || !!p.needsProject;
+  // Updates and new items can be moved to another project; a status change belongs to its item.
+  const movable = p.kind !== 'item_status' && !done;
   return (
     <div className={`card proposal${row.selected ? ' selected' : ''}`}>
       <label className="proposal-head">
         <input type="checkbox" checked={row.selected} disabled={locked} onChange={onToggle} />
         <span>
           <b>{p.kind === 'update' ? 'Cập nhật tình hình' : p.kind === 'item' ? `Thêm ${TYPE_LABEL[p.body.type].toLowerCase()}` : 'Đổi trạng thái'}</b>
-          {' · '}
-          <Link to={`/projects/${p.projectId}`}>
-            {p.projectId}
-            {p.projectName ? ` ${p.projectName}` : ''}
-          </Link>
+          {!movable && (
+            <>
+              {' · '}
+              <Link to={`/projects/${p.projectId}`}>
+                {p.projectId}
+                {p.projectName ? ` ${p.projectName}` : ''}
+              </Link>
+            </>
+          )}
         </span>
         {done && <span className="ok-text">✓ Đã ghi</span>}
       </label>
+      {movable && (
+        <label className="proposal-project">
+          Dự án
+          <select value={p.projectId} onChange={(e) => onProject(e.target.value)}>
+            <option value="">— Chọn dự án —</option>
+            {projects.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.id} · {x.name}
+              </option>
+            ))}
+          </select>
+          {p.needsProject && <small className="warn-text">Ghi chú không nêu dự án — chọn dự án để ghi.</small>}
+        </label>
+      )}
 
       {p.kind === 'update' && (
         <div className="form">

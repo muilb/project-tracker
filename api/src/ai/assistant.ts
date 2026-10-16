@@ -60,7 +60,8 @@ Người dùng viết ghi chú tự do (tiếng Việt, có thể lẫn tiếng 
 - kind "item_status": đổi trạng thái một vấn đề/sự kiện ĐANG CÓ trong danh sách (itemId lấy từ danh sách). status = "open" / "in_progress" / "done" / "postponed". note = ghi chú ngắn nếu có.
 
 Quy tắc:
-- projectId phải là mã dự án trong danh sách. Nhận diện dự án qua mã, tên, tên khách hàng. Nếu không xác định được dự án thì KHÔNG tạo thao tác, mà thêm một câu vào questions.
+- projectId phải là mã dự án trong danh sách. Nhận diện dự án qua mã, tên, tên khách hàng.
+- Khi ghi chú không nêu dự án: dùng "Dự án mặc định" nếu có; nếu không có thì dùng dự án đánh dấu ★ (dự án của người viết) khi người viết chỉ có đúng một dự án ★; nếu vẫn không chắc thì VẪN tạo thao tác với projectId = "" (người dùng sẽ tự chọn dự án), không bỏ thao tác.
 - Một ghi chú có thể tạo nhiều thao tác, cho nhiều dự án. Mỗi dự án tối đa một "update".
 - Nếu ghi chú nói một vấn đề đã có "xong", "đã xử lý", "hoãn"… thì dùng item_status, không tạo item mới trùng.
 - Các trường không dùng cho loại thao tác đó đặt null.

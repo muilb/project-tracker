@@ -214,6 +214,8 @@ export const notifyPrefsSchema = z.object({
   schedule: scheduleSchema.optional(),
   pausedUntil,
   lang: z.enum(LANGS).optional(),
+  // track H: Web Push; absent keeps the saved value (older pages do not send it).
+  push: z.boolean().optional(),
 });
 
 export const inboxReadSchema = z

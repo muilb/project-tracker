@@ -1,7 +1,8 @@
-// "My notifications": personal delivery (inbox, Telegram), events, watched projects, schedule, pause.
+// "My notifications": personal delivery (inbox, Telegram, browser / phone push), events, watched projects, schedule, pause.
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useApi } from '../api';
+import { PushDevices } from '../components/notify/PushDevices';
 import { PersonalTest, TelegramLinkFields } from '../components/notify/TelegramLink';
 import '../components/notify/notify.css';
 import { PERSONAL_EVENT_INFO, savePrefs, type MyNotify, type MyPrefs } from '../components/notify/shared';
@@ -126,6 +127,12 @@ export function MyNotifyPage() {
             setTelegram={(telegram) => set({ telegram })}
             onLinked={(p) => applied(p, ['telegram', 'telegramLinked', 'telegramChatTitle'])}
           />
+          <PushDevices
+            prefs={saved}
+            push={!!draft.push}
+            setPush={(push) => set({ push })}
+            onEnabled={(p) => applied(p, ['push'])}
+          />
         </div>
       </Section>
 
@@ -174,8 +181,8 @@ export function MyNotifyPage() {
           </div>
           <p className="muted notify-when">
             {l(
-              'Khi tạm dừng, không gửi Telegram và không thêm tin vào hộp thư cho đến hết ngày đã chọn (ví dụ khi nghỉ phép).',
-              '一時停止中は、選んだ日の終わりまで Telegram にも受信箱にも通知しません（休暇中など）。',
+              'Khi tạm dừng, không gửi Telegram, thông báo trình duyệt và không thêm tin vào hộp thư cho đến hết ngày đã chọn (ví dụ khi nghỉ phép).',
+              '一時停止中は、選んだ日の終わりまで Telegram・ブラウザ通知・受信箱のいずれにも通知しません（休暇中など）。',
             )}
           </p>
           <label>

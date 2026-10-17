@@ -19,6 +19,7 @@ import { PublicPage } from './pages/Public';
 import { SettingsPage } from './pages/Settings';
 import { TrashPage } from './pages/Trash';
 import { UsersPage } from './pages/Users';
+import { forgetPushDevice } from './push';
 import { SessionProvider, useSession } from './session';
 import type { User } from './types';
 
@@ -158,7 +159,8 @@ function Layout({ children }: { children: React.ReactNode }) {
             </span>
             <button
               className="btn-link"
-              onClick={() => {
+              onClick={async () => {
+                await forgetPushDevice(); // track H: a shared browser stops getting this person's notifications
                 auth.signOut();
                 navigate('/login');
               }}

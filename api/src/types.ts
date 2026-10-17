@@ -199,6 +199,9 @@ export interface NotifyPrefs {
   pausedUntil?: string;
   lang?: Lang;
   updatedAt: string;
+  // track H: Web Push.
+  /** Also send to this person's browsers / phones (Web Push); absent = off. */
+  push?: boolean;
 }
 
 /** One message in a person's web inbox (🔔). */
@@ -215,7 +218,11 @@ export interface InboxEntry {
 }
 
 /** Where an outbox message goes: a group channel, or one person's inbox / Telegram. */
-export type OutboxTarget = { channelId: string } | { userId: string; via: 'inbox' | 'telegram' };
+export type OutboxTarget =
+  | { channelId: string }
+  | { userId: string; via: 'inbox' | 'telegram' }
+  // track H: one browser / phone of the person (all of them when subscriptionId is absent).
+  | { userId: string; via: 'push'; subscriptionId?: string };
 
 /** A message waiting to be delivered (delayed, grouped or retried). */
 export interface OutboxEntry {
@@ -283,4 +290,27 @@ export interface AuditEntry {
 /** Claude API key for the natural-language entry page (a secret, never returned by the API). */
 export interface AiConfig {
   apiKey: string;
+}
+
+// track H: Web Push.
+
+/** VAPID key pair of the app (CONFIG/PUSH); the private key is a secret, never returned by the API. */
+export interface PushConfig {
+  publicKey: string;
+  privateKey: string;
+  createdAt: string;
+}
+
+/** One browser / phone of a person that receives Web Push (endpoint and keys are secrets). */
+export interface PushSubscriptionRecord {
+  userId: string;
+  /** Derived from the endpoint, so subscribing the same browser again replaces the row. */
+  id: string;
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  /** e.g. "Chrome · Windows". */
+  label: string;
+  createdAt: string;
+  lastSentAt?: string;
+  lastError?: string;
 }

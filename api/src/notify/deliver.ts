@@ -4,9 +4,10 @@ import { audit } from '../audit.js';
 import { l, withLang } from '../i18n.js';
 import type { Channel, OutboxEntry, OutboxTarget } from '../types.js';
 import type { NotifyDeps } from './deps.js';
-import { isPermanent, scrubError } from './errors.js';
+import { isPermanent, PermanentDeliveryError, scrubError } from './errors.js';
 import type { Message } from './message.js';
 import { hold } from './policy.js';
+import { pushTo } from './push.js';
 
 /** A message ready to go: built in the recipient's language, not yet delivered. */
 export interface Outgoing {
@@ -66,8 +67,16 @@ export async function deliver(deps: NotifyDeps, ch: Channel, msg: Message, now: 
   return (await attemptChannel(deps, ch, msg, now, event)).ok;
 }
 
-/** Personal delivery: the web inbox, or the person's linked Telegram chat. */
-async function deliverPersonal(deps: NotifyDeps, userId: string, via: 'inbox' | 'telegram', o: Outgoing, now: Date) {
+/** Personal delivery: the web inbox, the person's linked Telegram chat, or one of their browsers / phones. */
+async function deliverPersonal(deps: NotifyDeps, target: Extract<OutboxTarget, { userId: string }>, o: Outgoing, now: Date) {
+  const { userId, via } = target;
+  // track H: Web Push to one subscription (send() fans a message out to every device first).
+  if (via === 'push') {
+    const sub = target.subscriptionId ? await deps.store.getPushSubscription(userId, target.subscriptionId) : undefined;
+    if (!sub) throw new PermanentDeliveryError('Push subscription removed');
+    await pushTo(deps, sub, o.message, now, o.event, o.projectId);
+    return;
+  }
   if (via === 'inbox') {
     await deps.store.addInbox({
       userId,
@@ -138,6 +147,13 @@ export async function send(deps: NotifyDeps, o: Outgoing, now: Date): Promise<bo
   const next = await hold(deps, o, now);
   if (!next) return true;
   o = next;
+  // track H: one delivery per browser / phone, so a retry goes only to the device that failed.
+  if ('via' in o.target && o.target.via === 'push' && !o.target.subscriptionId) {
+    const { userId } = o.target;
+    const subs = await deps.store.listPushSubscriptions(userId);
+    const results = await Promise.all(subs.map((s) => send(deps, { ...o, target: { userId, via: 'push', subscriptionId: s.id } }, now)));
+    return results.some(Boolean);
+  }
   let result: Attempt;
   if ('channelId' in o.target) {
     const ch = o.channel ?? (await deps.store.getChannel(o.target.channelId));
@@ -145,7 +161,7 @@ export async function send(deps: NotifyDeps, o: Outgoing, now: Date): Promise<bo
     result = await attemptChannel(deps, ch, o.message, now, o.event);
   } else {
     try {
-      await deliverPersonal(deps, o.target.userId, o.target.via, o, now);
+      await deliverPersonal(deps, o.target, o, now);
       result = { ok: true };
     } catch (e) {
       result = failure(e);

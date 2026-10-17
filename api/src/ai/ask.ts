@@ -4,7 +4,8 @@ import { lang } from '../i18n.js';
 import { buildProjectView, compareProjects, type ProjectView } from '../rules.js';
 import type { Snapshot } from '../store/store.js';
 import { vnDate } from '../time.js';
-import type { Health } from '../types.js';
+import type { Health, User } from '../types.js';
+import { visibleSnapshot } from '../views.js';
 import { calendar, weekday } from './proposals.js';
 
 /** History kept in the prompt: enough for "the last two weeks / this month" questions. */
@@ -39,7 +40,9 @@ const STATUS = { open: 'mở', in_progress: 'đang xử lý', done: 'xong', post
 const vnTime = (iso: string) => new Date(Date.parse(iso) + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' ');
 const hours = (h: number) => (h >= 24 ? `${Math.floor(h / 24)} ngày ${Math.round(h % 24)} giờ` : `${Math.round(h)} giờ`);
 
-export function buildAskContext(snap: Snapshot, now: Date): string {
+/** Only the projects `me` may see go to the model (users stay, for names). */
+export function buildAskContext(all: Snapshot, now: Date, me: User): string {
+  const snap = visibleSnapshot(me, all);
   const users = new Map(snap.users.map((u) => [u.id, u]));
   const name = (id?: string) => (id ? (users.get(id)?.name ?? id.split('@')[0]) : '—');
   const since = now.getTime() - ASK_HISTORY_DAYS * 86_400_000;

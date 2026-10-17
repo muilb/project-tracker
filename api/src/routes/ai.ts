@@ -64,7 +64,7 @@ ai.post('/ai/parse', async (c) => {
   }
 });
 
-/** Read-only questions about the data (every signed-in user sees the same data on the web). */
+/** Read-only questions about the data the caller may see on the web. */
 ai.post('/ai/ask', async (c) => {
   const { messages } = await parseBody(c.req, aiAskSchema);
   const store = c.get('store');
@@ -73,7 +73,7 @@ ai.post('/ai/ask', async (c) => {
     throw new HTTPException(400, {
       message: l('Quản trị hệ thống chưa cài API key AI (Cài đặt → AI)', 'システム管理者が AI の API キーを未設定です（設定 → AI）'),
     });
-  const context = buildAskContext(await store.snapshot(), c.get('now'));
+  const context = buildAskContext(await store.snapshot(), c.get('now'), c.get('user'));
   try {
     return c.json(await c.get('ai').ask(config.apiKey, context, messages));
   } catch (e) {

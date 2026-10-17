@@ -153,8 +153,9 @@ export function HelpPage() {
                 <td>Hỗ trợ / Khác</td>
                 <td>Thành viên hỗ trợ</td>
                 <td>
-                  Xem, cập nhật tình hình thay PL / GL khi được thêm vào "Người hỗ trợ" của dự án. Không tạo dự án; dùng AI chỉ để hỏi,
-                  không nhập
+                  Chỉ xem dự án mình tham gia: là PL / GL / PMO / "Người hỗ trợ" của dự án, hoặc phụ trách ít nhất một mục của dự án.
+                  Dự án khác không hiện ở Tổng quan, Dự án, thống kê theo GL, AI và kênh thông báo mình tạo. Cập nhật tình hình thay PL
+                  / GL khi được thêm vào "Người hỗ trợ". Không tạo dự án; dùng AI chỉ để hỏi, không nhập
                 </td>
               </tr>
               <tr>

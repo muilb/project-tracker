@@ -2,7 +2,7 @@ import { Link, useSearchParams } from 'react-router';
 import { useApi } from '../api';
 import { Empty, ErrorBox, HealthBadge, HealthBar, Kpi, Section, TypeIcon, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft, fmtHours } from '../format';
-import { PRIORITY_LABEL } from '../labels';
+import { ONLY_MINE, PRIORITY_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { Dashboard as DashboardData, DashboardItem } from '../types';
 import { l } from '../i18n';
@@ -13,9 +13,11 @@ const DASHBOARD_ROWS = 5;
 export function Dashboard() {
   const { me, users, name } = useSession();
   const [params, setParams] = useSearchParams();
+  // OTHER only gets the projects they take part in, so "mine" / "all" would be the same choice.
+  const limited = me.role === 'OTHER';
   // GL / PL / supporters start on "their" projects; PMO and managers on everything.
-  const defaultScope = ['PL', 'GL', 'OTHER'].includes(me.role) ? 'mine' : 'all';
-  const scope = params.get('scope') ?? defaultScope;
+  const defaultScope = ['PL', 'GL'].includes(me.role) ? 'mine' : 'all';
+  const scope = limited ? 'all' : (params.get('scope') ?? defaultScope);
   const gl = params.get('gl') ?? '';
   const qs = new URLSearchParams({ scope, ...(gl ? { gl } : {}) }).toString();
   const { data, error, loading } = useApi<DashboardData>(`/dashboard?${qs}`);
@@ -35,14 +37,18 @@ export function Dashboard() {
       <div className="page-head">
         <h1>{l('Tổng quan', 'ダッシュボード')}</h1>
         <div className="filters">
-          <div className="segmented" role="group" aria-label={l('Phạm vi', '対象範囲')}>
-            <button className={scope === 'mine' ? 'active' : ''} onClick={() => set('scope', 'mine')}>
-              {l('Dự án của tôi', '自分のプロジェクト')}
-            </button>
-            <button className={scope === 'all' ? 'active' : ''} onClick={() => set('scope', 'all')}>
-              {l('Tất cả', 'すべて')}
-            </button>
-          </div>
+          {limited ? (
+            <span className="muted">{ONLY_MINE}</span>
+          ) : (
+            <div className="segmented" role="group" aria-label={l('Phạm vi', '対象範囲')}>
+              <button className={scope === 'mine' ? 'active' : ''} onClick={() => set('scope', 'mine')}>
+                {l('Dự án của tôi', '自分のプロジェクト')}
+              </button>
+              <button className={scope === 'all' ? 'active' : ''} onClick={() => set('scope', 'all')}>
+                {l('Tất cả', 'すべて')}
+              </button>
+            </div>
+          )}
           <select value={gl} onChange={(e) => set('gl', e.target.value)} aria-label={l('Lọc theo GL', 'GLで絞り込み')}>
             <option value="">{l('Mọi GL', 'すべての GL')}</option>
             {gls.map((u) => (
@@ -82,7 +88,10 @@ export function Dashboard() {
             }
           >
             {data.attention.length === 0 ? (
-              <Empty>{l('Không có dự án cần chú ý 🎉', '要注意のプロジェクトはありません 🎉')}</Empty>
+              <Empty>
+                {l('Không có dự án cần chú ý 🎉', '要注意のプロジェクトはありません 🎉')}
+                {limited && data.kpis.active === 0 && <> — {ONLY_MINE}</>}
+              </Empty>
             ) : (
               <ul className="rows">
                 {attention.visible.map((p) => (

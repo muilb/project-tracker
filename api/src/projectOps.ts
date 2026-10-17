@@ -99,8 +99,13 @@ export async function patchProject(ctx: OpContext, id: string, body: z.infer<typ
 export async function addUpdate(ctx: OpContext, id: string, body: z.infer<typeof createUpdateSchema>): Promise<Update> {
   const { store, user: me, now } = ctx;
   const project = await loadProject(store, id, me);
-  const [updates, items, settings] = await Promise.all([store.listUpdates(project.id), store.listItems(project.id), store.getSettings()]);
-  const before = buildProjectView(project, updates, items, settings, now);
+  // The pinned updates give the same view as the whole history (see rules.pinUpdates).
+  const [pinned, items, settings] = await Promise.all([
+    store.listPinnedUpdates(project.id),
+    store.listItems(project.id),
+    store.getSettings(),
+  ]);
+  const before = buildProjectView(project, pinned, items, settings, now);
   const update: Update = {
     id: randomUUID().slice(0, 8),
     projectId: project.id,
@@ -113,7 +118,7 @@ export async function addUpdate(ctx: OpContext, id: string, body: z.infer<typeof
     rawText: body.rawText,
   };
   await store.putUpdate(update);
-  const after = buildProjectView(project, [...updates, update], items, settings, now);
+  const after = buildProjectView(project, [...pinned, update], items, settings, now);
   await emit(ctx.notify, now, { type: 'update_posted', project, update, before, after, actor: me.id });
   return update;
 }

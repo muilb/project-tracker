@@ -81,7 +81,7 @@ export function helpMessage(asker: Known): Message {
 
 export async function runCommand(deps: BotDeps, asker: Known, command: Command, args: string): Promise<Message> {
   if (command === 'help') return helpMessage(asker);
-  const snap = visible(deps, asker, await deps.store.snapshot());
+  const snap = visible(deps, asker, await deps.store.snapshot({ now: deps.now }));
   const views = activeProjectViews(snap, deps.now);
   let msg: Message;
 

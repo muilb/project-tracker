@@ -2,7 +2,7 @@
 import { buildProjectView, type ProjectView } from '../rules.js';
 import { l } from '../i18n.js';
 import { vnDate } from '../time.js';
-import type { Snapshot } from '../store/store.js';
+import { uniqueUpdates, type Snapshot, type Store } from '../store/store.js';
 import type { Channel, Health, Item, PersonalEvent, Project, Update } from '../types.js';
 import type { MessageLine } from './message.js';
 import { dueSoonLine, escalationLine, itemDueLine, lateLine } from './personal.js';
@@ -109,11 +109,15 @@ const WEEK_MS = 7 * 86_400_000;
 /**
  * Monday digest: compares the projects with the same moment a week ago. Last week's colour is
  * rebuilt from the updates written before then; items closed since then count as open then.
+ * `snap` is a snapshot taken with `now`: projects updated this week have their history read, as
+ * their colour a week ago may come from an update older than the snapshot keeps.
  */
-export function weeklyChanges(snap: Snapshot, views: ProjectView[], now: Date): WeeklyChanges {
+export async function weeklyChanges(store: Store, snap: Snapshot, views: ProjectView[], now: Date): Promise<WeeklyChanges> {
   const then = new Date(now.getTime() - WEEK_MS);
   const thenIso = then.toISOString();
-  const updates = snap.updates.filter((u) => u.at <= thenIso);
+  const changed = new Set(snap.updates.filter((u) => u.at > thenIso).map((u) => u.projectId));
+  const history = await Promise.all(views.filter((v) => changed.has(v.id)).map((v) => store.listUpdates(v.id)));
+  const updates = uniqueUpdates([...snap.updates, ...history.flat()]).filter((u) => u.at <= thenIso);
   const changedSince = (i: Item) => i.updatedAt > thenIso && (i.status === 'done' || i.status === 'postponed');
   const items = snap.items.filter((i) => i.createdAt <= thenIso).map((i) => (changedSince(i) ? { ...i, status: 'open' as const } : i));
   const colour: { view: ProjectView; before: Health }[] = [];

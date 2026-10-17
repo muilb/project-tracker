@@ -2,14 +2,14 @@
 // items, people) goes into the prompt and Claude answers in prose. Nothing is written.
 import { lang } from '../i18n.js';
 import { buildProjectView, compareProjects, type ProjectView } from '../rules.js';
-import type { Snapshot } from '../store/store.js';
+import { SNAPSHOT_UPDATE_DAYS, type Snapshot } from '../store/store.js';
 import { vnDate } from '../time.js';
 import type { Health, User } from '../types.js';
 import { visibleSnapshot } from '../views.js';
 import { calendar, weekday } from './proposals.js';
 
 /** History kept in the prompt: enough for "the last two weeks / this month" questions. */
-export const ASK_HISTORY_DAYS = 60;
+export const ASK_HISTORY_DAYS = SNAPSHOT_UPDATE_DAYS; // as far back as the snapshot keeps every update
 const MAX_UPDATES_PER_PROJECT = 15;
 
 export interface AskMessage {

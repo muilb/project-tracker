@@ -7,7 +7,7 @@ import { l } from '../i18n.js';
 import { addUpdate, createItem, createProject, loadItem, loadProject, patchItem, patchProject, type OpContext } from '../projectOps.js';
 import { buildProjectView, compareItems, toItemView } from '../rules.js';
 import { createItemSchema, createProjectSchema, createUpdateSchema, parseBody, patchItemSchema, patchProjectSchema } from '../schemas.js';
-import type { Update } from '../types.js';
+import { updateCursor, type Store } from '../store/store.js';
 import { activeProjectViews, isInvolved, visibleSnapshot } from '../views.js';
 
 export const projects = new Hono<AppEnv>();
@@ -18,14 +18,11 @@ const op = (c: Context<AppEnv>): OpContext => ({ store: c.get('store'), notify: 
 /** The project page shows this many updates first; "more" loads UPDATES_PAGE older ones at a time. */
 const FIRST_UPDATES = 10;
 const UPDATES_PAGE = 20;
-const cursorOf = (u: Update) => `${u.at}|${u.id}`;
-
-/** Newest first, older than the `before` cursor (`<at>|<id>` of the last update shown). */
-function updatesPage(all: Update[], before: string | undefined, size: number) {
-  const sorted = all.sort((a, b) => cursorOf(b).localeCompare(cursorOf(a)));
-  const rest = before ? sorted.filter((u) => cursorOf(u) < before) : sorted;
-  const updates = rest.slice(0, size);
-  return { updates, nextBefore: rest.length > size ? cursorOf(updates[updates.length - 1]) : undefined };
+/** Newest first, older than the `before` cursor (`updateCursor` of the last update shown); reads one page only. */
+async function updatesPage(store: Store, projectId: string, before: string | undefined, size: number) {
+  const rows = await store.pageUpdates(projectId, size + 1, before);
+  const updates = rows.slice(0, size);
+  return { updates, nextBefore: rows.length > size ? updateCursor(updates[updates.length - 1]) : undefined };
 }
 
 projects.get('/', async (c) => {
@@ -33,7 +30,7 @@ projects.get('/', async (c) => {
   const now = c.get('now');
   const me = c.get('user');
   const { scope, gl, state } = c.req.query();
-  const snap = visibleSnapshot(me, await store.snapshot());
+  const snap = visibleSnapshot(me, await store.snapshot({ now }));
   let views =
     state === 'all' || state === 'paused' || state === 'closed'
       ? snap.projects
@@ -55,10 +52,15 @@ projects.get('/:id', async (c) => {
   const store = c.get('store');
   const now = c.get('now');
   const project = await loadProject(store, c.req.param('id'), c.get('user'));
-  const [updates, items, settings] = await Promise.all([store.listUpdates(project.id), store.listItems(project.id), store.getSettings()]);
+  const [pinned, page, items, settings] = await Promise.all([
+    store.listPinnedUpdates(project.id),
+    updatesPage(store, project.id, undefined, FIRST_UPDATES),
+    store.listItems(project.id),
+    store.getSettings(),
+  ]);
   return c.json({
-    project: buildProjectView(project, updates, items, settings, now),
-    ...updatesPage(updates, undefined, FIRST_UPDATES),
+    project: buildProjectView(project, pinned, items, settings, now),
+    ...page,
     items: items.map((i) => toItemView(i, now, settings)).sort(compareItems),
   });
 });
@@ -80,7 +82,7 @@ projects.get('/:id/updates', async (c) => {
   const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const { before, limit } = c.req.query();
   const size = Math.min(Math.max(Number(limit) || UPDATES_PAGE, 1), 100);
-  return c.json(updatesPage(await store.listUpdates(project.id), before, size));
+  return c.json(await updatesPage(store, project.id, before, size));
 });
 
 projects.post('/:id/updates', async (c) => {

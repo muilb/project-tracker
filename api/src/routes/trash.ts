@@ -14,7 +14,12 @@ const onlyAdmins = (c: { get: (k: 'user') => AppEnv['Variables']['user'] }) =>
 
 trash.get('/', async (c) => {
   onlyAdmins(c);
-  const snap = await c.get('store').snapshot({ includeDeleted: true });
+  const store = c.get('store');
+  // Deleted updates are read on their own: the snapshot keeps only recent updates.
+  const [snap, deletedUpdates] = await Promise.all([
+    store.snapshot({ includeDeleted: true, now: c.get('now') }),
+    store.listDeletedUpdates(),
+  ]);
   const name = new Map(snap.projects.map((p) => [p.id, p.name]));
   const liveProject = new Set(snap.projects.filter((p) => !p.deletedAt).map((p) => p.id));
   const newestFirst = (a: { deletedAt?: string }, b: { deletedAt?: string }) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '');
@@ -37,8 +42,8 @@ trash.get('/', async (c) => {
         deletedAt,
         deletedBy,
       })),
-    updates: snap.updates
-      .filter((u) => u.deletedAt && liveProject.has(u.projectId))
+    updates: deletedUpdates
+      .filter((u) => liveProject.has(u.projectId))
       .sort(newestFirst)
       .map(({ id, projectId, at, author, summary, deletedAt, deletedBy }) => ({
         id,

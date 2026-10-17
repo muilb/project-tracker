@@ -60,6 +60,26 @@ export function compareItems(a: ItemView, b: ItemView): number {
   );
 }
 
+/** Newest first; same time: higher id first (the order of the sort keys). */
+export const newestUpdateFirst = (a: Update, b: Update) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id);
+
+/**
+ * The updates that decide a project's view: for each author and role, the newest update and the
+ * newest one with a colour. `buildProjectView` only ever takes the newest update matching a test on
+ * the author, the role and whether a colour is set, and that update is always one of these — so
+ * the view built from these (plus any other updates) equals the view built from the whole history,
+ * whoever the project's owners are. Soft-deleted updates are ignored.
+ */
+export function pinUpdates(updates: Update[]): Update[] {
+  const pinned = new Map<string, Update>();
+  for (const u of updates.filter((u) => !u.deletedAt).sort(newestUpdateFirst)) {
+    const who = `${u.author}#${u.authorRole}`;
+    if (!pinned.has(who)) pinned.set(who, u);
+    if (u.health && !pinned.has(`${who}#health`)) pinned.set(`${who}#health`, u);
+  }
+  return [...new Set(pinned.values())].sort(newestUpdateFirst);
+}
+
 export function buildProjectView(
   project: Project,
   updates: Update[],
@@ -67,7 +87,8 @@ export function buildProjectView(
   settings: Settings,
   now: Date,
 ): ProjectView {
-  const sorted = updates.filter((u) => u.projectId === project.id).sort((a, b) => b.at.localeCompare(a.at));
+  // Each value below is the newest update passing a test on author / role / colour: keep it so (see pinUpdates).
+  const sorted = updates.filter((u) => u.projectId === project.id).sort(newestUpdateFirst);
   const owner = sorted.filter((u) => isOwnerUpdate(project, u));
   const lastOwnerUpdate = owner[0];
   const declaredHealth = owner.find((u) => u.health)?.health;

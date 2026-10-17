@@ -137,7 +137,7 @@ channels.get('/', async (c) => {
   const list = all.filter((ch) => can.admin(me) || ch.createdBy === me.id).sort((a, b) => a.name.localeCompare(b.name));
   if (!can.admin(me) || list.length === 0) return c.json({ channels: list.map((ch) => publicChannel(ch)) });
   // PMO / managers: flag channels whose owner left or cannot see the scope any more.
-  const snap = await c.get('store').snapshot();
+  const snap = await c.get('store').snapshot({ now: c.get('now') });
   const owners = [...new Set(list.map((ch) => ch.createdBy))];
   const statuses = await c
     .get('accounts')

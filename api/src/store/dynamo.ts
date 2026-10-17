@@ -27,6 +27,7 @@ import {
   type Update,
   type User,
 } from '../types.js';
+import { pinUpdates } from '../rules.js';
 import {
   AUDIT_DAYS,
   ConflictError,
@@ -37,8 +38,11 @@ import {
   liveSnapshot,
   OUTBOX_DAYS,
   outboxKey,
+  snapshotSince,
+  uniqueUpdates,
   type ListOptions,
   type Snapshot,
+  type SnapshotOptions,
   type Store,
 } from './store.js';
 
@@ -48,6 +52,7 @@ import {
  *   PROJECT#<id>      PROJECT
  *   PROJECT#<id>      UPDATE#<iso time>#<id>
  *   PROJECT#<id>      ITEM#<id>
+ *   PROJECT#<id>      PINS              (pinned updates, see rules.pinUpdates: enough for the views)
  *   CHANNEL#<id>      CHANNEL
  *   SENT#<key>        SENT              (alert de-duplication, expires via the `ttl` attribute)
  *   AUDIT             <iso time>#<id>   (administrative log, expires via `ttl` after AUDIT_DAYS)
@@ -59,12 +64,30 @@ import {
  *   PUSH#<email>      <subscription id> (Web Push browsers / phones, track H)
  *   TEMP#<key>        TEMP              (track G: Telegram bot state and counters, expire via `ttl`)
  * Every row also has `kind`. The `byKind` index (partition `kind`, sort `sk`) lets the snapshot,
- * users and channels be read by kind, so the inbox / logs / de-dup rows are never scanned.
+ * users and channels be read by kind, so the inbox / logs / de-dup rows are never scanned. Its sort
+ * key starts with the update time for updates, so the snapshot reads only recent ones (plus PINS).
  */
-type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT' | 'NOTIFY' | 'INBOX' | 'OUTBOX' | 'DELIVERY' | 'PUSH' | 'TEMP';
+type Kind =
+  | 'USER'
+  | 'PROJECT'
+  | 'UPDATE'
+  | 'ITEM'
+  | 'PINS'
+  | 'CHANNEL'
+  | 'SENT'
+  | 'AUDIT'
+  | 'NOTIFY'
+  | 'INBOX'
+  | 'OUTBOX'
+  | 'DELIVERY'
+  | 'PUSH'
+  | 'TEMP';
 
 /** Global secondary index on `kind` (see infra/lib/stack.ts). */
 export const KIND_INDEX = 'byKind';
+
+/** A project's pinned updates; `version` guards concurrent writers. */
+type PinsRow = { updates: Update[]; version: number };
 
 const ttlAfter = (iso: string, days: number) => Math.floor(Date.parse(iso) / 1000) + days * 86_400;
 
@@ -82,8 +105,14 @@ export class DynamoStore implements Store {
     this.db = db ?? DynamoDBDocumentClient.from(client, { marshallOptions: { removeUndefinedValues: true } });
   }
 
-  /** Every row of one kind, from the `byKind` index; undefined when the index cannot be used yet. */
-  private async byKind(kind: Kind | 'CONFIG'): Promise<Record<string, unknown>[] | undefined> {
+  /**
+   * Every row of one kind (with a sort key from `from`, matching `filter`), from the `byKind` index;
+   * undefined when the index cannot be used yet.
+   */
+  private async byKind(
+    kind: Kind | 'CONFIG',
+    opts: { from?: string; filter?: string } = {},
+  ): Promise<Record<string, unknown>[] | undefined> {
     if (!this.indexReady) return undefined;
     const out: Record<string, unknown>[] = [];
     let start: Record<string, unknown> | undefined;
@@ -93,8 +122,9 @@ export class DynamoStore implements Store {
           new QueryCommand({
             TableName: this.table,
             IndexName: KIND_INDEX,
-            KeyConditionExpression: 'kind = :k',
-            ExpressionAttributeValues: { ':k': kind },
+            KeyConditionExpression: opts.from ? 'kind = :k AND sk >= :from' : 'kind = :k',
+            ExpressionAttributeValues: { ':k': kind, ...(opts.from ? { ':from': opts.from } : {}) },
+            ...(opts.filter ? { FilterExpression: opts.filter } : {}),
             ExclusiveStartKey: start,
           }),
         );
@@ -208,11 +238,78 @@ export class DynamoStore implements Store {
     return this.put(`PROJECT#${project.id}`, 'PROJECT', 'PROJECT', project);
   }
 
-  putUpdate(update: Update) {
-    return this.put(`PROJECT#${update.projectId}`, `UPDATE#${update.at}#${update.id}`, 'UPDATE', update);
+  async putUpdate(update: Update) {
+    await this.put(`PROJECT#${update.projectId}`, `UPDATE#${update.at}#${update.id}`, 'UPDATE', update);
+    const row = await this.get<PinsRow>(`PROJECT#${update.projectId}`, 'PINS');
+    const pinned = row?.updates.some((u) => u.id === update.id);
+    if (row && !pinned && update.deletedAt) return; // deleting an update that decides nothing
+    // A new / restored update is merged in; a pinned one that changed needs the whole history again
+    // (with this write applied: the query may not see it yet).
+    const history = async () =>
+      (await this.listUpdates(update.projectId, { includeDeleted: true })).filter((u) => u.id !== update.id);
+    const updates = pinUpdates([...(row && !pinned ? row.updates : await history()), update]);
+    // Someone else changed the pins meanwhile: drop them, the next reader rebuilds them from the history.
+    if (!(await this.savePins(update.projectId, updates, row?.version)))
+      await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: `PROJECT#${update.projectId}`, sk: 'PINS' } }));
   }
   async listUpdates(projectId: string, opts?: ListOptions) {
     return liveRows(await this.query<Update>(`PROJECT#${projectId}`, 'UPDATE#'), opts);
+  }
+  async pageUpdates(projectId: string, limit: number, before?: string) {
+    // BETWEEN includes its ends: the row at the cursor itself is skipped.
+    const hi = before ? `UPDATE#${before}` : 'UPDATE$';
+    const out: Update[] = [];
+    let start: Record<string, unknown> | undefined;
+    do {
+      const res = await this.db.send(
+        new QueryCommand({
+          TableName: this.table,
+          KeyConditionExpression: 'pk = :pk AND sk BETWEEN :lo AND :hi',
+          ExpressionAttributeValues: { ':pk': `PROJECT#${projectId}`, ':lo': 'UPDATE#', ':hi': hi },
+          FilterExpression: 'attribute_not_exists(deletedAt)',
+          ScanIndexForward: false,
+          Limit: limit + 1,
+          ExclusiveStartKey: start,
+        }),
+      );
+      for (const row of res.Items ?? []) if (row.sk !== hi) out.push(strip<Update>(row));
+      start = res.LastEvaluatedKey;
+    } while (start && out.length < limit);
+    return out.slice(0, limit);
+  }
+  async listPinnedUpdates(projectId: string) {
+    return (await this.get<PinsRow>(`PROJECT#${projectId}`, 'PINS'))?.updates ?? (await this.rebuildPins(projectId));
+  }
+  async listDeletedUpdates() {
+    const rows =
+      (await this.byKind('UPDATE', { filter: 'attribute_exists(deletedAt)' })) ??
+      (await this.scanAll()).filter((r) => r.kind === 'UPDATE' && r.deletedAt);
+    return rows.map((r) => strip<Update>(r));
+  }
+
+  /** Saves a project's pinned updates; false when another writer saved them since `version` was read. */
+  private async savePins(projectId: string, updates: Update[], version?: number) {
+    try {
+      await this.db.send(
+        new PutCommand({
+          TableName: this.table,
+          Item: { pk: `PROJECT#${projectId}`, sk: 'PINS', kind: 'PINS', updates, version: (version ?? 0) + 1 },
+          ...(version === undefined
+            ? { ConditionExpression: 'attribute_not_exists(pk)' }
+            : { ConditionExpression: 'version = :v', ExpressionAttributeValues: { ':v': version } }),
+        }),
+      );
+      return true;
+    } catch (e) {
+      if (e instanceof ConditionalCheckFailedException) return false;
+      throw e;
+    }
+  }
+  /** Pins from the whole history, for a project that has none saved (data from before pins, or dropped). */
+  private async rebuildPins(projectId: string) {
+    const updates = pinUpdates(await this.listUpdates(projectId));
+    await this.savePins(projectId, updates); // false: another writer saved them first, theirs stay
+    return updates;
   }
 
   getItem(projectId: string, id: string) {
@@ -428,18 +525,28 @@ export class DynamoStore implements Store {
     return Number(res.Attributes?.value);
   }
 
-  async snapshot(opts?: ListOptions): Promise<Snapshot> {
+  async snapshot(opts?: SnapshotOptions): Promise<Snapshot> {
     const snap: Snapshot = { users: [], projects: [], updates: [], items: [], settings: DEFAULT_SETTINGS };
-    const kinds = ['USER', 'PROJECT', 'UPDATE', 'ITEM'] as const;
-    const parts = await Promise.all(kinds.map((k) => this.byKind(k)));
+    const since = opts?.now && snapshotSince(opts.now);
+    const [users, projects, updates, items, pins] = await Promise.all([
+      this.byKind('USER'),
+      this.byKind('PROJECT'),
+      this.byKind('UPDATE', since ? { from: `UPDATE#${since}` } : {}),
+      this.byKind('ITEM'),
+      since ? this.byKind('PINS') : [],
+    ]);
     let settingsRow: Record<string, unknown> | undefined;
-    if (parts.every((p) => p)) {
-      [snap.users, snap.projects, snap.updates, snap.items] = parts.map((rows) => rows!.map((r) => strip(r))) as [
-        Snapshot['users'],
-        Snapshot['projects'],
-        Snapshot['updates'],
-        Snapshot['items'],
-      ];
+    if (users && projects && updates && items && pins) {
+      snap.users = users.map((r) => strip<User>(r));
+      snap.projects = projects.map((r) => strip<Project>(r));
+      snap.updates = updates.map((r) => strip<Update>(r));
+      snap.items = items.map((r) => strip<Item>(r));
+      if (since) {
+        // Pins saved per project; a project without them yet (older data) gets them from its history once.
+        const saved = new Map(pins.map((r) => [String(r.pk).slice('PROJECT#'.length), (r as unknown as PinsRow).updates]));
+        const pinned = await Promise.all(snap.projects.map(async (p) => saved.get(p.id) ?? (await this.rebuildPins(p.id))));
+        snap.updates = uniqueUpdates([...snap.updates, ...pinned.flat()]);
+      }
       settingsRow = await this.get<Record<string, unknown>>('CONFIG', 'SETTINGS');
     } else {
       for (const row of await this.scanAll()) {

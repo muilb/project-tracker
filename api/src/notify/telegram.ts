@@ -1,4 +1,6 @@
 // Telegram delivery through one system bot (created with @BotFather, token set by PMO in Settings).
+import { l } from '../i18n.js';
+import { PermanentDeliveryError } from './errors.js';
 import type { Message } from './message.js';
 
 export interface TelegramChat {
@@ -17,6 +19,37 @@ export interface TelegramClient {
   sendMessage(token: string, chatId: string, html: string): Promise<void>;
 }
 
+/** The group became a supergroup: Telegram gives its new chat id, the message must be sent there. */
+export class TelegramMigratedError extends Error {
+  constructor(public newChatId: string) {
+    super(`Telegram: group migrated to a supergroup (${newChatId})`);
+  }
+}
+
+/** A clear, bilingual reason for the Telegram errors people can fix themselves; permanent ones are not retried. */
+export function telegramError(status: number, description = ''): Error {
+  const d = description.toLowerCase();
+  if (d.includes('bot was kicked') || d.includes('not a member') || d.includes('group chat was deleted'))
+    return new PermanentDeliveryError(
+      l(
+        'Telegram: bot đã bị xoá khỏi nhóm (hoặc nhóm đã bị xoá). Thêm lại bot rồi kết nối lại kênh (Sửa → Đổi sang nhóm khác).',
+        'Telegram: ボットがグループから削除されました（またはグループが削除されました）。ボットを追加し直してチャネルを再接続してください（編集 → 別のグループに変更）。',
+      ),
+    );
+  if (d.includes('chat not found'))
+    return new PermanentDeliveryError(
+      l(
+        'Telegram: không tìm thấy nhóm (nhóm đã bị xoá hoặc bot không còn trong nhóm). Kết nối lại kênh (Sửa → Đổi sang nhóm khác).',
+        'Telegram: グループが見つかりません（削除されたか、ボットがもういません）。チャネルを再接続してください（編集 → 別のグループに変更）。',
+      ),
+    );
+  if (d.includes('bot was blocked'))
+    return new PermanentDeliveryError(l('Telegram: người nhận đã chặn bot.', 'Telegram: 受信者がボットをブロックしました。'));
+  const text = `Telegram: ${description || `HTTP ${status}`}`;
+  // Other 4xx (bad token, bad request) do not get better by retrying; 429 and 5xx do.
+  return status >= 400 && status < 500 && status !== 429 ? new PermanentDeliveryError(text) : new Error(text);
+}
+
 async function call<T>(token: string, method: string, body: object): Promise<T> {
   const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: 'POST',
@@ -24,8 +57,17 @@ async function call<T>(token: string, method: string, body: object): Promise<T> 
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(8000),
   });
-  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string };
-  if (!json.ok) throw new Error(`Telegram: ${json.description ?? `HTTP ${res.status}`}`);
+  const json = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    result?: T;
+    description?: string;
+    error_code?: number;
+    parameters?: { migrate_to_chat_id?: number };
+  };
+  if (!json.ok) {
+    if (json.parameters?.migrate_to_chat_id) throw new TelegramMigratedError(String(json.parameters.migrate_to_chat_id));
+    throw telegramError(json.error_code ?? res.status, json.description);
+  }
   return json.result as T;
 }
 

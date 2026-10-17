@@ -489,6 +489,29 @@ export function HelpPage() {
           Ở mỗi kênh, chọn mẫu tin (kết nối, chuyển Đỏ, vấn đề Cao, nhắc mỗi giờ, tóm tắt 8h) rồi bấm <B>Gửi thử</B> để xem trước tin thật
           trông thế nào. Tin mẫu có chữ <b>[Mẫu]</b> và không ảnh hưởng thông báo thật. Kênh có thể <B>Sửa</B>, <B>Tắt</B> hoặc <B>Xoá</B>.
         </p>
+        <h3>Lỗi gửi &amp; nhật ký</h3>
+        <ul className="howto">
+          <li>
+            Gửi lỗi (Teams / Telegram tạm trục trặc) thì hệ thống tự gửi lại sau 1, 5, 15, 60 phút (tối đa 6 lần). Tin nhắc mỗi giờ không
+            gửi lại riêng mà vào lượt của giờ sau.
+          </li>
+          <li>
+            Lỗi không thể tự hết (Workflow đã bị xoá, bot bị đuổi khỏi nhóm, nhóm không còn) thì không gửi lại. Dòng ⚠ ở kênh ghi rõ lý do
+            và cách sửa.
+          </li>
+          <li>
+            Mất <b>5 tin liên tiếp</b> thì kênh <b>tự tắt</b> (nhãn ■ <b>Tự tắt do gửi lỗi</b>) và bạn nhận tin trong hộp thư 🔔. Sửa kênh,
+            bấm <B>Gửi thử</B>, rồi <B>Bật</B> lại.
+          </li>
+          <li>Nhóm Telegram lên "supergroup" thì hệ thống tự chuyển sang nhóm mới, không cần làm gì.</li>
+          <li>
+            <B>Nhật ký gửi</B> dưới mỗi kênh: 20 lần gửi gần nhất, thành công hay lỗi. <B>Chuyển người phụ trách</B>: giao kênh cho người khác
+            (người đó phải đăng nhập được). PMO thấy nhãn ▲ <b>Mồ côi</b> ở kênh mà người phụ trách đã nghỉ hoặc không còn xem được dự án.
+          </li>
+          <li>
+            Kênh Teams dùng URL <code>…webhook.office.com</code> là kiểu cũ Microsoft đã ngừng: tạo Workflow mới rồi <B>Sửa</B> → dán URL mới.
+          </li>
+        </ul>
         <h3>Đổi nhóm / đổi URL</h3>
         <ul className="howto">
           <li>

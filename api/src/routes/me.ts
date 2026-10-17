@@ -9,6 +9,7 @@ import { l, lang, withLang } from '../i18n.js';
 import { send } from '../notify/deliver.js';
 import { personalTestMessage, prefsOf } from '../notify/personal.js';
 import { personalKey } from '../notify/routePersonal.js';
+import { testPush } from './push.js';
 import { renderTelegram } from '../notify/telegram.js';
 import { inboxReadSchema, notifyPrefsSchema, parseBody } from '../schemas.js';
 import { inboxCursor } from '../store/store.js';
@@ -40,6 +41,7 @@ me.put('/notify', async (c) => {
     // Telegram can only be switched on once a chat is linked.
     telegram: body.telegram && !!current.telegramChatId,
     watch: [...new Set(body.watch)],
+    push: body.push ?? current.push ?? false, // track H
     userId: user.id,
     updatedAt: c.get('now').toISOString(),
   };
@@ -160,19 +162,23 @@ me.post('/notify/telegram/confirm', async (c) => {
   return c.json({ prefs: publicPrefs(prefs) });
 });
 
-/** A test message to the inbox, and to the linked Telegram chat (whether or not it is switched on). */
+/**
+ * A test message to the inbox, to the linked Telegram chat (whether or not it is switched on),
+ * and to every browser / phone when Web Push is on.
+ */
 me.post('/notify/test', async (c) => {
   const deps = c.get('notify');
   const now = c.get('now');
   const prefs = await prefsOf(deps.store, c.get('user'), now);
   const message = withLang(prefs.lang ?? lang(), () => personalTestMessage(deps));
   const inbox = await send(deps, { target: { userId: prefs.userId, via: 'inbox' }, event: 'test', message }, now);
-  if (!prefs.telegramChatId) return c.json({ inbox });
+  const push = prefs.push ? await testPush(deps, prefs.userId, message, now) : undefined; // track H
+  if (!prefs.telegramChatId) return c.json({ inbox, push });
   try {
     await deps.send({ id: `U:${prefs.userId}`, kind: 'telegram', telegramChatId: prefs.telegramChatId } as Channel, message);
-    return c.json({ inbox, telegram: { ok: true } });
+    return c.json({ inbox, telegram: { ok: true }, push });
   } catch (e) {
-    return c.json({ inbox, telegram: { ok: false, error: (e as Error).message.slice(0, 300) } });
+    return c.json({ inbox, telegram: { ok: false, error: (e as Error).message.slice(0, 300) }, push });
   }
 });
 

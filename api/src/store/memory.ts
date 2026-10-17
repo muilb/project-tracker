@@ -9,6 +9,8 @@ import {
   type NotifyPrefs,
   type OutboxEntry,
   type Project,
+  type PushConfig,
+  type PushSubscriptionRecord,
   type Settings,
   type TelegramBot,
   type Update,
@@ -44,6 +46,8 @@ export class MemoryStore implements Store {
   outbox = new Map<string, OutboxEntry>();
   deliveries: DeliveryLog[] = [];
   temp = new Map<string, { value: unknown; expires: number }>(); // track G
+  pushConfig?: PushConfig;
+  pushSubs = new Map<string, PushSubscriptionRecord>(); // `${userId}#${id}`
 
   async getUser(id: string) {
     return clone(this.users.get(id));
@@ -226,6 +230,30 @@ export class MemoryStore implements Store {
       settings: this.settings,
     });
     return opts?.includeDeleted ? snap : liveSnapshot(snap);
+  }
+
+  // track H: Web Push.
+  async getPushConfig() {
+    return clone(this.pushConfig);
+  }
+  async initPushConfig(config: PushConfig) {
+    this.pushConfig ??= clone(config);
+    return clone(this.pushConfig);
+  }
+  async putPushSubscription(sub: PushSubscriptionRecord) {
+    this.pushSubs.set(`${sub.userId}#${sub.id}`, clone(sub));
+  }
+  async getPushSubscription(userId: string, id: string) {
+    return clone(this.pushSubs.get(`${userId}#${id}`));
+  }
+  async listPushSubscriptions(userId: string) {
+    return [...this.pushSubs.values()]
+      .filter((s) => s.userId === userId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(clone);
+  }
+  async deletePushSubscription(userId: string, id: string) {
+    this.pushSubs.delete(`${userId}#${id}`);
   }
 }
 

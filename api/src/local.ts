@@ -6,6 +6,7 @@ import { MemoryAccounts } from './accounts.js';
 import { blankAction, claudeClient, type AiClient } from './ai/assistant.js';
 import { createApp } from './app.js';
 import type { Message } from './notify/message.js';
+import type { PushSender } from './notify/push.js';
 import { createSender } from './notify/sender.js';
 import { telegramClient, type TelegramClient } from './notify/telegram.js';
 import { loadSample } from './seed/sample.js';
@@ -79,6 +80,10 @@ const ai: AiClient = process.env.ANTHROPIC_API_KEY
         return { answer: `(AI giả lập) Bạn hỏi: "${q}".\nDự án đang Đỏ:\n${red.join('\n') || '- không có'}`, truncated: false };
       },
     };
+// Web Push payloads are printed unless LOCAL_SEND=1 (then they go to the browser's push service).
+const push: PushSender | undefined = process.env.LOCAL_SEND
+  ? undefined
+  : async (req) => console.log(`[push → ${new URL(req.subscription.endpoint).hostname}] ${req.payload}`);
 if (process.env.ANTHROPIC_API_KEY) await store.putAiConfig({ apiKey: process.env.ANTHROPIC_API_KEY });
 const app = createApp({
   store,
@@ -89,6 +94,7 @@ const app = createApp({
   webUrl: 'http://localhost:5173',
   accounts,
   ai,
+  push,
 });
 serve({ fetch: app.fetch, port });
 console.log(`API dev server: http://localhost:${port}  (header x-dev-user: lan@example.com)`);

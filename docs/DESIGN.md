@@ -246,6 +246,20 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 - Chỉ dự án đang chạy; riêng `assigned_to_me` gửi cả khi dự án tạm dừng.
 - **Tạm dừng** (`pausedUntil`): không gửi gì, kể cả hộp thư. **Giờ yên lặng**: mặc định 22:00–07:00 giờ VN; tắt bằng `schedule.quietFrom = quietTo` (giờ tuỳ chỉnh do nhánh D làm trong `policy.ts`). Tin tức thời trong giờ yên lặng vẫn vào hộp thư nhưng không gửi Telegram; nhắc việc theo giờ thì chờ hết giờ yên lặng mới gửi (cả hộp thư lẫn Telegram).
 - Chống trùng bằng `markSent` với khoá `P#<email>#<sự kiện>#…` (14 ngày), chỉ ghi khi đã gửi được.
+- **Web Push** (nhánh H, `notify/push.ts`, `routes/push.ts`, thư viện `web-push`): nơi nhận thứ ba `via: 'push'`, bật bằng `NotifyPrefs.push` (thiếu = tắt), theo đúng giờ yên lặng / tạm dừng như Telegram.
+  - Khoá VAPID tạo lần đầu cần dùng, lưu ở `CONFIG` / `PUSH` (khoá riêng là **bí mật**, không endpoint nào trả về; tạo đồng thời thì giữ cặp ghi trước — `initPushConfig` ghi có điều kiện).
+  - Thiết bị: `PUSH#<email>` / `<id>` với `id` = 16 ký tự hex đầu của sha-256(endpoint) (cùng trình duyệt đăng ký lại thì ghi đè), `label` ("Chrome · Windows"), `createdAt`, `lastSentAt`, `lastError`. Tối đa 10 thiết bị / người (bỏ thiết bị cũ nhất). Endpoint chỉ nhận dịch vụ push của trình duyệt (`*.googleapis.com`, `*.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`, https) vì API gửi request tới đó.
+  - Gửi: `deliver.send` tách tin thành một lượt cho mỗi thiết bị (`subscriptionId`), nên gửi lại chỉ tới thiết bị lỗi. 404 / 410 → xoá thiết bị, không gửi lại; 429 / 5xx / lỗi mạng → đường gửi lại của nhánh C; 4xx khác → lỗi vĩnh viễn, giữ thiết bị kèm `lastError`. Payload JSON ≤ 3000 byte: `title`, `body` (tối đa 4 dòng đầu), `url`, `tag` = `project-<id>` (tin mới cùng dự án thay tin cũ) hoặc tên sự kiện; TTL 24 giờ, `urgency: high` cho tin `attention`.
+  - Web: `web/public/sw.js` chỉ hiện thông báo và mở / focus ứng dụng tại link (link khác origin chỉ giữ đường dẫn); **không có handler `fetch`** nên không cache gì. Đăng ký mỗi lần tải trang với `updateViaCache: 'none'`; CloudFront có behavior `/sw.js` không cache. `manifest.webmanifest` + icon để thêm vào Màn hình chính (bắt buộc cho push trên iOS). Đăng xuất bằng nút trên thanh trên cùng sẽ xoá thiết bị và huỷ đăng ký của trình duyệt (máy dùng chung).
+
+| Method | Path | Ghi chú |
+|---|---|---|
+| GET | `/me/push/key` | `{ publicKey }` (tạo khoá VAPID nếu chưa có) |
+| GET | `/me/push/subscriptions` | Thiết bị của mình: `{ id, label, createdAt, lastSentAt?, lastError? }`, không có endpoint / khoá |
+| POST | `/me/push/subscriptions` | `{ endpoint, keys: { p256dh, auth }, label }` → 201 `{ subscription }` |
+| DELETE | `/me/push/subscriptions/:id` | Chỉ thiết bị của mình (của người khác → 404) |
+
+`PUT /me/notify` nhận thêm `push` (thiếu = giữ giá trị đã lưu). `POST /me/notify/test` gửi cả tới mọi thiết bị khi `push` bật: thêm `push: { sent, failed, errors }`.
 - Tin được dựng trong `withLang(prefs.lang)`; `lang` lưu theo ngôn ngữ lúc người dùng lưu cài đặt / liên kết Telegram (chưa có thì tiếng Việt).
 
 ### Lịch gửi

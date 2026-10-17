@@ -67,10 +67,20 @@ export class TrackerStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
+    const siteOrigin = origins.S3BucketOrigin.withOriginAccessControl(site);
     const cdn = new cloudfront.Distribution(this, 'Cdn', {
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(site),
+        origin: siteOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      },
+      // The Web Push service worker is never cached at the edge, so a new version reaches browsers
+      // on their next update check (the page registers it with updateViaCache: 'none').
+      additionalBehaviors: {
+        '/sw.js': {
+          origin: siteOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        },
       },
       defaultRootObject: 'index.html',
       errorResponses: [403, 404].map((httpStatus) => ({

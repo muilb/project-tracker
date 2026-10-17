@@ -12,6 +12,8 @@ import { admin } from './routes/admin.js';
 import { ai as aiRoutes } from './routes/ai.js';
 import { channels } from './routes/channels.js';
 import { me } from './routes/me.js';
+import { push as pushRoutes } from './routes/push.js';
+import type { PushSender } from './notify/push.js';
 import { projects } from './routes/projects.js';
 import { telegramWebhook } from './routes/telegram.js';
 import { trash } from './routes/trash.js';
@@ -34,6 +36,8 @@ export interface AppDeps {
   accounts?: Accounts;
   /** Claude API for natural-language entry (tests pass a fake). */
   ai?: AiClient;
+  /** Web Push (track H; tests pass a fake, default the web-push library). */
+  push?: PushSender;
 }
 
 export function createApp({
@@ -46,8 +50,9 @@ export function createApp({
   accounts = new MemoryAccounts(),
   telegram = telegramClient,
   ai = claudeClient,
+  push,
 }: AppDeps) {
-  const notify = { store, send, webUrl };
+  const notify = { store, send, webUrl, push };
   const initialRoles = parseInitialRoles(auth.adminEmails);
   const app = new Hono<AppEnv>();
 
@@ -99,6 +104,7 @@ export function createApp({
   app.route('/', aiRoutes);
   app.route('/projects', projects);
   app.route('/channels', channels);
+  app.route('/me/push', pushRoutes);
   app.route('/me', me);
   app.route('/trash', trash);
 

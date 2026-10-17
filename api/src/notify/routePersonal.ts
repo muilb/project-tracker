@@ -26,8 +26,8 @@ export const snoozeKey = (userId: string, subject: string) => personalKey(userId
 const MAX_CLOSE_BUTTONS = 3;
 
 /**
- * The inbox always receives; the linked Telegram chat too when switched on and outside quiet
- * hours (`telegramNow` false holds Telegram back for immediate messages).
+ * The inbox always receives; the linked Telegram chat and Web Push too when switched on and outside
+ * quiet hours (`telegramNow` false holds them back for immediate messages).
  */
 function toPerson(
   prefs: NotifyPrefs,
@@ -41,6 +41,8 @@ function toPerson(
   const out: Outgoing[] = [{ target: { userId: prefs.userId, via: 'inbox' }, event, message, projectId, sentKeys }];
   if (telegramNow && prefs.telegram && prefs.telegramChatId)
     out.push({ target: { userId: prefs.userId, via: 'telegram' }, event, message, projectId, sentKeys });
+  // track H: Web Push follows the same rules as Telegram (deliver.ts sends to every device).
+  if (telegramNow && prefs.push) out.push({ target: { userId: prefs.userId, via: 'push' }, event, message, projectId, sentKeys });
   return out;
 }
 

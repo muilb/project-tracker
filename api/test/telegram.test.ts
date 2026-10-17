@@ -82,19 +82,21 @@ describe('rendering', () => {
 });
 
 describe('bot setup', () => {
-  it('only admins set the token; it is validated and never returned', async () => {
+  it('only the system admin sets the token; it is validated and never returned', async () => {
     expect((await call('PUT', '/settings/telegram', 'an', { token: TOKEN })).status).toBe(403);
-    expect((await call('PUT', '/settings/telegram', 'lan', { token: 'not-a-token-at-all' })).status).toBe(400);
+    expect((await call('PUT', '/settings/telegram', 'lan', { token: TOKEN })).status).toBe(403); // PMO
+    expect((await call('PUT', '/settings/telegram', 'admin', { token: 'not-a-token-at-all' })).status).toBe(400);
     badToken = true;
-    expect((await call('PUT', '/settings/telegram', 'lan', { token: TOKEN })).status).toBe(400);
+    expect((await call('PUT', '/settings/telegram', 'admin', { token: TOKEN })).status).toBe(400);
     badToken = false;
-    const res = await call('PUT', '/settings/telegram', 'lan', { token: TOKEN });
+    const res = await call('PUT', '/settings/telegram', 'admin', { token: TOKEN });
     expect(await res.json()).toEqual({ configured: true, username: 'du_an_bot' });
     const status = await call('GET', '/settings/telegram', 'an');
     const text = await status.text();
     expect(JSON.parse(text)).toEqual({ configured: true, username: 'du_an_bot' });
     expect(text).not.toContain(TOKEN);
-    expect((await call('DELETE', '/settings/telegram', 'lan')).status).toBe(200);
+    expect((await call('DELETE', '/settings/telegram', 'lan')).status).toBe(403);
+    expect((await call('DELETE', '/settings/telegram', 'admin')).status).toBe(200);
     expect(await store.getTelegramBot()).toBeUndefined();
   });
 });

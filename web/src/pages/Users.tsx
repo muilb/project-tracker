@@ -8,7 +8,10 @@ import { useSession } from '../session';
 import { l } from '../i18n';
 
 export function UsersPage() {
-  const { users, reloadUsers, canManageUsers, me } = useSession();
+  const { users, reloadUsers, canManageUsers, isSystemAdmin, me } = useSession();
+  // Only ADMIN grants ADMIN or touches ADMIN accounts.
+  const assignable = ROLES.filter((r) => r !== 'ADMIN' || isSystemAdmin);
+  const locked = (u: { role: Role }) => u.role === 'ADMIN' && !isSystemAdmin;
   const [error, setError] = useState<string>();
   const [id, setId] = useState('');
   const [name, setName] = useState('');
@@ -150,7 +153,7 @@ export function UsersPage() {
                         <option value="">
                           {l('Mặc định (theo ADMIN_EMAILS, nếu không có thì PL)', '既定（ADMIN_EMAILS に従う。なければ PL）')}
                         </option>
-                        {ROLES.map((r) => (
+                        {assignable.map((r) => (
                           <option key={r} value={r}>
                             {ROLE_LABEL[r]}
                           </option>
@@ -191,7 +194,7 @@ export function UsersPage() {
           <label>
             {l('Vai trò', 'ロール')}
             <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              {ROLES.map((r) => (
+              {assignable.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABEL[r]}
                 </option>
@@ -226,12 +229,21 @@ export function UsersPage() {
                   <td>
                     <select
                       value={u.role}
-                      disabled={u.id === me.id}
-                      title={u.id === me.id ? l('Không tự đổi vai trò của chính mình', '自分自身のロールは変更できません') : undefined}
+                      disabled={u.id === me.id || locked(u)}
+                      title={
+                        u.id === me.id
+                          ? l('Không tự đổi vai trò của chính mình', '自分自身のロールは変更できません')
+                          : locked(u)
+                            ? l(
+                                'Chỉ Quản trị hệ thống mới đổi được tài khoản ADMIN',
+                                'ADMIN アカウントを変更できるのはシステム管理者のみです',
+                              )
+                            : undefined
+                      }
                       onChange={(e) => changeRole(u.id, e.target.value as Role)}
                       aria-label={l(`Vai trò của ${u.name}`, `${u.name} のロール`)}
                     >
-                      {ROLES.map((r) => (
+                      {(locked(u) ? ROLES : assignable).map((r) => (
                         <option key={r} value={r}>
                           {ROLE_LABEL[r]}
                         </option>
@@ -239,7 +251,7 @@ export function UsersPage() {
                     </select>
                   </td>
                   <td className="nowrap">
-                    {u.id !== me.id && (
+                    {u.id !== me.id && !locked(u) && (
                       <button type="button" className="btn-link" onClick={() => resetPassword(u.id)}>
                         {l('Đặt lại mật khẩu', 'パスワード再設定')}
                       </button>

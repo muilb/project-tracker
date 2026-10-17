@@ -47,7 +47,7 @@ type Tab = 'entry' | 'ask';
 
 /** "✦ AI": ask questions about the data (everyone) or enter changes in plain text (PL and above). */
 export function AiEntryPage() {
-  const { isAdmin, me } = useSession();
+  const { isSystemAdmin, me } = useSession();
   const status = useApi<{ configured: boolean; model: string }>('/settings/ai');
   const canEnter = me.role !== 'OTHER';
   const [params, setParams] = useSearchParams();
@@ -74,15 +74,21 @@ export function AiEntryPage() {
         )}
       </div>
       <ErrorBox error={status.error} />
-      {status.data && !status.data.configured ? <NotConfigured isAdmin={isAdmin} /> : tab === 'ask' ? <AskPanel /> : <EntryPanel />}
+      {status.data && !status.data.configured ? (
+        <NotConfigured isSystemAdmin={isSystemAdmin} />
+      ) : tab === 'ask' ? (
+        <AskPanel />
+      ) : (
+        <EntryPanel />
+      )}
     </div>
   );
 }
 
-function NotConfigured({ isAdmin }: { isAdmin: boolean }) {
+function NotConfigured({ isSystemAdmin }: { isSystemAdmin: boolean }) {
   return (
     <div className="info-box">
-      {isAdmin ? (
+      {isSystemAdmin ? (
         <>
           {lang === 'ja' ? (
             <>
@@ -96,8 +102,8 @@ function NotConfigured({ isAdmin }: { isAdmin: boolean }) {
         </>
       ) : (
         l(
-          'PMO chưa cài API key AI. Nhờ PMO vào Cài đặt → AI để bật tính năng này.',
-          'PMO が AI の API キーを未設定です。PMO に「設定 → AI」で有効にしてもらってください。',
+          'Quản trị hệ thống chưa cài API key AI. Nhờ Quản trị hệ thống vào Cài đặt → AI để bật tính năng này.',
+          'システム管理者が AI の API キーを未設定です。システム管理者に「設定 → AI」で有効にしてもらってください。',
         )
       )}
     </div>

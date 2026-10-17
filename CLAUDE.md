@@ -19,7 +19,7 @@ Project tracking system replacing an Excel sheet. Serverless on AWS. UI text and
 
 ## Conventions
 - Languages: every user-visible string is written as `l('Tiếng Việt', '日本語')` — `web/src/i18n.ts` on the web (choice in localStorage, switching reloads the page), `api/src/i18n.ts` in the API (request language from `Accept-Language` via AsyncLocalStorage; zod messages must use `msg()` / `{ error: () => … }` so they are evaluated per request). Alerts are built inside `withLang(channel.lang, …)`. User-entered data is never translated.
-- Auth: Cognito only authenticates; roles (PL/GL/PMO/SUBMNG/MNG/OTHER) are stored in DynamoDB. Permission checks live in `api/src/auth.ts` (`can.*`).
+- Auth: Cognito only authenticates; roles (PL/GL/PMO/SUBMNG/MNG/OTHER/ADMIN) are stored in DynamoDB. Permission checks live in `api/src/auth.ts` (`can.*`); `can.system` (ADMIN only) guards secrets and granting ADMIN. Administrative changes are recorded with `audit()` (`src/audit.ts`).
 - `GET /public` and `GET /health` are the only unauthenticated routes; the public payload must never include customers, people, needHelp or issue text — `test/rules.test.ts` checks this.
 - Dates for items are `YYYY-MM-DD`; "today" is Vietnam time (`src/time.ts`). Timestamps are ISO UTC.
 - Repo is public: never commit credentials, webhook URLs or real personal data.

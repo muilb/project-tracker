@@ -5,10 +5,81 @@ import { ErrorBox, Section } from '../components/ui';
 import { l, lang } from '../i18n';
 import { HEALTH_LABEL } from '../labels';
 import { useSession } from '../session';
+import type { AuditAction, AuditEntry } from '../../../api/src/types';
+import { fmtDateTime } from '../format';
 import type { Settings } from '../types';
 
+/** AI key and Telegram bot as seen by PMO / managers: status only, changes are for ADMIN. */
+function ReadOnlySecret({ title, status }: { title: string; status: string }) {
+  return (
+    <Section title={title}>
+      <div className="info-box">{status}</div>
+      <p className="muted">
+        {l('Chỉ Quản trị hệ thống (ADMIN) mới cài hoặc đổi được.', '設定・変更できるのはシステム管理者（ADMIN）のみです。')}
+      </p>
+    </Section>
+  );
+}
+
+const ACTION_LABEL: Record<AuditAction, string> = {
+  role_change: l('Đổi vai trò', 'ロール変更'),
+  admin_granted: l('Cấp ADMIN (ADMIN_EMAILS)', 'ADMIN 付与（ADMIN_EMAILS）'),
+  user_create: l('Thêm người dùng', 'ユーザー追加'),
+  account_approve: l('Duyệt tài khoản', 'アカウント承認'),
+  account_reject: l('Từ chối tài khoản', 'アカウント却下'),
+  password_reset: l('Đặt lại mật khẩu', 'パスワード再設定'),
+  ai_key_set: l('Cài API key AI', 'AI の API キー設定'),
+  ai_key_remove: l('Gỡ API key AI', 'AI の API キー削除'),
+  telegram_set: l('Cài / đổi bot Telegram', 'Telegram ボット設定 / 変更'),
+  telegram_remove: l('Gỡ bot Telegram', 'Telegram ボット削除'),
+  project_delete: l('Xoá dự án', 'プロジェクト削除'),
+  restore: l('Khôi phục từ thùng rác', 'ごみ箱から復元'),
+};
+
+/** Administrative log (ADMIN only). */
+function AuditLog() {
+  const { name } = useSession();
+  const { data, error } = useApi<{ entries: AuditEntry[] }>('/audit');
+  return (
+    <Section title={l('Nhật ký quản trị', '操作ログ')}>
+      <ErrorBox error={error} />
+      {!data ? (
+        <p className="loading">{l('Đang tải…', '読み込み中…')}</p>
+      ) : data.entries.length === 0 ? (
+        <p className="muted">{l('Chưa có thao tác nào.', '操作はまだありません。')}</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{l('Thời gian', '日時')}</th>
+                <th>{l('Người làm', '実行者')}</th>
+                <th>{l('Thao tác', '操作')}</th>
+                <th>{l('Đối tượng', '対象')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.entries.map((e) => (
+                <tr key={e.id}>
+                  <td className="nowrap">{fmtDateTime(e.at)}</td>
+                  <td>{name(e.actor)}</td>
+                  <td>{ACTION_LABEL[e.action] ?? e.action}</td>
+                  <td>
+                    {e.target}
+                    {e.detail && <div className="muted">{e.detail}</div>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 export function SettingsPage() {
-  const { isAdmin } = useSession();
+  const { isAdmin, isSystemAdmin } = useSession();
   const [s, setS] = useState<Settings>();
   const [error, setError] = useState<string>();
   const [saved, setSaved] = useState(false);
@@ -119,6 +190,7 @@ export function SettingsPage() {
           <button className="btn btn-primary">{l('Lưu cài đặt', '設定を保存')}</button>
         </div>
       </form>
+      {isSystemAdmin && <AuditLog />}
     </div>
   );
 }
@@ -130,6 +202,18 @@ function TelegramSettings() {
   const [error, setError] = useState<string>();
   const [changing, setChanging] = useState(false);
   const [notice, setNotice] = useState<string>();
+  const { isSystemAdmin } = useSession();
+  if (!isSystemAdmin)
+    return (
+      <ReadOnlySecret
+        title={l('Bot Telegram', 'Telegram ボット')}
+        status={
+          data?.configured
+            ? l(`✓ Đang dùng bot @${data.username}.`, `✓ ボット @${data.username} を使用中です。`)
+            : l('Chưa cài bot Telegram.', 'Telegram ボットは未設定です。')
+        }
+      />
+    );
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -287,6 +371,18 @@ function AiSettings() {
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const { isSystemAdmin } = useSession();
+  if (!isSystemAdmin)
+    return (
+      <ReadOnlySecret
+        title="AI (Claude)"
+        status={
+          data?.configured
+            ? l(`✓ Đã cài API key, model ${data.model}.`, `✓ API キー設定済み（モデル ${data.model}）。`)
+            : l('Chưa cài API key AI.', 'AI の API キーは未設定です。')
+        }
+      />
+    );
 
   async function save(e: FormEvent) {
     e.preventDefault();

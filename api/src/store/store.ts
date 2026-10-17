@@ -1,4 +1,4 @@
-import type { AiConfig, Channel, Item, Project, Settings, TelegramBot, Update, User } from '../types.js';
+import type { AiConfig, AuditEntry, Channel, Item, Project, Settings, TelegramBot, Update, User } from '../types.js';
 
 export interface Snapshot {
   users: User[];
@@ -9,6 +9,8 @@ export interface Snapshot {
 }
 
 export class ConflictError extends Error {}
+
+export const AUDIT_DAYS = 400;
 
 /**
  * Persistence boundary. Data volume is small (tens of projects, thousands of rows),
@@ -54,6 +56,10 @@ export interface Store {
   /** Alert de-duplication: whether `key` was recorded by markSent (records expire after `ttlDays`). */
   hasSent(key: string): Promise<boolean>;
   markSent(key: string, ttlDays: number): Promise<void>;
+
+  /** Administrative log (kept AUDIT_DAYS); newest first. */
+  addAudit(entry: AuditEntry): Promise<void>;
+  listAudit(limit: number): Promise<AuditEntry[]>;
 
   /** Atomically increments and returns a named counter (project / item ids). */
   nextSeq(name: 'project' | 'item' | 'channel'): Promise<number>;

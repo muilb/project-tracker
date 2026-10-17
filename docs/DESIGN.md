@@ -37,14 +37,20 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 | PMO | `PMO` |
 | Sub manager / Manager | `SUBMNG` / `MNG` |
 | Người hỗ trợ, khác | `OTHER` |
+| Quản trị hệ thống | `ADMIN` |
 
 | Thao tác | Ai được làm |
 |---|---|
 | Tạo dự án | PL trở lên (mọi vai trò trừ `OTHER`) |
 | Sửa dự án, đổi trạng thái | PMO / SUBMNG / MNG, hoặc GL / PL của dự án |
 | Ghi cập nhật, thêm/sửa vấn đề và sự kiện | Mọi người đã đăng nhập |
-| Thêm/sửa người dùng | PMO / MNG |
-| Sửa cài đặt | PMO / SUBMNG / MNG |
+| Thêm/sửa người dùng, duyệt tài khoản, đặt lại mật khẩu | PMO / MNG / ADMIN (tài khoản `ADMIN` thì chỉ ADMIN) |
+| Sửa cài đặt (tần suất, ngưỡng), xoá dự án, thùng rác | PMO / SUBMNG / MNG / ADMIN |
+| API key AI, bot Telegram, cấp vai trò `ADMIN`, nhật ký quản trị | Chỉ `ADMIN` |
+
+`ADMIN` đầu tiên: `ADMIN_EMAILS` (biến GitHub) có `email:ADMIN` → lần đăng nhập sau tài khoản đó được nâng lên ADMIN (các vai trò khác trong `ADMIN_EMAILS` chỉ áp dụng ở lần đăng nhập đầu). Không ai tự đổi vai trò của mình nên luôn còn ít nhất một ADMIN.
+
+Nhật ký quản trị (`GET /audit`, ADMIN): đổi vai trò, thêm / duyệt / từ chối tài khoản, đặt lại mật khẩu, cài / gỡ key AI và bot, xoá dự án, khôi phục. Lưu ở `pk = AUDIT`, tự xoá sau 400 ngày (TTL).
 
 ## Quy tắc (giữ nguyên từ file Excel) — `api/src/rules.ts`
 
@@ -88,7 +94,7 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | PATCH | `/projects/:id/items/:itemId` | Sửa, đóng mục (`status: done`) |
 | GET / POST | `/users`, PATCH `/users/:email` | Người dùng; PMO tạo trước người chưa đăng nhập |
 | GET | `/users/pending` | PMO / MNG: các tài khoản đã đăng ký nhưng chưa xác nhận email (đọc từ Cognito) |
-| POST | `/users/pending/:email/approve` | PMO / MNG: xác nhận tài khoản và đánh dấu email đã xác minh. Body `{ "role"?: … }`; nếu không truyền vai trò thì lấy theo `ADMIN_EMAILS`, không có thì PL |
+| POST | `/users/pending/:email/approve` | PMO / MNG / ADMIN (vai trò `ADMIN` thì chỉ ADMIN): xác nhận tài khoản và đánh dấu email đã xác minh. Body `{ "role"?: … }`; nếu không truyền vai trò thì lấy theo `ADMIN_EMAILS`, không có thì PL |
 | POST | `/users/pending/:email/reject` | PMO / MNG: xoá đăng ký chưa xác nhận |
 | GET / PUT | `/settings` | Tần suất cập nhật và các ngưỡng |
 | GET / POST | `/channels` | Kênh thông báo `kind: teams` (`webhookUrl`) hoặc `kind: telegram` (`connectCode`). Mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được. `lang` (`vi` / `ja`) là ngôn ngữ tin gửi vào kênh, mặc định theo ngôn ngữ người tạo |
@@ -104,6 +110,7 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET | `/trash` | PMO / quản lý: dự án, mục, cập nhật đã xoá (ai xoá, lúc nào) |
 | POST | `/trash/restore` | PMO / quản lý. Body `{ kind: project \| item \| update, projectId, id? }`. Khôi phục mục của dự án đang bị xoá thì phải khôi phục dự án trước |
 | POST | `/users/:email/reset-password` | PMO / MNG (không cho chính mình). Đặt mật khẩu tạm trong Cognito (`Permanent: false`), trả về `{ password }` một lần; lần đăng nhập sau Cognito yêu cầu `NEW_PASSWORD_REQUIRED`, web hiện bước đặt mật khẩu mới |
+| GET | `/audit` | ADMIN: 200 thao tác quản trị gần nhất |
 
 Ví dụ tạo dự án:
 

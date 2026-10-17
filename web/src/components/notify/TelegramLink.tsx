@@ -87,6 +87,7 @@ export function TelegramLinkFields({
               {l('Gỡ liên kết', '連携を解除')}
             </button>
           </div>
+          <BotCommands />
         </>
       ) : !bot ? (
         <p className="muted">
@@ -116,6 +117,11 @@ export function TelegramLinkFields({
         </ol>
       ) : (
         <>
+          {prefs.telegramBroken && (
+            <p className="error-box">
+              <span aria-hidden>▲</span> {prefs.telegramBroken}
+            </p>
+          )}
           <p className="muted">
             {l(
               `Nhận thông báo cá nhân qua chat riêng với @${bot}.`,
@@ -176,5 +182,40 @@ export function PersonalTest() {
       )}
       {error && <span className="warn-text">⚠ {error}</span>}
     </div>
+  );
+}
+
+/** track G: what the linked person can ask the bot in their private chat. */
+function BotCommands() {
+  const { me } = useSession();
+  return (
+    <details className="bot-commands">
+      <summary>{l('Lệnh của bot', 'ボットのコマンド')}</summary>
+      <ul>
+        <li>
+          <code>/mine</code> — {l('dự án của tôi: trạng thái, trễ cập nhật', '自分のプロジェクト: 状態・報告の遅れ')}
+        </li>
+        <li>
+          <code>/status P03</code> — {l('tình hình một dự án', '1 つのプロジェクトの状況')}
+        </li>
+        <li>
+          <code>/late</code> — {l('các dự án đang trễ cập nhật', '報告が遅れているプロジェクト')}
+        </li>
+        <li>
+          <code>/help</code> — {l('danh sách lệnh', 'コマンド一覧')}
+        </li>
+        <li>
+          {l('Nút dưới tin nhắc: "✓ Đóng mục", "⏰ Hoãn nhắc 1 ngày".', 'リマインダーのボタン:「✓ 完了にする」「⏰ 1 日後に再通知」。')}
+        </li>
+        {me.role !== 'OTHER' && (
+          <li>
+            {l(
+              'Gõ ghi chú tự do (vd. "P03 xong UAT, chuyển xanh"): AI đề xuất thay đổi, bấm Xác nhận thì mới ghi.',
+              '自由にメモを書く（例:「P03 UAT 完了、緑に」）: AI が変更を提案し、「確定」を押すと保存されます。',
+            )}
+          </li>
+        )}
+      </ul>
+    </details>
   );
 }

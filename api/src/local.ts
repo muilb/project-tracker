@@ -36,7 +36,16 @@ const telegram: TelegramClient = process.env.LOCAL_SEND
   : {
       getMe: async () => ({ username: 'local_dev_bot' }),
       findChatByText: async () => ({ chat: { id: '-100123', title: 'Nhóm thử (local)' }, seen: [] }),
-      sendMessage: async (_t, chatId, html) => console.log(`[telegram → ${chatId}]`, html),
+      sendMessage: async (_t, chatId, html, buttons) =>
+        console.log(`[telegram → ${chatId}]`, html, buttons?.length ? buttons.map((b) => `[${b.label}]`).join(' ') : ''),
+      // No public HTTPS URL locally: the bot stays one-way (connect codes through findChatByText above).
+      setWebhook: async () => {
+        throw new Error('local dev: no webhook (set LOCAL_SEND=1 and use a public HTTPS URL)');
+      },
+      deleteWebhook: async () => {},
+      getWebhookInfo: async () => ({ url: '', pendingUpdates: 0 }),
+      answerCallbackQuery: async () => {},
+      clearButtons: async () => {},
     };
 // Real Claude when ANTHROPIC_API_KEY is set (the key is pre-installed as if PMO saved it);
 // otherwise a fake that turns each "P01 …" sentence into an update and answers questions with the red projects.

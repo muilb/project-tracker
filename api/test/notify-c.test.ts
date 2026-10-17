@@ -12,6 +12,7 @@ import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';
 import { vnToIso } from '../src/time.js';
 import type { Channel } from '../src/types.js';
+import { webhookStubs } from './helpers/telegram.js';
 
 const now = new Date(vnToIso(SAMPLE_NOW_VN));
 const min = (n: number) => new Date(now.getTime() + n * 60_000);
@@ -171,6 +172,7 @@ describe('telegram', () => {
   let tgSent: { chatId: string }[];
   let migrate: boolean;
   const telegram: TelegramClient = {
+    ...webhookStubs,
     getMe: async () => ({ username: 'du_an_bot' }),
     findChatByText: async () => ({ seen: [] }),
     async sendMessage(_token, chatId) {

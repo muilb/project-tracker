@@ -11,10 +11,19 @@ import type { Message } from './message.js';
 import { allPrefs, itemMessage, remindersMessage, timing, updateMessage, watches } from './personal.js';
 import { isPaused, isQuiet, vnHour } from './policy.js';
 import { DEDUPE_DAYS } from './render.js';
+import { closeAction, reminderActions } from '../bot/actions.js';
 import type { RouteContext } from './routeChannels.js';
 
 /** De-duplication key of a personal message. */
 export const personalKey = (userId: string, rest: string) => `P#${userId}#${rest}`;
+
+// track G: "Snooze 1 day" under a Telegram reminder.
+/** What a reminder is about, without its time: `my_item_due#I0015`, `late_update_mine#P03`. */
+export const reminderSubject = (key: string) => key.split('#').slice(0, 2).join('#');
+/** Set (for a day) by the snooze button; the hourly run skips the subject meanwhile. */
+export const snoozeKey = (userId: string, subject: string) => personalKey(userId, `snooze#${subject}`);
+/** At most this many "Close" buttons under one reminder. */
+const MAX_CLOSE_BUTTONS = 3;
 
 /**
  * The inbox always receives; the linked Telegram chat and Web Push too when switched on and outside
@@ -84,6 +93,8 @@ export async function personalMessages(deps: NotifyDeps, event: NotifyEvent, now
         ? updateMessage(deps, event.project, event.update, event.before, event.after, reasons, ctx.name)
         : itemMessage(deps, event.project, event.item, reasons, event.actor, ctx.name),
     );
+    if (event.type === 'item_saved' && reasons[0] === 'assigned_to_me')
+      message.actions = withLang(p.lang, () => [closeAction(event.project.id, event.item.id)]);
     out.push(...toPerson(p, reasons[0], message, event.project.id, [key], !isQuiet(timing(p), now)));
   }
   return out;
@@ -117,6 +128,7 @@ export async function hourlyPersonalMessages(
       if (!p.events.includes(x.event) || (x.event === 'my_item_due' && !itemsTime)) continue;
       if (!reachable(userId, x.project, p, now, ctx)) continue;
       const fullKey = personalKey(userId, x.key);
+      if (await deps.store.hasSent(snoozeKey(userId, reminderSubject(x.key)))) continue;
       if (!(await deps.store.hasSent(fullKey))) mine.push({ ...x, fullKey });
     }
     if (!mine.length) continue;
@@ -128,6 +140,15 @@ export async function hourlyPersonalMessages(
         mine.map((x) => x.line()),
       ),
     );
+    if (p.telegram && p.telegramChatId)
+      message.actions = await withLang(p.lang, () =>
+        reminderActions(
+          deps,
+          userId,
+          mine.filter((x) => x.event === 'my_item_due' && x.itemId).slice(0, MAX_CLOSE_BUTTONS),
+          mine.map((x) => reminderSubject(x.key)),
+        ),
+      );
     out.push(
       ...toPerson(
         p,

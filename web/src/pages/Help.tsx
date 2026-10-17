@@ -668,6 +668,33 @@ export function HelpPage() {
             Nhớ bấm <B>Lưu</B> ở cuối trang (theo dõi / bỏ theo dõi và kết nối Telegram được lưu ngay).
           </li>
         </ul>
+        <h3>Dùng bot Telegram</h3>
+        <p>
+          Sau khi kết nối Telegram riêng, bạn có thể hỏi bot ngay trong chat (danh sách lệnh cũng có ở <B>Thông báo của tôi</B> →{' '}
+          <B>Lệnh của bot</B>). Bot chỉ trả lời những gì bạn được xem trên web.
+        </p>
+        <ul className="howto">
+          <li>
+            <code>/mine</code> — dự án của tôi (trạng thái, trễ cập nhật). <code>/status P03</code> — tình hình một dự án.{' '}
+            <code>/late</code> — các dự án đang trễ cập nhật. <code>/help</code> — danh sách lệnh.
+          </li>
+          <li>
+            Trong <b>nhóm</b> đã kết nối làm kênh, gõ <code>/mine@tên_bot</code>, <code>/status@tên_bot P03</code>… — bot trả lời theo phạm
+            vi của kênh.
+          </li>
+          <li>
+            Nút dưới tin: <B>✓ Đóng mục</B> (khi được giao mục, hoặc mục mình phụ trách đến hạn) đóng mục như trên web;{' '}
+            <B>⏰ Hoãn nhắc 1 ngày</B> tạm không nhắc lại các việc trong tin đó đến hôm sau.
+          </li>
+          <li>
+            <b>Ghi chú bằng chat</b> (PL trở lên): gõ tự do, ví dụ "P03 xong UAT, chuyển xanh". Bot dùng AI đề xuất các thay đổi, bấm{' '}
+            <B>✓ Xác nhận</B> trong 30 phút thì mới ghi (như nhập bằng AI trên web), <B>✗ Huỷ</B> để bỏ.
+          </li>
+          <li>
+            Chặn hoặc xoá bot thì Telegram riêng tự tắt, trang <B>Thông báo của tôi</B> báo lý do — bấm <B>Kết nối Telegram</B> để nối lại.
+            Bot bị xoá khỏi một nhóm thì kênh đó tự tắt, người tạo kênh nhận tin trong 🔔.
+          </li>
+        </ul>
       </H>
 
       <H id="public">
@@ -723,7 +750,8 @@ export function HelpPage() {
           <li>
             <b>Bot Telegram</b> (ADMIN): tạo bot với @BotFather (<code>/newbot</code>) rồi dán token. Token lộ ra ngoài thì{' '}
             <code>/revoke</code> ở BotFather rồi bấm <B>Đổi token</B> và dán token mới — các nhóm đã kết nối vẫn giữ nguyên. Đổi sang bot
-            khác thì phải thêm bot mới vào từng nhóm.
+            khác thì phải thêm bot mới vào từng nhóm. Khi lưu token, hệ thống bật <b>webhook</b> để bot nhận lệnh và nút bấm; thẻ Bot
+            Telegram hiện trạng thái webhook, nếu báo ▲ thì bấm <B>Kết nối lại webhook</B>.
           </li>
           <li>
             <b>Microsoft Teams</b>: không có gì để cài chung — mỗi kênh Teams đăng ký ở trang Kênh thông báo với URL webhook riêng.

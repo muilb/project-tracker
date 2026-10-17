@@ -229,6 +229,11 @@ export async function parseBody<T extends z.ZodType>(req: { json(): Promise<unkn
   } catch {
     throw new HTTPException(400, { message: l('Body phải là JSON', 'Body は JSON である必要があります') });
   }
+  return checkBody(schema, body);
+}
+
+/** Validates a body that did not come from a request (Telegram buttons, track G) like parseBody does. */
+export function checkBody<T extends z.ZodType>(schema: T, body: unknown): z.infer<T> {
   const res = schema.safeParse(body);
   if (!res.success) {
     const msg = res.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ');

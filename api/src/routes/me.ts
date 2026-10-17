@@ -1,6 +1,7 @@
 // The signed-in person's own notification settings and web inbox.
 import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
+import { findChatByCode } from '../bot/codes.js';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import type { AppEnv } from '../env.js';
@@ -56,6 +57,7 @@ me.delete('/notify/telegram', async (c) => {
     telegram: false,
     telegramChatId: undefined,
     telegramChatTitle: undefined,
+    telegramBroken: undefined,
     updatedAt: c.get('now').toISOString(),
   };
   await store.putNotifyPrefs(prefs);
@@ -111,7 +113,7 @@ me.post('/notify/telegram/confirm', async (c) => {
   const bot = await systemBot(c);
   let chat;
   try {
-    ({ chat } = await c.get('telegram').findChatByText(bot.token, code));
+    ({ chat } = await findChatByCode(store, c.get('telegram'), bot, code));
   } catch (e) {
     throw new HTTPException(502, {
       message: l('Không đọc được tin nhắn của bot: ', 'ボットのメッセージを読み込めません: ') + (e as Error).message,
@@ -151,6 +153,7 @@ me.post('/notify/telegram/confirm', async (c) => {
     telegram: true,
     telegramChatId: chat.id,
     telegramChatTitle: chat.title,
+    telegramBroken: undefined,
     lang: language,
     updatedAt: c.get('now').toISOString(),
   };

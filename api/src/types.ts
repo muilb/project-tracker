@@ -199,6 +199,9 @@ export interface NotifyPrefs {
   pausedUntil?: string;
   lang?: Lang;
   updatedAt: string;
+  // track G
+  /** Why the personal Telegram link stopped working (the person blocked the bot…); cleared by linking again. */
+  telegramBroken?: string;
   // track H: Web Push.
   /** Also send to this person's browsers / phones (Web Push); absent = off. */
   push?: boolean;
@@ -254,6 +257,13 @@ export interface DeliveryLog {
 export interface TelegramBot {
   token: string;
   username: string;
+  // track G: two-way bot. Without webhookSecret (bots saved before) connect codes are read with getUpdates.
+  /** Secret Telegram sends back in X-Telegram-Bot-Api-Secret-Token (never returned by the API). */
+  webhookSecret?: string;
+  /** Where setWebhook pointed the bot. */
+  webhookUrl?: string;
+  /** Why setWebhook failed (the bot then keeps working one way, with getUpdates). */
+  webhookError?: string;
 }
 
 export const AUDIT_ACTIONS = [

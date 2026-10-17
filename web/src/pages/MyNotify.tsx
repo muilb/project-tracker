@@ -125,7 +125,7 @@ export function MyNotifyPage() {
             bot={data.telegramBot}
             telegram={draft.telegram}
             setTelegram={(telegram) => set({ telegram })}
-            onLinked={(p) => applied(p, ['telegram', 'telegramLinked', 'telegramChatTitle'])}
+            onLinked={(p) => applied(p, ['telegram', 'telegramLinked', 'telegramChatTitle', 'telegramBroken'])}
           />
           <PushDevices
             prefs={saved}

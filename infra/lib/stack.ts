@@ -161,6 +161,8 @@ export class TrackerStack extends Stack {
     api.addRoutes({ path: '/{proxy+}', methods: [GET, POST, PATCH, PUT, DELETE], integration, authorizer });
     api.addRoutes({ path: '/public', methods: [GET], integration });
     api.addRoutes({ path: '/health', methods: [GET], integration });
+    // Telegram updates: no Cognito login, the Lambda checks the webhook's secret token.
+    api.addRoutes({ path: '/telegram/webhook', methods: [POST], integration });
     // Cap traffic (the public dashboard is open to the internet).
     const stage = api.defaultStage!.node.defaultChild as apigw.CfnStage;
     stage.defaultRouteSettings = { throttlingRateLimit: 20, throttlingBurstLimit: 50 };

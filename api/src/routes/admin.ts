@@ -1,15 +1,16 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { audit } from '../audit.js';
 import { can, ensure } from '../auth.js';
 import { auditCursor } from '../store/store.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
-import { randomInt } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { NoAccountError, NotPendingError, UnconfirmedError } from '../accounts.js';
-import { looksLikeBotToken } from '../notify/telegram.js';
+import { scrubError } from '../notify/errors.js';
+import { looksLikeBotToken, webhookStatus } from '../notify/telegram.js';
 import { approveAccountSchema, createUserSchema, parseBody, patchUserSchema, settingsSchema, telegramBotSchema } from '../schemas.js';
-import type { User } from '../types.js';
+import type { TelegramBot, User } from '../types.js';
 
 export const admin = new Hono<AppEnv>();
 
@@ -183,8 +184,29 @@ admin.put('/settings', async (c) => {
 
 admin.get('/settings/telegram', async (c) => {
   const bot = await c.get('store').getTelegramBot();
-  return c.json({ configured: !!bot, username: bot?.username });
+  if (!bot) return c.json({ configured: false });
+  // track G: webhook state; Telegram's own delivery errors only for the system admin (one call to Telegram).
+  let info;
+  if (can.system(c.get('user')) && bot.webhookSecret)
+    info = await c
+      .get('telegram')
+      .getWebhookInfo(bot.token)
+      .catch(() => undefined);
+  return c.json({ configured: true, username: bot.username, webhook: webhookStatus(bot, info) });
 });
+
+/** Points the bot at this API (`/telegram/webhook` next to the request URL) with a new secret. */
+async function connectWebhook(c: Context<AppEnv>, bot: TelegramBot): Promise<TelegramBot> {
+  const url = new URL('/telegram/webhook', c.req.url).toString();
+  const webhookSecret = randomBytes(32).toString('hex');
+  try {
+    await c.get('telegram').setWebhook(bot.token, url, webhookSecret);
+    return { token: bot.token, username: bot.username, webhookSecret, webhookUrl: url };
+  } catch (e) {
+    // Local dev (http://localhost) or a Telegram outage: the bot keeps working one way, with getUpdates.
+    return { token: bot.token, username: bot.username, webhookError: scrubError((e as Error).message).slice(0, 300) };
+  }
+}
 
 admin.put('/settings/telegram', async (c) => {
   ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới cài bot Telegram', 'Telegram ボットの設定はシステム管理者のみ行えます'));
@@ -205,7 +227,14 @@ admin.put('/settings/telegram', async (c) => {
     });
   }
   const before = await c.get('store').getTelegramBot();
-  await c.get('store').putTelegramBot({ token, username });
+  // A replaced bot stops sending updates here.
+  if (before?.webhookSecret && before.token !== token)
+    await c
+      .get('telegram')
+      .deleteWebhook(before.token)
+      .catch(() => {});
+  const bot = await connectWebhook(c, { token, username });
+  await c.get('store').putTelegramBot(bot);
   await audit(
     c.get('store'),
     c.get('now'),
@@ -214,11 +243,30 @@ admin.put('/settings/telegram', async (c) => {
     `@${username}`,
     before ? `@${before.username} → @${username}` : undefined,
   );
-  return c.json({ configured: true, username });
+  return c.json({ configured: true, username, webhook: webhookStatus(bot) });
+});
+
+/** track G: points the saved bot at this API again (a bot saved before webhooks, or after an error). */
+admin.post('/settings/telegram/webhook', async (c) => {
+  ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới cài bot Telegram', 'Telegram ボットの設定はシステム管理者のみ行えます'));
+  const before = await c.get('store').getTelegramBot();
+  if (!before)
+    throw new HTTPException(400, {
+      message: l('Quản trị hệ thống chưa cài bot Telegram (Cài đặt → Telegram)', 'システム管理者が Telegram ボットを未設定です（設定 → Telegram）'),
+    });
+  const bot = await connectWebhook(c, before);
+  await c.get('store').putTelegramBot(bot);
+  return c.json({ configured: true, username: bot.username, webhook: webhookStatus(bot) });
 });
 
 admin.delete('/settings/telegram', async (c) => {
   ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới gỡ bot Telegram', 'Telegram ボットの削除はシステム管理者のみ行えます'));
+  const bot = await c.get('store').getTelegramBot();
+  if (bot?.webhookSecret)
+    await c
+      .get('telegram')
+      .deleteWebhook(bot.token)
+      .catch((e) => console.error('deleteWebhook failed', scrubError((e as Error).message)));
   await c.get('store').putTelegramBot(undefined);
   await audit(c.get('store'), c.get('now'), c.get('user').id, 'telegram_remove');
   return c.json({ configured: false });

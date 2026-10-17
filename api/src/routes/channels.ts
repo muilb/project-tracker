@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import { audit } from '../audit.js';
+import { findChatByCode } from '../bot/codes.js';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l, lang, withLang } from '../i18n.js';
@@ -97,7 +98,7 @@ async function findTelegramChat(c: Context<AppEnv>, connectCode: string) {
     });
   let chat, seen: string[];
   try {
-    ({ chat, seen } = await c.get('telegram').findChatByText(bot.token, connectCode));
+    ({ chat, seen } = await findChatByCode(c.get('store'), c.get('telegram'), bot, connectCode));
   } catch (e) {
     throw new HTTPException(502, {
       message: l('Không đọc được tin nhắn của bot: ', 'ボットのメッセージを読み込めません: ') + (e as Error).message,

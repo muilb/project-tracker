@@ -8,6 +8,7 @@ import { channelFromRow, channelToRow } from '../src/store/dynamo.js';
 import { MemoryStore } from '../src/store/memory.js';
 import { vnToIso } from '../src/time.js';
 import type { Channel } from '../src/types.js';
+import { webhookStubs } from './helpers/telegram.js';
 
 const now = new Date(vnToIso(SAMPLE_NOW_VN));
 const TOKEN = '123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw0';
@@ -17,6 +18,7 @@ let tgSent: { token: string; chatId: string; html: string }[];
 let chats: { text: string; id: string; title: string }[];
 let badToken: boolean;
 const telegram: TelegramClient = {
+  ...webhookStubs,
   async getMe(token) {
     if (badToken) throw new Error('Telegram: Unauthorized');
     expect(token).toBe(TOKEN);
@@ -90,11 +92,12 @@ describe('bot setup', () => {
     expect((await call('PUT', '/settings/telegram', 'admin', { token: TOKEN })).status).toBe(400);
     badToken = false;
     const res = await call('PUT', '/settings/telegram', 'admin', { token: TOKEN });
-    expect(await res.json()).toEqual({ configured: true, username: 'du_an_bot' });
+    expect(await res.json()).toMatchObject({ configured: true, username: 'du_an_bot', webhook: { active: true } });
     const status = await call('GET', '/settings/telegram', 'an');
     const text = await status.text();
-    expect(JSON.parse(text)).toEqual({ configured: true, username: 'du_an_bot' });
+    expect(JSON.parse(text)).toMatchObject({ configured: true, username: 'du_an_bot' });
     expect(text).not.toContain(TOKEN);
+    expect(text).not.toContain((await store.getTelegramBot())!.webhookSecret);
     expect((await call('DELETE', '/settings/telegram', 'lan')).status).toBe(403);
     expect((await call('DELETE', '/settings/telegram', 'admin')).status).toBe(200);
     expect(await store.getTelegramBot()).toBeUndefined();

@@ -8,6 +8,7 @@ import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';
 import { vnToIso } from '../src/time.js';
 import type { Channel, NotifyPrefs } from '../src/types.js';
+import { webhookStubs } from './helpers/telegram.js';
 
 // Sample "now" is 09:45 Vietnam time: P03 is late ≥ 2× its 8h cycle, several PLs are late,
 // son owns an overdue issue, dung an overdue issue, khanh a milestone tomorrow.
@@ -28,6 +29,7 @@ const deps = () => ({ store, send, webUrl: 'https://web.example' });
 let chats: (TelegramChat & { text: string })[];
 let tgSent: { chatId: string; html: string }[];
 const telegram: TelegramClient = {
+  ...webhookStubs,
   async getMe() {
     return { username: 'pt_bot' };
   },

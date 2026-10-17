@@ -234,8 +234,79 @@ export function SettingsPage() {
   );
 }
 
+// track G: two-way bot (commands, buttons, notes by chat) needs Telegram to reach the webhook.
+interface WebhookInfo {
+  active: boolean;
+  url?: string;
+  error?: string;
+  pendingUpdates?: number;
+  lastError?: string;
+  lastErrorAt?: string;
+  elsewhere?: boolean;
+}
+
+function WebhookStatus({ webhook, onFixed }: { webhook: WebhookInfo; onFixed: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  async function connect() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.post('/settings/telegram/webhook', {});
+      onFixed();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const problem = !webhook.active || webhook.elsewhere;
+  return (
+    <div className={problem ? 'error-box' : 'info-box'}>
+      {webhook.active && !webhook.elsewhere ? (
+        <div>
+          <span aria-hidden>●</span>{' '}
+          {l(
+            'Webhook: đang bật — bot nhận lệnh (/mine, /status, /late), nút bấm và ghi chú qua chat.',
+            'Webhook: 有効 — ボットはコマンド（/mine・/status・/late）、ボタン、チャットからのメモを受け付けます。',
+          )}
+        </div>
+      ) : (
+        <div>
+          <span aria-hidden>▲</span>{' '}
+          {webhook.elsewhere
+            ? l(
+                'Webhook: bot đang gửi cập nhật tới một địa chỉ khác (hệ thống khác dùng cùng bot?). Bấm "Kết nối lại webhook".',
+                'Webhook: ボットの更新が別のアドレスに送られています（同じボットを別システムで使用？）。「Webhook を再接続」を押してください。',
+              )
+            : l(
+                'Webhook: chưa bật — bot chỉ gửi tin một chiều (lệnh, nút bấm, ghi chú qua chat chưa dùng được).',
+                'Webhook: 無効 — ボットは送信のみです（コマンド・ボタン・チャットからのメモは使えません）。',
+              )}
+          {webhook.error && <div className="muted">{webhook.error}</div>}
+        </div>
+      )}
+      {webhook.active && webhook.lastError && (
+        <div className="muted">
+          {l('Lỗi Telegram gửi tới webhook gần nhất', 'Telegram から Webhook への直近のエラー')}: {webhook.lastError}
+          {webhook.lastErrorAt && ` (${fmtDateTime(webhook.lastErrorAt)})`}
+          {!!webhook.pendingUpdates && ` · ${l('đang chờ', '待機中')} ${webhook.pendingUpdates}`}
+        </div>
+      )}
+      {problem && (
+        <div className="actions gap">
+          <button className="btn" disabled={busy} onClick={connect}>
+            {busy ? l('Đang kết nối…', '接続中…') : l('Kết nối lại webhook', 'Webhook を再接続')}
+          </button>
+        </div>
+      )}
+      <ErrorBox error={error} />
+    </div>
+  );
+}
+
 function TelegramSettings() {
-  const { data, reload } = useApi<{ configured: boolean; username?: string }>('/settings/telegram');
+  const { data, reload } = useApi<{ configured: boolean; username?: string; webhook?: WebhookInfo }>('/settings/telegram');
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -309,6 +380,7 @@ function TelegramSettings() {
               </>
             )}
           </div>
+          {data.webhook && <WebhookStatus webhook={data.webhook} onFixed={reload} />}
           <div className="actions gap">
             <button
               className="btn"

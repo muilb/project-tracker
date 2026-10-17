@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { api, useApi } from '../api';
-import { Empty, ErrorBox, Kpi, LangSwitch, Section, TypeIcon, UrgencyBadge } from '../components/ui';
+import { Empty, ErrorBox, Kpi, LangSwitch, Section, TypeIcon, UrgencyBadge, useShowMore } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft } from '../format';
 import { PRIORITY_LABEL, TYPE_LABEL } from '../labels';
 import type { PublicDashboard } from '../types';
@@ -9,6 +9,8 @@ import { l } from '../i18n';
 /** Public, read-only status page. Refreshes every minute. */
 export function PublicPage() {
   const { data, error, reload } = useApi<PublicDashboard>('/public', api.getPublic);
+  const urgent = useShowMore(data?.projects ?? [], 5);
+  const upcoming = useShowMore(data?.upcoming ?? [], 5);
   useEffect(() => {
     const t = setInterval(reload, 60_000);
     return () => clearInterval(t);
@@ -47,7 +49,7 @@ export function PublicPage() {
                 <Empty>{l('Không có dự án khẩn cấp 🎉', '緊急のプロジェクトはありません 🎉')}</Empty>
               ) : (
                 <ul className="items">
-                  {data.projects.map((p) => (
+                  {urgent.visible.map((p) => (
                     <li key={p.id}>
                       <UrgencyBadge urgency={p.urgency} />
                       <span className="item-main">
@@ -64,13 +66,14 @@ export function PublicPage() {
                   ))}
                 </ul>
               )}
+              {urgent.more}
             </Section>
             <Section title={l('Mốc & sự kiện sắp tới', '近日のマイルストーン・イベント')}>
               {data.upcoming.length === 0 ? (
                 <Empty>{l('Không có sự kiện sắp tới', '近日のイベントはありません')}</Empty>
               ) : (
                 <ul className="items">
-                  {data.upcoming.map((i, n) => (
+                  {upcoming.visible.map((i, n) => (
                     <li key={n}>
                       <span className="item-date nowrap">
                         {fmtDay(i.date)}
@@ -88,6 +91,7 @@ export function PublicPage() {
                   ))}
                 </ul>
               )}
+              {upcoming.more}
             </Section>
           </div>
         </>

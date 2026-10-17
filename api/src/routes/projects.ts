@@ -27,6 +27,19 @@ async function loadItem(store: Store, project: Project, id: string): Promise<Ite
   return item;
 }
 
+/** The project page shows this many updates first; "more" loads UPDATES_PAGE older ones at a time. */
+const FIRST_UPDATES = 10;
+const UPDATES_PAGE = 20;
+const cursorOf = (u: Update) => `${u.at}|${u.id}`;
+
+/** Newest first, older than the `before` cursor (`<at>|<id>` of the last update shown). */
+function updatesPage(all: Update[], before: string | undefined, size: number) {
+  const sorted = all.sort((a, b) => cursorOf(b).localeCompare(cursorOf(a)));
+  const rest = before ? sorted.filter((u) => cursorOf(u) < before) : sorted;
+  const updates = rest.slice(0, size);
+  return { updates, nextBefore: rest.length > size ? cursorOf(updates[updates.length - 1]) : undefined };
+}
+
 /** Alerts must never make the user's change fail. */
 async function alert(fn: () => Promise<void>) {
   try {
@@ -111,7 +124,7 @@ projects.get('/:id', async (c) => {
   const [updates, items, settings] = await Promise.all([store.listUpdates(project.id), store.listItems(project.id), store.getSettings()]);
   return c.json({
     project: buildProjectView(project, updates, items, settings, now),
-    updates: updates.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50),
+    ...updatesPage(updates, undefined, FIRST_UPDATES),
     items: items.map((i) => toItemView(i, now, settings)).sort(compareItems),
   });
 });
@@ -134,8 +147,9 @@ projects.patch('/:id', async (c) => {
 projects.get('/:id/updates', async (c) => {
   const store = c.get('store');
   const project = await loadProject(store, c.req.param('id'));
-  const updates = (await store.listUpdates(project.id)).sort((a, b) => b.at.localeCompare(a.at));
-  return c.json({ updates });
+  const { before, limit } = c.req.query();
+  const size = Math.min(Math.max(Number(limit) || UPDATES_PAGE, 1), 100);
+  return c.json(updatesPage(await store.listUpdates(project.id), before, size));
 });
 
 projects.post('/:id/updates', async (c) => {

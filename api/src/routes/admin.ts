@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { audit } from '../audit.js';
 import { can, ensure } from '../auth.js';
+import { auditCursor } from '../store/store.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
 import { randomInt } from 'node:crypto';
@@ -226,5 +227,8 @@ admin.delete('/settings/telegram', async (c) => {
 /** Administrative log (ADMIN): accounts, roles, passwords, secrets, deletes and restores. */
 admin.get('/audit', async (c) => {
   ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới xem được nhật ký', '操作ログはシステム管理者のみ閲覧できます'));
-  return c.json({ entries: await c.get('store').listAudit(200) });
+  const page = 50;
+  const entries = await c.get('store').listAudit(page + 1, c.req.query('before') || undefined);
+  const shown = entries.slice(0, page);
+  return c.json({ entries: shown, nextBefore: entries.length > page ? auditCursor(shown[shown.length - 1]) : undefined });
 });

@@ -12,6 +12,8 @@ export type DashboardItem = Dashboard['upcoming'][number];
 
 export interface ProjectDetail {
   project: ProjectView;
+  /** Newest updates; `nextBefore` pages to older ones (GET /projects/:id/updates?before=). */
   updates: Update[];
+  nextBefore?: string;
   items: ItemView[];
 }

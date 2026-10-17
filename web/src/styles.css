@@ -1018,3 +1018,31 @@ html {
   font-size: 1.15rem;
   letter-spacing: 0.05em;
 }
+
+/* ---- Long lists ---- */
+.more-row {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  padding-top: 0.6rem;
+}
+/* Update history: as tall as the update form next to it, the rest scrolls inside. */
+.history-card {
+  display: flex;
+  flex-direction: column;
+}
+.history-card .history {
+  overflow-y: auto;
+  max-height: 60vh;
+}
+@media (min-width: 900px) {
+  .history-card {
+    contain: size;
+    min-height: 420px;
+  }
+  .history-card .history {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none;
+  }
+}

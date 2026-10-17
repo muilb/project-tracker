@@ -288,6 +288,10 @@ export function HelpPage() {
           <li>PMO / quản lý cũng cập nhật được: đó là đánh giá hoặc chỉ đạo, hiện riêng trên trang dự án.</li>
         </ul>
         <p className="muted">
+          <B>Lịch sử cập nhật</B> hiện 10 cập nhật mới nhất, cuộn trong khung; bấm <B>Xem thêm</B> để tải cập nhật cũ hơn. Các danh sách dài
+          khác cũng hiện vài dòng đầu kèm nút <B>Xem thêm</B> / <B>Thu gọn</B>.
+        </p>
+        <p className="muted">
           Lỡ ghi nhầm (sai dự án, gõ nhầm)? Bấm <B>Xoá</B> cạnh cập nhật trong <B>Lịch sử cập nhật</B> — người viết xoá được trong 24 giờ,
           sau đó nhờ PMO / quản lý. Cập nhật đã xoá vào Thùng rác, PMO khôi phục được.
         </p>

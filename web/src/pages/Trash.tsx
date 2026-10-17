@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import type { ItemType } from '../../../api/src/types';
 import { api, useApi } from '../api';
-import { Empty, ErrorBox, Section, TypeIcon } from '../components/ui';
+import { Empty, ErrorBox, Section, TypeIcon, useShowMore } from '../components/ui';
 import { fmtDateTime, fmtDay } from '../format';
 import { l } from '../i18n';
 import { TYPE_LABEL } from '../labels';
@@ -19,11 +19,16 @@ interface TrashData {
 }
 
 /** Soft-deleted projects, items and updates (PMO / managers): look and restore. */
+const TRASH_ROWS = 20;
+
 export function TrashPage() {
   const { isAdmin, name } = useSession();
   const { data, error, reload } = useApi<TrashData>(isAdmin ? '/trash' : null);
   const [notice, setNotice] = useState<string>();
   const [actionError, setActionError] = useState<string>();
+  const projects = useShowMore(data?.projects ?? [], TRASH_ROWS);
+  const items = useShowMore(data?.items ?? [], TRASH_ROWS);
+  const updates = useShowMore(data?.updates ?? [], TRASH_ROWS);
 
   if (!isAdmin) return <ErrorBox error={l('Chỉ PMO / quản lý mới xem được thùng rác', 'ごみ箱は PMO / 管理者のみ利用できます')} />;
 
@@ -77,7 +82,7 @@ export function TrashPage() {
               <Empty>{l('Không có dự án nào bị xoá', '削除されたプロジェクトはありません')}</Empty>
             ) : (
               <ul className="rows">
-                {data.projects.map((p) => (
+                {projects.visible.map((p) => (
                   <li key={p.id} className="row">
                     <div className="row-main">
                       <b>
@@ -91,6 +96,7 @@ export function TrashPage() {
                 ))}
               </ul>
             )}
+            {projects.more}
           </Section>
 
           <Section title={`${l('Vấn đề · Sự kiện · Mốc', '課題・イベント・マイルストーン')} (${data.items.length})`}>
@@ -98,7 +104,7 @@ export function TrashPage() {
               <Empty>{l('Không có mục nào bị xoá', '削除された項目はありません')}</Empty>
             ) : (
               <ul className="rows">
-                {data.items.map((i) => (
+                {items.visible.map((i) => (
                   <li key={i.id} className="row">
                     <div className="row-main">
                       <div className="row-title">
@@ -116,6 +122,7 @@ export function TrashPage() {
                 ))}
               </ul>
             )}
+            {items.more}
           </Section>
 
           <Section title={`${l('Cập nhật tình hình', '状況報告')} (${data.updates.length})`}>
@@ -123,7 +130,7 @@ export function TrashPage() {
               <Empty>{l('Không có cập nhật nào bị xoá', '削除された報告はありません')}</Empty>
             ) : (
               <ul className="rows">
-                {data.updates.map((u) => (
+                {updates.visible.map((u) => (
                   <li key={u.id} className="row">
                     <div className="row-main">
                       <div className="row-title">
@@ -142,6 +149,7 @@ export function TrashPage() {
                 ))}
               </ul>
             )}
+            {updates.more}
           </Section>
         </>
       )}

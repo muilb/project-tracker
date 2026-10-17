@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Health, ItemType, Urgency } from '../../../api/src/types';
 import { fmtHours } from '../format';
 import { l, lang, setLang } from '../i18n';
@@ -56,9 +56,19 @@ export function Kpi({ label, value, tone, hint }: { label: string; value: number
   );
 }
 
-export function Section({ title, extra, children }: { title: string; extra?: ReactNode; children: ReactNode }) {
+export function Section({
+  title,
+  extra,
+  children,
+  className,
+}: {
+  title: string;
+  extra?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <section className="card">
+    <section className={`card${className ? ` ${className}` : ''}`}>
       <header className="card-head">
         <h2>{title}</h2>
         {extra}
@@ -107,5 +117,61 @@ export function LangSwitch() {
         日本語
       </button>
     </span>
+  );
+}
+
+/**
+ * Long lists show the first `step` rows; "Xem thêm" adds `step` more (the data is already
+ * loaded), "Thu gọn" goes back. Render `more` under the list.
+ */
+export function useShowMore<T>(items: T[], step: number) {
+  const [count, setCount] = useState(step);
+  const shown = Math.min(count, items.length);
+  return {
+    visible: items.slice(0, count),
+    more: (
+      <MoreLess
+        hidden={items.length - shown}
+        canLess={shown > step}
+        onMore={() => setCount((c) => c + step)}
+        onLess={() => setCount(step)}
+      />
+    ),
+  };
+}
+
+export function MoreLess({
+  hidden,
+  canLess,
+  onMore,
+  onLess,
+  busy,
+}: {
+  /** Rows not shown yet; undefined = unknown (more pages on the server). */
+  hidden?: number;
+  canLess?: boolean;
+  onMore?: () => void;
+  onLess?: () => void;
+  busy?: boolean;
+}) {
+  const hasMore = hidden === undefined ? !!onMore : hidden > 0;
+  if (!hasMore && !canLess) return null;
+  return (
+    <div className="more-row">
+      {hasMore && (
+        <button type="button" className="btn-link" disabled={busy} onClick={onMore}>
+          {busy
+            ? l('Đang tải…', '読み込み中…')
+            : hidden === undefined
+              ? l('Xem thêm', 'さらに表示')
+              : l(`Xem thêm (còn ${hidden})`, `さらに表示（残り ${hidden} 件）`)}
+        </button>
+      )}
+      {canLess && (
+        <button type="button" className="btn-link" onClick={onLess}>
+          {l('Thu gọn', '折りたたむ')}
+        </button>
+      )}
+    </div>
   );
 }

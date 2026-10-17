@@ -12,6 +12,9 @@ export class ConflictError extends Error {}
 
 export const AUDIT_DAYS = 400;
 
+/** Sort key of an audit entry, used as the paging cursor. */
+export const auditCursor = (e: Pick<AuditEntry, 'at' | 'id'>) => `${e.at}#${e.id}`;
+
 /**
  * Persistence boundary. Data volume is small (tens of projects, thousands of rows),
  * so dashboards simply load everything with `snapshot()`.
@@ -57,9 +60,9 @@ export interface Store {
   hasSent(key: string): Promise<boolean>;
   markSent(key: string, ttlDays: number): Promise<void>;
 
-  /** Administrative log (kept AUDIT_DAYS); newest first. */
+  /** Administrative log (kept AUDIT_DAYS); newest first, older than the `before` cursor (`auditCursor`). */
   addAudit(entry: AuditEntry): Promise<void>;
-  listAudit(limit: number): Promise<AuditEntry[]>;
+  listAudit(limit: number, before?: string): Promise<AuditEntry[]>;
 
   /** Atomically increments and returns a named counter (project / item ids). */
   nextSeq(name: 'project' | 'item' | 'channel'): Promise<number>;

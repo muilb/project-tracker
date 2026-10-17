@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { api, useApi } from '../api';
-import { ErrorBox, Section } from '../components/ui';
+import { ErrorBox, MoreLess, Section } from '../components/ui';
 import { l, lang } from '../i18n';
 import { HEALTH_LABEL } from '../labels';
 import { useSession } from '../session';
@@ -39,7 +39,19 @@ const ACTION_LABEL: Record<AuditAction, string> = {
 /** Administrative log (ADMIN only). */
 function AuditLog() {
   const { name } = useSession();
-  const { data, error } = useApi<{ entries: AuditEntry[] }>('/audit');
+  const { data, error } = useApi<{ entries: AuditEntry[]; nextBefore?: string }>('/audit');
+  const [older, setOlder] = useState<{ entries: AuditEntry[]; nextBefore?: string; busy?: boolean; loaded?: boolean }>({ entries: [] });
+  const nextBefore = older.loaded ? older.nextBefore : data?.nextBefore;
+  async function loadOlder() {
+    if (!nextBefore) return;
+    setOlder((o) => ({ ...o, busy: true }));
+    try {
+      const page = await api.get<{ entries: AuditEntry[]; nextBefore?: string }>(`/audit?before=${encodeURIComponent(nextBefore)}`);
+      setOlder((o) => ({ entries: [...o.entries, ...page.entries], nextBefore: page.nextBefore, loaded: true }));
+    } catch {
+      setOlder((o) => ({ ...o, busy: false }));
+    }
+  }
   return (
     <Section title={l('Nhật ký quản trị', '操作ログ')}>
       <ErrorBox error={error} />
@@ -59,7 +71,7 @@ function AuditLog() {
               </tr>
             </thead>
             <tbody>
-              {data.entries.map((e) => (
+              {[...data.entries, ...older.entries].map((e) => (
                 <tr key={e.id}>
                   <td className="nowrap">{fmtDateTime(e.at)}</td>
                   <td>{name(e.actor)}</td>
@@ -72,6 +84,12 @@ function AuditLog() {
               ))}
             </tbody>
           </table>
+          <MoreLess
+            onMore={nextBefore ? loadOlder : undefined}
+            busy={older.busy}
+            canLess={older.entries.length > 0}
+            onLess={() => setOlder({ entries: [] })}
+          />
         </div>
       )}
     </Section>

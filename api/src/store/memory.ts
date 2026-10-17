@@ -10,7 +10,7 @@ import {
   type Update,
   type User,
 } from '../types.js';
-import { ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot, type Store } from './store.js';
+import { auditCursor, ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot, type Store } from './store.js';
 
 /** In-memory store for tests and local development. */
 export class MemoryStore implements Store {
@@ -110,10 +110,11 @@ export class MemoryStore implements Store {
   async addAudit(entry: AuditEntry) {
     this.audit.push(clone(entry));
   }
-  async listAudit(limit: number) {
+  async listAudit(limit: number, before?: string) {
     return [...this.audit]
       .reverse() // same timestamp: newest written first
       .sort((a, b) => b.at.localeCompare(a.at))
+      .filter((e) => !before || auditCursor(e) < before)
       .slice(0, limit)
       .map(clone);
   }

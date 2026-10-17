@@ -209,6 +209,30 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 | DELETE | `/me/notify/telegram` | Gỡ Telegram cá nhân |
 | GET | `/me/inbox?before=` | 30 tin mới nhất, `unread`, `nextBefore` |
 | POST | `/me/inbox/read` | `{ ids }` hoặc `{ all: true }`; trả `unread` |
+| POST | `/me/notify/telegram/link` | Tạo mã `PT-XXXXX` (hiệu lực 1 ngày, dùng 1 lần); trả `{ code, url: https://t.me/<bot>?start=<mã>, bot }`. 400 nếu chưa cài bot |
+| POST | `/me/notify/telegram/confirm` | `{ code }`: tìm tin `/start <mã>` bot nhận được (`findChatByText`), **chỉ nhận chat riêng**, gửi tin thử rồi lưu (`telegram: true`); trả `{ prefs }`. Lỗi rõ ràng: mã sai / hết hạn / của người khác, bot chưa nhận được mã, mã gửi trong nhóm (400), không đọc được / không gửi được Telegram (502). Không liệt kê chat của người khác |
+| POST | `/me/notify/test` | Tin thử vào hộp thư, và vào Telegram nếu đã liên kết (kể cả khi đang tắt): `{ inbox, telegram?: { ok, error? } }` |
+
+**Ai nhận gì** (`notify/routePersonal.ts`, mặc định theo vai trò ở `notify/personal.ts`):
+
+| Sự kiện | Khi nào | Người nhận | Mặc định bật cho |
+|---|---|---|---|
+| `update_due_soon` | Còn ≤ 4 giờ đến hạn cập nhật (một lần mỗi hạn) | PL (không có PL thì GL) | PL |
+| `late_update_mine` | Đã trễ cập nhật; nhắc lại mỗi 24 giờ | PL (không có PL thì GL) | PL |
+| `escalation` | Trễ ≥ 2 lần chu kỳ → GL; ≥ 4 lần → PMO của dự án (mỗi mức một lần mỗi hạn) | GL, PMO | GL, PMO / quản lý |
+| `assigned_to_me` | Mục mới có người phụ trách, hoặc đổi người phụ trách (mục chưa đóng) | người phụ trách mới | mọi người |
+| `my_item_due` | Mục mình phụ trách đến hạn ngày mai hoặc quá hạn; một tin mỗi ngày, từ giờ tóm tắt (08:00) | người phụ trách | mọi người |
+| `need_help` | Cập nhật có "cần hỗ trợ" | GL, PMO của dự án | GL, PMO / quản lý |
+| `health_changed` | Trạng thái tổng hợp đổi (cả hai chiều) sau một cập nhật | GL, PL, người theo dõi | GL |
+| `watched_red` | Dự án theo dõi chuyển sang Đỏ | người theo dõi (`watch`) | mọi người |
+| `watched_high_issue` | Vấn đề ưu tiên Cao mới ở dự án theo dõi | người theo dõi | mọi người |
+
+- Chỉ gửi cho người có trong danh sách người dùng, **không gửi cho chính người gây ra sự kiện**, người nhận phải `can.viewProject`, và loại tin đó phải đang bật trong cài đặt.
+- Một thay đổi chỉ tạo **một tin cho mỗi người**: nếu một người nhận vì nhiều lý do (ví dụ GL vừa `health_changed` vừa `need_help`), tiêu đề theo lý do quan trọng nhất (`watched_red` > `health_changed` > `need_help`; `assigned_to_me` > `watched_high_issue`), nội dung luôn có "cần hỗ trợ" nếu có. Nhắc việc theo giờ được gộp thành một tin "🔔 Nhắc việc của bạn (n)".
+- Chỉ dự án đang chạy; riêng `assigned_to_me` gửi cả khi dự án tạm dừng.
+- **Tạm dừng** (`pausedUntil`): không gửi gì, kể cả hộp thư. **Giờ yên lặng**: mặc định 22:00–07:00 giờ VN; tắt bằng `schedule.quietFrom = quietTo` (giờ tuỳ chỉnh do nhánh D làm trong `policy.ts`). Tin tức thời trong giờ yên lặng vẫn vào hộp thư nhưng không gửi Telegram; nhắc việc theo giờ thì chờ hết giờ yên lặng mới gửi (cả hộp thư lẫn Telegram).
+- Chống trùng bằng `markSent` với khoá `P#<email>#<sự kiện>#…` (14 ngày), chỉ ghi khi đã gửi được.
+- Tin được dựng trong `withLang(prefs.lang)`; `lang` lưu theo ngôn ngữ lúc người dùng lưu cài đặt / liên kết Telegram (chưa có thì tiếng Việt).
 
 ### Lịch gửi
 

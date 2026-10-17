@@ -189,9 +189,4 @@ describe('/me notification settings and inbox', () => {
     expect((await (await call('POST', '/me/inbox/read', 'an', { all: true })).json()).unread).toBe(0);
     expect((await call('POST', '/me/inbox/read', 'an', {})).status).toBe(400);
   });
-
-  it('answers 501 for the parts track A builds', async () => {
-    expect((await call('POST', '/me/notify/telegram/link', 'an')).status).toBe(501);
-    expect((await call('POST', '/me/notify/test', 'an')).status).toBe(501);
-  });
 });

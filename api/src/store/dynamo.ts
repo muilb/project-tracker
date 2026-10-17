@@ -189,12 +189,12 @@ export class DynamoStore implements Store {
       ttl: Math.floor(Date.parse(entry.at) / 1000) + AUDIT_DAYS * 86_400,
     });
   }
-  async listAudit(limit: number) {
+  async listAudit(limit: number, before?: string) {
     const res = await this.db.send(
       new QueryCommand({
         TableName: this.table,
-        KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: { ':pk': 'AUDIT' },
+        KeyConditionExpression: before ? 'pk = :pk AND sk < :before' : 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': 'AUDIT', ...(before ? { ':before': before } : {}) },
         ScanIndexForward: false,
         Limit: limit,
       }),

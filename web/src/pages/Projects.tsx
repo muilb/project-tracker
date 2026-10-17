@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useApi } from '../api';
-import { Empty, ErrorBox, HealthBadge, TypeIcon, Warnings } from '../components/ui';
+import { Empty, ErrorBox, HealthBadge, TypeIcon, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay } from '../format';
 import { STATE_LABEL } from '../labels';
 import { useSession } from '../session';
@@ -25,6 +25,7 @@ export function Projects() {
   const projects = (data?.projects ?? []).filter(
     (p) => !needle || `${p.id} ${p.name} ${p.customer ?? ''} ${name(p.gl)} ${name(p.pl)}`.toLowerCase().includes(needle),
   );
+  const { visible, more } = useShowMore(projects, 20);
 
   return (
     <div className="stack">
@@ -79,7 +80,7 @@ export function Projects() {
                 </tr>
               </thead>
               <tbody>
-                {projects.map((p) => (
+                {visible.map((p) => (
                   <tr key={p.id}>
                     <td>
                       <Link to={`/projects/${p.id}`}>
@@ -118,6 +119,7 @@ export function Projects() {
                 ))}
               </tbody>
             </table>
+            {more}
           </div>
         )}
       </section>

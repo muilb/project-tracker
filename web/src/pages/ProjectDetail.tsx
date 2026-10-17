@@ -2,11 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import type { Health, ItemStatus, ItemType, Priority } from '../../../api/src/types';
 import { api, useApi } from '../api';
-import { Empty, ErrorBox, HealthBadge, Section, TypeIcon, UrgencyBadge, Warnings } from '../components/ui';
+import { Empty, ErrorBox, HealthBadge, MoreLess, Section, TypeIcon, UrgencyBadge, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft, todayVN } from '../format';
 import { HEALTH_LABEL, ITEM_STATUS_LABEL, PRIORITY_LABEL, ROLE_LABEL, STATE_LABEL, TYPE_LABEL } from '../labels';
 import { useSession } from '../session';
-import type { ItemView, ProjectDetail } from '../types';
+import type { ItemView, ProjectDetail, Update } from '../types';
 import { l } from '../i18n';
 
 export function ProjectDetailPage() {
@@ -15,9 +15,26 @@ export function ProjectDetailPage() {
   const { data, error, reload } = useApi<ProjectDetail>(`/projects/${id}`);
   const [notice, setNotice] = useState<string>();
   const [actionError, setActionError] = useState<string>();
+  // Older updates loaded with "Xem thêm"; reset whenever the page data reloads.
+  const [older, setOlder] = useState<{ for?: ProjectDetail; updates: Update[]; nextBefore?: string; busy?: boolean }>({ updates: [] });
   if (error) return <ErrorBox error={error} />;
   if (!data) return <p className="loading">{l('Đang tải…', '読み込み中…')}</p>;
   const p = data.project;
+  const extra = older.for === data ? older : { updates: [], nextBefore: data.nextBefore, busy: false };
+  const history = [...data.updates, ...extra.updates];
+  async function loadOlder() {
+    if (!extra.nextBefore) return;
+    setOlder({ ...extra, for: data, busy: true });
+    try {
+      const page = await api.get<{ updates: Update[]; nextBefore?: string }>(
+        `/projects/${p.id}/updates?before=${encodeURIComponent(extra.nextBefore)}`,
+      );
+      setOlder({ for: data, updates: [...extra.updates, ...page.updates], nextBefore: page.nextBefore });
+    } catch (e) {
+      setOlder({ ...extra, for: data, busy: false });
+      setActionError((e as Error).message);
+    }
+  }
   const canEdit = isAdmin || p.gl === me.id || p.pl === me.id;
   const now = Date.now();
   const canDeleteUpdate = (u: { author: string; at: string }) => isAdmin || (u.author === me.id && now - Date.parse(u.at) < 24 * 3600_000);
@@ -102,33 +119,41 @@ export function ProjectDetailPage() {
 
       <div className="grid-2">
         <UpdateForm projectId={p.id} defaultHealth={p.declaredHealth ?? p.health} onDone={reload} />
-        <Section title={l('Lịch sử cập nhật', '報告履歴')}>
-          {data.updates.length === 0 ? (
+        <Section title={l('Lịch sử cập nhật', '報告履歴')} className="history-card">
+          {history.length === 0 ? (
             <Empty>{l('Chưa có cập nhật', '報告はまだありません')}</Empty>
           ) : (
-            <ul className="history">
-              {data.updates.map((u) => (
-                <li key={u.id}>
-                  <div className="history-head">
-                    <span className="nowrap">{fmtDateTime(u.at)}</span>
-                    <b>{name(u.author)}</b>
-                    <span className="muted">{ROLE_LABEL[u.authorRole]}</span>
-                    {u.health && <HealthBadge health={u.health} />}
-                    {canDeleteUpdate(u) && (
-                      <button
-                        type="button"
-                        className="btn-link danger-link"
-                        onClick={() => remove(`/projects/${p.id}/updates/${u.id}`, l('cập nhật này', 'この報告'))}
-                      >
-                        {l('Xoá', '削除')}
-                      </button>
-                    )}
-                  </div>
-                  <p>{u.summary}</p>
-                  {u.needHelp && <p className="help">🙋 {u.needHelp}</p>}
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="history">
+                {history.map((u) => (
+                  <li key={u.id}>
+                    <div className="history-head">
+                      <span className="nowrap">{fmtDateTime(u.at)}</span>
+                      <b>{name(u.author)}</b>
+                      <span className="muted">{ROLE_LABEL[u.authorRole]}</span>
+                      {u.health && <HealthBadge health={u.health} />}
+                      {canDeleteUpdate(u) && (
+                        <button
+                          type="button"
+                          className="btn-link danger-link"
+                          onClick={() => remove(`/projects/${p.id}/updates/${u.id}`, l('cập nhật này', 'この報告'))}
+                        >
+                          {l('Xoá', '削除')}
+                        </button>
+                      )}
+                    </div>
+                    <p>{u.summary}</p>
+                    {u.needHelp && <p className="help">🙋 {u.needHelp}</p>}
+                  </li>
+                ))}
+              </ul>
+              <MoreLess
+                onMore={extra.nextBefore ? loadOlder : undefined}
+                busy={extra.busy}
+                canLess={extra.updates.length > 0}
+                onLess={() => setOlder({ updates: [] })}
+              />
+            </>
           )}
         </Section>
       </div>
@@ -222,7 +247,10 @@ function Items({
   const [showClosed, setShowClosed] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string>();
-  const shown = items.filter((i) => showClosed || !i.closed);
+  const { visible: shown, more } = useShowMore(
+    items.filter((i) => showClosed || !i.closed),
+    10,
+  );
 
   async function patch(item: ItemView, body: { status: ItemStatus }) {
     setError(undefined);
@@ -321,6 +349,7 @@ function Items({
               ))}
             </tbody>
           </table>
+          {more}
         </div>
       )}
     </Section>

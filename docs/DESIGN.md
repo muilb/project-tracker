@@ -87,9 +87,9 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET | `/dashboard?scope=all\|mine&gl=<email>` | Số liệu tổng, dự án cần chú ý, trễ cập nhật, vấn đề ưu tiên, sắp tới, thống kê theo GL |
 | GET | `/projects?scope=mine&gl=&state=active\|paused\|closed\|all` | Danh sách dự án kèm số liệu đã tính |
 | POST | `/projects` | Tạo dự án (PL trở lên). `id` tự sinh `P01, P02…` nếu không truyền |
-| GET | `/projects/:id` | Chi tiết, 50 cập nhật gần nhất, các vấn đề / sự kiện |
+| GET | `/projects/:id` | Chi tiết, 10 cập nhật gần nhất (+ `nextBefore` nếu còn cũ hơn), các vấn đề / sự kiện |
 | PATCH | `/projects/:id` | Sửa thông tin, `state` (`active` / `paused` / `closed`), `publicVisible`, `publicName` |
-| GET / POST | `/projects/:id/updates` | Cập nhật tình hình: `health`, `summary`, `needHelp` |
+| GET / POST | `/projects/:id/updates` | GET: trang cập nhật cũ hơn, `?before=<nextBefore>&limit=` (mặc định 20, tối đa 100) → `{ updates, nextBefore? }`. POST: ghi cập nhật `health`, `summary`, `needHelp` |
 | GET / POST | `/projects/:id/items` | Vấn đề / sự kiện / mốc: `type` = `issue` / `event` / `milestone` |
 | PATCH | `/projects/:id/items/:itemId` | Sửa, đóng mục (`status: done`) |
 | GET / POST | `/users`, PATCH `/users/:email` | Người dùng; PMO tạo trước người chưa đăng nhập (chỉ tạo hồ sơ trong DynamoDB, **không** tạo tài khoản Cognito — người đó tự đăng ký bằng đúng email) |
@@ -111,7 +111,7 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET | `/trash` | PMO / quản lý: dự án, mục, cập nhật đã xoá (ai xoá, lúc nào) |
 | POST | `/trash/restore` | PMO / quản lý. Body `{ kind: project \| item \| update, projectId, id? }`. Khôi phục mục của dự án đang bị xoá thì phải khôi phục dự án trước |
 | POST | `/users/:email/reset-password` | PMO / MNG (không cho chính mình). Đặt mật khẩu tạm trong Cognito (`Permanent: false`), trả về `{ password }` một lần; lần đăng nhập sau Cognito yêu cầu `NEW_PASSWORD_REQUIRED`, web hiện bước đặt mật khẩu mới |
-| GET | `/audit` | ADMIN: 200 thao tác quản trị gần nhất |
+| GET | `/audit` | ADMIN: 50 thao tác mới nhất mỗi trang, `?before=<nextBefore>` để xem cũ hơn |
 
 Ví dụ tạo dự án:
 
@@ -149,6 +149,8 @@ POST /projects
 **Điện thoại:** dưới 760px, menu thu vào nút ☰ (đóng lại sau mỗi lần chuyển trang). Trang AI có nút 🎤 nhập giọng nói (Web Speech API, `vi-VN` / `ja-JP` theo ngôn ngữ giao diện), chỉ hiện trên thiết bị cảm ứng; trình duyệt không hỗ trợ thì hướng dẫn dùng micro của bàn phím.
 
 **Ngôn ngữ:** tiếng Việt (mặc định) và tiếng Nhật. Nút `VI / 日本語` ở thanh trên, trang đăng nhập, trang public và hướng dẫn; lựa chọn lưu trong trình duyệt (`localStorage`), lần đầu theo ngôn ngữ trình duyệt. Chuỗi giao diện viết cặp `l('tiếng Việt', '日本語')` (`web/src/i18n.ts`); đổi ngôn ngữ thì tải lại trang. Hướng dẫn tiếng Nhật ở `HelpJa.tsx`. Dữ liệu người dùng nhập (tên dự án, tình hình…) giữ nguyên ngôn ngữ gốc.
+
+**Danh sách dài:** mỗi list hiện N dòng đầu và nút **Xem thêm (còn x)** / **Thu gọn** (`useShowMore`, dữ liệu đã tải sẵn): 5 dòng ở Tổng quan và trang public, 10 ở bảng mục của dự án, 20 ở danh sách dự án, người dùng (có ô tìm), thùng rác. Lịch sử cập nhật và nhật ký quản trị tải tiếp từ máy chủ theo con trỏ `nextBefore`. Khung lịch sử cập nhật cao bằng form cập nhật bên cạnh, phần dư cuộn bên trong.
 
 Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.
 

@@ -1,11 +1,14 @@
 import { Link, useSearchParams } from 'react-router';
 import { useApi } from '../api';
-import { Empty, ErrorBox, HealthBadge, HealthBar, Kpi, Section, TypeIcon, Warnings } from '../components/ui';
+import { Empty, ErrorBox, HealthBadge, HealthBar, Kpi, Section, TypeIcon, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft, fmtHours } from '../format';
 import { PRIORITY_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { Dashboard as DashboardData, DashboardItem } from '../types';
 import { l } from '../i18n';
+
+/** Rows per list before "Xem thêm". */
+const DASHBOARD_ROWS = 5;
 
 export function Dashboard() {
   const { me, users, name } = useSession();
@@ -16,6 +19,8 @@ export function Dashboard() {
   const gl = params.get('gl') ?? '';
   const qs = new URLSearchParams({ scope, ...(gl ? { gl } : {}) }).toString();
   const { data, error, loading } = useApi<DashboardData>(`/dashboard?${qs}`);
+  const attention = useShowMore(data?.attention ?? [], DASHBOARD_ROWS);
+  const late = useShowMore(data?.lateUpdates ?? [], DASHBOARD_ROWS);
 
   const set = (k: string, v: string) => {
     const next = new URLSearchParams(params);
@@ -80,7 +85,7 @@ export function Dashboard() {
               <Empty>{l('Không có dự án cần chú ý 🎉', '要注意のプロジェクトはありません 🎉')}</Empty>
             ) : (
               <ul className="rows">
-                {data.attention.map((p) => (
+                {attention.visible.map((p) => (
                   <li key={p.id} className="row">
                     <div className="row-main">
                       <div className="row-title">
@@ -106,6 +111,7 @@ export function Dashboard() {
                 ))}
               </ul>
             )}
+            {attention.more}
           </Section>
 
           <div className="grid-2">
@@ -138,7 +144,7 @@ export function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.lateUpdates.map((p) => (
+                    {late.visible.map((p) => (
                       <tr key={p.id}>
                         <td>
                           <Link to={`/projects/${p.id}`}>
@@ -157,6 +163,7 @@ export function Dashboard() {
                     ))}
                   </tbody>
                 </table>
+                {late.more}
               </div>
             )}
           </Section>
@@ -217,24 +224,28 @@ export function Dashboard() {
 }
 
 function ItemList({ items, empty }: { items: DashboardItem[]; empty: string }) {
+  const { visible, more } = useShowMore(items, DASHBOARD_ROWS);
   if (items.length === 0) return <Empty>{empty}</Empty>;
   return (
-    <ul className="items">
-      {items.map((i) => (
-        <li key={i.id} className={i.overdue ? 'overdue' : ''}>
-          <span className="item-date nowrap">
-            {fmtDay(i.date)}
-            <small className={i.overdue ? 'warn-text' : 'muted'}>{fmtDaysLeft(i.daysLeft)}</small>
-          </span>
-          <TypeIcon type={i.type} />
-          <span className="item-main">
-            <Link to={`/projects/${i.projectId}`}>{i.title}</Link>
-            <small className="muted">
-              {i.projectId} · {i.projectName} · {l('ưu tiên', '優先度')} {PRIORITY_LABEL[i.priority].toLowerCase()}
-            </small>
-          </span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="items">
+        {visible.map((i) => (
+          <li key={i.id} className={i.overdue ? 'overdue' : ''}>
+            <span className="item-date nowrap">
+              {fmtDay(i.date)}
+              <small className={i.overdue ? 'warn-text' : 'muted'}>{fmtDaysLeft(i.daysLeft)}</small>
+            </span>
+            <TypeIcon type={i.type} />
+            <span className="item-main">
+              <Link to={`/projects/${i.projectId}`}>{i.title}</Link>
+              <small className="muted">
+                {i.projectId} · {i.projectName} · {l('ưu tiên', '優先度')} {PRIORITY_LABEL[i.priority].toLowerCase()}
+              </small>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {more}
+    </>
   );
 }

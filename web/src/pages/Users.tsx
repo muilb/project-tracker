@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ROLES, type AccountStatus, type Role } from '../../../api/src/types';
 import { api, useApi } from '../api';
-import { ErrorBox, Section } from '../components/ui';
+import { ErrorBox, Section, useShowMore } from '../components/ui';
 import { fmtDateTime } from '../format';
 import { ROLE_LABEL } from '../labels';
 import { useSession } from '../session';
@@ -53,6 +53,13 @@ export function UsersPage() {
   const [info, setInfo] = useState<string>();
   const [temp, setTemp] = useState<{ email: string; password: string }>();
   const accounts = useApi<{ accounts: Record<string, AccountStatus> }>(canManageUsers ? '/users/accounts' : null);
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
+  const list = useShowMore(
+    users.filter((u) => !needle || `${u.name} ${u.id} ${ROLE_LABEL[u.role]}`.toLowerCase().includes(needle)),
+    20,
+  );
+  const waiting = useShowMore(pending.data?.pending ?? [], 20);
 
   if (!canManageUsers) return <ErrorBox error={l('Chỉ PMO / MNG mới quản lý người dùng', 'ユーザー管理は PMO / MNG のみ行えます')} />;
 
@@ -174,7 +181,7 @@ export function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {pending.data.pending.map((p) => (
+                {waiting.visible.map((p) => (
                   <tr key={p.email}>
                     <td>{p.name || '—'}</td>
                     <td>{p.email}</td>
@@ -213,6 +220,7 @@ export function UsersPage() {
                 ))}
               </tbody>
             </table>
+            {waiting.more}
           </div>
         </Section>
       )}
@@ -246,6 +254,15 @@ export function UsersPage() {
         </p>
       </Section>
       <section className="card">
+        <div className="filters list-search">
+          <input
+            type="search"
+            placeholder={l('Tìm tên, email, vai trò…', '名前・メール・ロールで検索…')}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <span className="muted">{l(`${users.length} người dùng`, `ユーザー ${users.length} 人`)}</span>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -258,7 +275,7 @@ export function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => {
+              {list.visible.map((u) => {
                 const status = accounts.data?.accounts[u.id];
                 const badge = status && ACCOUNT_BADGE[status];
                 return (
@@ -308,6 +325,7 @@ export function UsersPage() {
               })}
             </tbody>
           </table>
+          {list.more}
         </div>
       </section>
     </div>

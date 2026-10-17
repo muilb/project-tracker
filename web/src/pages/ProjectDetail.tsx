@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import type { Health, ItemStatus, ItemType, Priority } from '../../../api/src/types';
 import { api, useApi } from '../api';
+import { WatchButton } from '../components/notify/WatchButton';
 import { Empty, ErrorBox, HealthBadge, MoreLess, Section, TypeIcon, UrgencyBadge, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft, todayVN } from '../format';
 import { HEALTH_LABEL, ITEM_STATUS_LABEL, PRIORITY_LABEL, ROLE_LABEL, STATE_LABEL, TYPE_LABEL } from '../labels';
@@ -75,11 +76,14 @@ export function ProjectDetailPage() {
             {!p.publicVisible && <span className="badge">{l('Ẩn khỏi trang public', '公開ページに非表示')}</span>}
           </div>
         </div>
-        {canEdit && (
-          <Link className="btn" to={`/projects/${p.id}/edit`}>
-            {l('Sửa dự án', 'プロジェクト編集')}
-          </Link>
-        )}
+        <div className="filters">
+          <WatchButton projectId={p.id} />
+          {canEdit && (
+            <Link className="btn" to={`/projects/${p.id}/edit`}>
+              {l('Sửa dự án', 'プロジェクト編集')}
+            </Link>
+          )}
+        </div>
       </div>
 
       {notice && <div className="info-box">{notice}</div>}

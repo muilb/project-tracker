@@ -18,9 +18,10 @@ const SECTIONS: [id: string, title: string][] = [
   ['ai', '8. Trợ lý AI: nhập và hỏi'],
   ['tao-du-an', '9. Tạo và sửa dự án'],
   ['thong-bao', '10. Kênh thông báo (Telegram / Teams)'],
-  ['public', '11. Trang public'],
-  ['pmo', '12. Dành cho PMO / quản lý'],
-  ['hoi-dap', '13. Câu hỏi thường gặp'],
+  ['thong-bao-ca-nhan', '11. Thông báo cá nhân (🔔, Telegram riêng)'],
+  ['public', '12. Trang public'],
+  ['pmo', '13. Dành cho PMO / quản lý'],
+  ['hoi-dap', '14. Câu hỏi thường gặp'],
 ];
 
 function H({ id, children }: { id: string; children: ReactNode }) {
@@ -524,6 +525,73 @@ export function HelpPage() {
           <li>Loại kênh (Telegram ↔ Teams) không đổi được: đăng ký kênh mới rồi xoá kênh cũ.</li>
         </ul>
         <p className="muted">Teams cũng được hỗ trợ (dán URL webhook của Workflows) khi công ty cho phép dùng Power Automate.</p>
+      </H>
+
+      <H id="thong-bao-ca-nhan">
+        <p>
+          Ngoài kênh cho cả nhóm, mỗi người còn nhận <b>tin riêng</b>: việc của mình sắp đến hạn, được giao mục, dự án mình theo dõi có
+          chuyện. Cài ở <B>Thông báo của tôi</B> (menu, hoặc bấm 🔔 → <B>Cài đặt thông báo của tôi</B>).
+        </p>
+        <h3>Chuông 🔔</h3>
+        <ul className="howto">
+          <li>Số đỏ cạnh 🔔 là số tin chưa đọc (tự làm mới mỗi phút). Trên điện thoại 🔔 nằm cạnh nút ☰.</li>
+          <li>
+            Bấm 🔔 để xem 30 tin mới nhất; <B>Xem thêm</B> để xem tin cũ hơn. Tin chưa đọc có nền xanh và nhãn <b>● Mới</b>, tin đã đọc có
+            nhãn <b>✓ Đã đọc</b>.
+          </li>
+          <li>
+            Bấm một tin để mở dự án liên quan, tin đó được đánh dấu đã đọc. <B>Đánh dấu đã đọc tất cả</B> để xoá số đỏ.
+          </li>
+          <li>Tin được giữ 60 ngày.</li>
+        </ul>
+        <h3>Nơi nhận</h3>
+        <ul className="howto">
+          <li>
+            <B>Hộp thư web</B> (🔔) luôn bật.
+          </li>
+          <li>
+            <b>Telegram riêng</b>: bấm <B>Kết nối Telegram</B> → <B>Mở @bot trong Telegram</B> → trong Telegram bấm <b>Start</b> → quay lại
+            web bấm <B>Tôi đã bấm Start</B>. Bot gửi một tin thử là xong. Sau đó chọn <B>Gửi cả vào Telegram</B> và bấm <B>Lưu</B>.{' '}
+            <B>Gỡ liên kết</B> để ngừng nhận qua Telegram.
+          </li>
+          <li>
+            <B>Gửi thử</B>: gửi một tin thử vào 🔔 (và Telegram nếu đã bật).
+          </li>
+          <li className="muted">Nếu thấy ▲ "chưa khả dụng" thì chức năng đó chưa được bật trên máy chủ; hộp thư web vẫn nhận tin bình thường.</li>
+        </ul>
+        <h3>Loại tin</h3>
+        <p>Chọn loại tin muốn nhận; dưới mỗi ô có ghi khi nào tin được gửi. Mặc định theo vai trò:</p>
+        <ul className="howto">
+          <li>
+            <b>PL</b>: sắp đến hạn cập nhật (còn 4 giờ), dự án của tôi trễ cập nhật (nhắc mỗi 24 giờ).
+          </li>
+          <li>
+            <b>GL, PMO</b>: trễ kéo dài (trễ từ 2 lần chu kỳ báo GL, từ 4 lần báo PMO), cần hỗ trợ; GL thêm đổi trạng thái.
+          </li>
+          <li>
+            <b>Mọi người</b>: được giao mục, mục của tôi đến hạn (ngày mai / quá hạn), dự án theo dõi chuyển Đỏ hoặc có vấn đề Cao mới.
+          </li>
+          <li>Không bao giờ nhận tin về việc do chính mình làm (ví dụ tự gán mục cho mình).</li>
+        </ul>
+        <h3>⭐ Theo dõi dự án</h3>
+        <p>
+          Mở một dự án → bấm <B>☆ Theo dõi</B> ở đầu trang (bấm lại <B>★ Đang theo dõi</B> để bỏ). Danh sách dự án theo dõi nằm ở{' '}
+          <B>Thông báo của tôi</B>, có nút <B>Bỏ theo dõi</B> và ô <B>Thêm dự án</B>.
+        </p>
+        <h3>Lịch và tạm dừng</h3>
+        <ul className="howto">
+          <li>Giờ yên lặng 22h–7h: không nhận tin nhắc (tin Đỏ và vấn đề Cao vẫn gửi ngay). Có thể bỏ chọn.</li>
+          <li>
+            <B>Tạm dừng đến hết ngày</B>: chọn ngày (ví dụ khi nghỉ phép), không nhận tin nào đến hết ngày đó. <B>Bỏ tạm dừng</B> để nhận lại.
+            Đầu trang hiện ● Đang nhận hoặc ▲ Tạm dừng.
+          </li>
+          <li>
+            <B>Ngôn ngữ tin nhắn</B>: tiếng Việt hoặc tiếng Nhật.
+          </li>
+          <li>
+            Nhớ bấm <B>Lưu</B> ở cuối trang (theo dõi / bỏ theo dõi và kết nối Telegram được lưu ngay).
+          </li>
+        </ul>
       </H>
 
       <H id="public">

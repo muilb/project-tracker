@@ -7,6 +7,7 @@ import { blankAction, claudeClient, type AiClient } from './ai/assistant.js';
 import { createApp } from './app.js';
 import type { Message } from './notify/message.js';
 import type { PushSender } from './notify/push.js';
+import { flushDue } from './notify/pipeline.js';
 import { createSender } from './notify/sender.js';
 import { telegramClient, type TelegramClient } from './notify/telegram.js';
 import { loadSample } from './seed/sample.js';
@@ -96,5 +97,7 @@ const app = createApp({
   ai,
   push,
 });
+// Like the FlushFn Lambda: messages held in the outbox (grouped high-priority issues, retries) go out every minute.
+setInterval(() => void flushDue({ store, send, webUrl: 'http://localhost:5173', push }, new Date()).catch((e) => console.error('outbox', e)), 60_000);
 serve({ fetch: app.fetch, port });
 console.log(`API dev server: http://localhost:${port}  (header x-dev-user: lan@example.com)`);

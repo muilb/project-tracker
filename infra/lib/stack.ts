@@ -37,6 +37,14 @@ export class TrackerStack extends Stack {
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       timeToLiveAttribute: 'ttl', // expires alert de-duplication rows
       removalPolicy: RemovalPolicy.RETAIN,
+      // Read by row kind (snapshot, users, channels) instead of scanning inbox / log rows too.
+      globalSecondaryIndexes: [
+        {
+          indexName: 'byKind',
+          partitionKey: { name: 'kind', type: dynamodb.AttributeType.STRING },
+          sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+        },
+      ],
     });
 
     // --- Login (Cognito only authenticates; roles live in DynamoDB) ---

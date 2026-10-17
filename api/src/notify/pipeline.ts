@@ -37,7 +37,7 @@ export async function emit(deps: NotifyDeps, now: Date, event: NotifyEvent): Pro
  */
 export async function runHourly(deps: NotifyDeps, now: Date): Promise<{ messages: number }> {
   const channels = (await deps.store.listChannels()).filter((c) => c.enabled);
-  const snap = await deps.store.snapshot();
+  const snap = await deps.store.snapshot({ now });
   const views = activeProjectViews(snap, now);
   const ctx = context(snap.users);
   let messages = 0;

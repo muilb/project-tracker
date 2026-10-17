@@ -19,6 +19,10 @@ import type {
 export interface Snapshot {
   users: User[];
   projects: Project[];
+  /**
+   * With `now`: the updates of the last SNAPSHOT_UPDATE_DAYS plus each project's pinned updates
+   * (`pinUpdates`), which is all `buildProjectView` needs. Without `now`: every update.
+   */
   updates: Update[];
   items: Item[];
   settings: Settings;
@@ -30,17 +34,22 @@ export const AUDIT_DAYS = 400;
 export const INBOX_DAYS = 60;
 export const OUTBOX_DAYS = 7;
 export const DELIVERY_LOG_DAYS = 30;
+/** Days of update history the snapshot carries (the AI questions look this far back). */
+export const SNAPSHOT_UPDATE_DAYS = 60;
 
 /** Sort key of an audit entry, used as the paging cursor. */
 export const auditCursor = (e: Pick<AuditEntry, 'at' | 'id'>) => `${e.at}#${e.id}`;
 /** Sort key of an inbox entry, used as the paging cursor. */
 export const inboxCursor = (e: Pick<InboxEntry, 'at' | 'id'>) => `${e.at}#${e.id}`;
+/** Sort key of an update within its project, used as the paging cursor. */
+export const updateCursor = (u: Pick<Update, 'at' | 'id'>) => `${u.at}#${u.id}`;
 /** Sort key of an outbox entry (due time first). */
 export const outboxKey = (e: Pick<OutboxEntry, 'dueAt' | 'id'>) => `${e.dueAt}#${e.id}`;
 
 /**
- * Persistence boundary. Data volume is small (tens of projects, thousands of rows),
- * so dashboards simply load everything with `snapshot()`.
+ * Persistence boundary. Data volume is small (tens of projects, thousands of rows), so dashboards
+ * load users, projects and items with `snapshot()`; update history, which grows for ever, is
+ * limited to recent updates plus the pinned ones (see `pinUpdates`).
  */
 export interface Store {
   getUser(id: string): Promise<User | undefined>;
@@ -53,10 +62,16 @@ export interface Store {
   createProject(project: Project): Promise<void>;
   putProject(project: Project): Promise<void>;
 
-  /** Adds or replaces (same id and time) an update. */
+  /** Adds or replaces (same id and time) an update, and keeps the project's pinned updates current. */
   putUpdate(update: Update): Promise<void>;
-  /** Soft-deleted updates are left out unless `includeDeleted`. */
+  /** The whole history; soft-deleted updates are left out unless `includeDeleted`. */
   listUpdates(projectId: string, opts?: ListOptions): Promise<Update[]>;
+  /** Live updates, newest first, older than the `before` cursor (`updateCursor`). */
+  pageUpdates(projectId: string, limit: number, before?: string): Promise<Update[]>;
+  /** The project's pinned updates (`pinUpdates` of its live history): enough for `buildProjectView`. */
+  listPinnedUpdates(projectId: string): Promise<Update[]>;
+  /** Soft-deleted updates of every project (the trash). */
+  listDeletedUpdates(): Promise<Update[]>;
 
   /** Returns soft-deleted items too (callers check `deletedAt`). */
   getItem(projectId: string, id: string): Promise<Item | undefined>;
@@ -122,8 +137,8 @@ export interface Store {
   /** Atomically adds 1 and returns the new count; the counter expires `ttlSeconds` after it was created. */
   bumpCounter(key: string, ttlSeconds: number): Promise<number>;
 
-  /** Live data only, unless `includeDeleted` (the trash). */
-  snapshot(opts?: ListOptions): Promise<Snapshot>;
+  /** Live data only, unless `includeDeleted` (the trash). `now` limits the updates (see `Snapshot.updates`). */
+  snapshot(opts?: SnapshotOptions): Promise<Snapshot>;
 
   // track H: Web Push.
   /** VAPID keys (secret private key). */
@@ -140,6 +155,22 @@ export interface Store {
 export interface ListOptions {
   includeDeleted?: boolean;
 }
+
+export interface SnapshotOptions extends ListOptions {
+  now?: Date;
+}
+
+/** The first of each update (same project and id). */
+export function uniqueUpdates(updates: Update[]): Update[] {
+  const seen = new Set<string>();
+  return updates.filter((u) => {
+    const key = `${u.projectId}#${u.id}`;
+    return !seen.has(key) && !!seen.add(key);
+  });
+}
+
+/** ISO time SNAPSHOT_UPDATE_DAYS before `now`: the oldest update the snapshot keeps besides the pinned ones. */
+export const snapshotSince = (now: Date) => new Date(now.getTime() - SNAPSHOT_UPDATE_DAYS * 86_400_000).toISOString();
 
 const live = (r: { deletedAt?: string }) => !r.deletedAt;
 

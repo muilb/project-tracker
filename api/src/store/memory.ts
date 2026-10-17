@@ -16,6 +16,7 @@ import {
   type Update,
   type User,
 } from '../types.js';
+import { newestUpdateFirst, pinUpdates } from '../rules.js';
 import {
   auditCursor,
   ConflictError,
@@ -23,8 +24,12 @@ import {
   liveRows,
   liveSnapshot,
   outboxKey,
+  snapshotSince,
+  uniqueUpdates,
+  updateCursor,
   type ListOptions,
   type Snapshot,
+  type SnapshotOptions,
   type Store,
 } from './store.js';
 
@@ -77,6 +82,19 @@ export class MemoryStore implements Store {
   }
   async listUpdates(projectId: string, opts?: ListOptions) {
     return liveRows(this.updates.filter((u) => u.projectId === projectId).map(clone), opts);
+  }
+  async pageUpdates(projectId: string, limit: number, before?: string) {
+    return liveRows(this.updates.filter((u) => u.projectId === projectId))
+      .sort(newestUpdateFirst)
+      .filter((u) => !before || updateCursor(u) < before)
+      .slice(0, limit)
+      .map(clone);
+  }
+  async listPinnedUpdates(projectId: string) {
+    return pinUpdates(this.updates.filter((u) => u.projectId === projectId)).map(clone);
+  }
+  async listDeletedUpdates() {
+    return this.updates.filter((u) => u.deletedAt).map(clone);
   }
 
   async getItem(projectId: string, id: string) {
@@ -221,11 +239,19 @@ export class MemoryStore implements Store {
     return count;
   }
 
-  async snapshot(opts?: ListOptions): Promise<Snapshot> {
+  async snapshot(opts?: SnapshotOptions): Promise<Snapshot> {
+    // Same updates as DynamoStore: recent ones plus the pinned ones (worked out here on the fly).
+    const since = opts?.now && snapshotSince(opts.now);
+    const updates = since
+      ? uniqueUpdates([
+          ...this.updates.filter((u) => u.at >= since),
+          ...[...this.projects.keys()].flatMap((id) => pinUpdates(this.updates.filter((u) => u.projectId === id))),
+        ])
+      : this.updates;
     const snap = clone({
       users: [...this.users.values()],
       projects: [...this.projects.values()],
-      updates: this.updates,
+      updates,
       items: [...this.items.values()],
       settings: this.settings,
     });

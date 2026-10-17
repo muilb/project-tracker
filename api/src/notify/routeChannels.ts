@@ -92,8 +92,9 @@ export async function hourlyChannelMessages(
 
   const digestKey = `${ch.id}#digest#${vnDate(now)}`;
   if (wants(ch, 'daily_digest', now) && digestDue(ch, now) && scoped.length && !(await deps.store.hasSent(digestKey))) {
-    const message = isWeeklyDigest(ch)
-      ? weeklyDigestMessage(deps, ch, scoped, weeklyChanges(await deps.store.snapshot(), scoped, now), now, ctx.name)
+    const changes = isWeeklyDigest(ch) && (await weeklyChanges(deps.store, await deps.store.snapshot({ now }), scoped, now));
+    const message = changes
+      ? weeklyDigestMessage(deps, ch, scoped, changes, now, ctx.name)
       : digestMessage(deps, ch, scoped, now, ctx.name);
     out.push({
       ...toChannel(ch, 'daily_digest', message),

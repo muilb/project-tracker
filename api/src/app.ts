@@ -83,7 +83,7 @@ export function createApp({
   app.get('/public', async (c) => {
     const nowMs = c.get('now').getTime();
     if (!publicCache || nowMs - publicCache.at > publicCacheSeconds * 1000) {
-      publicCache = { at: nowMs, body: buildPublic(await store.snapshot(), c.get('now')) };
+      publicCache = { at: nowMs, body: buildPublic(await store.snapshot({ now: c.get('now') }), c.get('now')) };
     }
     c.header('Cache-Control', `public, max-age=${publicCacheSeconds}`);
     return c.json(publicCache.body);
@@ -97,7 +97,7 @@ export function createApp({
 
   app.get('/dashboard', async (c) => {
     const { scope, gl } = c.req.query();
-    const snap = await store.snapshot();
+    const snap = await store.snapshot({ now: c.get('now') });
     return c.json(buildDashboard(snap, c.get('now'), c.get('user'), { scope: scope === 'mine' ? 'mine' : 'all', gl: gl || undefined }));
   });
   app.route('/', admin);

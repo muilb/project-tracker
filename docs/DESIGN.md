@@ -24,6 +24,9 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
   - Email nằm trong `ADMIN_EMAILS` nhận vai trò ghi kèm (`email:MNG`), hoặc PMO nếu không ghi vai trò.
   - Mail công ty hay chặn thư xác nhận của Cognito (`no-reply@verificationemail.com`). Vì vậy PMO / MNG có thể **duyệt** tài khoản chờ xác nhận ở trang Người dùng; menu hiện số tài khoản đang chờ. Lambda API được cấp các quyền `ListUsers`, `AdminGetUser`, `AdminConfirmSignUp`, `AdminUpdateUserAttributes`, `AdminDeleteUser`, chỉ trên user pool này.
 - Dữ liệu ít (vài chục dự án), nên dashboard đọc toàn bộ dự án / cập nhật / mục / người dùng rồi tính trong bộ nhớ. Việc đọc này đi qua chỉ mục `byKind` (khoá `kind`, `sk`), mỗi loại một query, nên **không quét** các dòng hộp thư, nhật ký gửi, chống trùng, hàng đợi… (chúng tăng theo lượng thông báo). Danh sách kênh và người dùng cũng đọc qua chỉ mục này. Khi chỉ mục chưa có hoặc đang tạo (lần deploy đầu), store tự quét cả bảng như trước và thử lại chỉ mục sau 1 phút.
+- Lịch sử cập nhật tăng mãi nên không đọc hết mỗi lần. `snapshot({ now })` chỉ lấy cập nhật trong `SNAPSHOT_UPDATE_DAYS` (60) ngày gần nhất (khoá sắp xếp của cập nhật bắt đầu bằng thời gian, nên chỉ mục `byKind` lọc được ngay), cộng thêm **cập nhật ghim** của từng dự án (dòng `PROJECT#<id>` / `PINS`). Cập nhật ghim (`rules.pinUpdates`) là, với mỗi người viết + vai trò, cập nhật mới nhất và cập nhật có màu mới nhất. Mọi giá trị của `buildProjectView` (màu PL khai, màu PMO, nhận xét quản lý, cập nhật gần nhất của PL…) đều là "cập nhật mới nhất thoả điều kiện về người viết / vai trò / có màu", nên luôn nằm trong các dòng ghim: màu dự án tính ra giống hệt khi đọc toàn bộ lịch sử, kể cả khi đổi PL / GL / supporter. `test/history.test.ts` kiểm tra điều này với lịch sử ngẫu nhiên.
+  - `putUpdate` giữ dòng ghim luôn đúng: cập nhật mới / khôi phục được gộp vào, không đọc lịch sử; xoá một cập nhật đang ghim thì đọc lại lịch sử của dự án đó (hiếm). Hai người ghi cùng lúc (điều kiện `version`) thì dòng ghim bị xoá, lần đọc sau dựng lại từ lịch sử. Dữ liệu cũ chưa có dòng ghim được dựng một lần khi `snapshot` gặp.
+  - Trang dự án và nút "Xem thêm" đọc đúng một trang cập nhật (`pageUpdates`, mới nhất trước); thêm cập nhật tính màu trước / sau từ dòng ghim. Thùng rác đọc riêng các cập nhật đã xoá (`listDeletedUpdates`). Báo cáo tuần đọc lịch sử đầy đủ chỉ cho các dự án có cập nhật trong tuần (màu của tuần trước có thể đến từ cập nhật cũ hơn 60 ngày).
 - Một bảng DynamoDB (`pk` / `sk`, chi tiết ở `api/src/store/dynamo.ts`):
 
   | `pk` | `sk` | Nội dung |
@@ -379,6 +382,6 @@ Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `sc
 
 ## Xoá mềm
 
-- Dự án, cập nhật, mục có `deletedAt` / `deletedBy`. `Store.snapshot()`, `listUpdates()`, `listItems()` bỏ các dòng đã xoá và mọi dòng của dự án đã xoá; `snapshot({ includeDeleted: true })` dùng cho Thùng rác. `getProject` / `getItem` trả cả dòng đã xoá — route kiểm tra `deletedAt` và trả 404.
+- Dự án, cập nhật, mục có `deletedAt` / `deletedBy`. `Store.snapshot()`, `listUpdates()`, `listItems()` bỏ các dòng đã xoá và mọi dòng của dự án đã xoá; `snapshot({ includeDeleted: true })` (dự án, mục) và `listDeletedUpdates()` (cập nhật) dùng cho Thùng rác. `getProject` / `getItem` trả cả dòng đã xoá — route kiểm tra `deletedAt` và trả 404.
 - Vì vậy dashboard, trang public, cảnh báo, AI đều không thấy dữ liệu đã xoá. Mã dự án đã xoá vẫn bị giữ (tạo trùng mã báo 409 kèm gợi ý khôi phục).
 - Không có xoá cứng; khôi phục ở `/trash` (web: Cài đặt → Thùng rác).

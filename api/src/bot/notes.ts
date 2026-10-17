@@ -87,7 +87,7 @@ export async function proposeFromNote(deps: BotDeps, user: User, chatId: string,
       ],
     };
   const { text } = checkBody(aiParseSchema, { text: raw });
-  const snap = await deps.store.snapshot();
+  const snap = await deps.store.snapshot({ now: deps.now });
   let out;
   try {
     out = toProposals(await deps.ai.extract(config.apiKey, buildContext(snap, deps.now, user), text), snap, user);

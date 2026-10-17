@@ -22,7 +22,7 @@ export function sampleMessage(deps: NotifyDeps, ch: Channel, sample: TestSample,
 
 async function buildSample(deps: NotifyDeps, ch: Channel, sample: TestSample, now: Date): Promise<Message> {
   if (sample === 'connect') return testMessage(ch, deps.webUrl);
-  const snap = await deps.store.snapshot();
+  const snap = await deps.store.snapshot({ now });
   const users = new Map(snap.users.map((u) => [u.id, u]));
   // Same projects as real alerts: in scope and visible to the channel's creator. Worst first.
   const views = activeProjectViews(snap, now).filter((v) => inScope(ch, v) && creatorSees(ch, v, users, snap.items));

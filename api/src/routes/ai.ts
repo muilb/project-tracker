@@ -54,7 +54,7 @@ ai.post('/ai/parse', async (c) => {
     throw new HTTPException(400, {
       message: l('Quản trị hệ thống chưa cài API key AI (Cài đặt → AI)', 'システム管理者が AI の API キーを未設定です（設定 → AI）'),
     });
-  const snap = await store.snapshot();
+  const snap = await store.snapshot({ now: c.get('now') });
   try {
     const out = await c.get('ai').extract(config.apiKey, buildContext(snap, c.get('now'), c.get('user'), projectId), text);
     return c.json(toProposals(out, snap, c.get('user'), projectId));
@@ -73,7 +73,7 @@ ai.post('/ai/ask', async (c) => {
     throw new HTTPException(400, {
       message: l('Quản trị hệ thống chưa cài API key AI (Cài đặt → AI)', 'システム管理者が AI の API キーを未設定です（設定 → AI）'),
     });
-  const context = buildAskContext(await store.snapshot(), c.get('now'), c.get('user'));
+  const context = buildAskContext(await store.snapshot({ now: c.get('now') }), c.get('now'), c.get('user'));
   try {
     return c.json(await c.get('ai').ask(config.apiKey, context, messages));
   } catch (e) {

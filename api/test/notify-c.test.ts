@@ -5,6 +5,7 @@ import { AUTO_PAUSE_FAILURES, deliver, flushDue, send } from '../src/notify/deli
 import { PermanentDeliveryError, scrubError } from '../src/notify/errors.js';
 import type { Message } from '../src/notify/message.js';
 import { createSender } from '../src/notify/sender.js';
+import { postSlack } from '../src/notify/slack.js';
 import { isLegacyTeamsUrl, isTeamsWebhookUrl, postTeams } from '../src/notify/teams.js';
 import { TelegramMigratedError, telegramError, type TelegramClient } from '../src/notify/telegram.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
@@ -232,6 +233,14 @@ describe('teams', () => {
     vi.stubGlobal('fetch', async () => new Response('busy', { status: 503 }));
     await expect(postTeams(URL_A, {})).rejects.not.toBeInstanceOf(PermanentDeliveryError);
   });
+
+  it('Slack: an archived channel / removed app is permanent, rate limits are retried', async () => {
+    const hook = 'https://hooks.slack.com/services/T000/B000/XXXX';
+    vi.stubGlobal('fetch', async () => new Response('channel_is_archived', { status: 410 }));
+    await expect(postSlack(hook, {})).rejects.toBeInstanceOf(PermanentDeliveryError);
+    vi.stubGlobal('fetch', async () => new Response('rate_limited', { status: 429 }));
+    await expect(postSlack(hook, {})).rejects.not.toBeInstanceOf(PermanentDeliveryError);
+  });
 });
 
 describe('secrets stay out of logs and errors', () => {
@@ -239,6 +248,7 @@ describe('secrets stay out of logs and errors', () => {
     const s = scrubError(`fetch https://api.telegram.org/bot${TOKEN}/sendMessage failed; ${URL_A}`);
     expect(s).not.toContain(TOKEN);
     expect(s).not.toContain('SECRET_A');
+    expect(scrubError('POST https://hooks.slack.com/services/T01/B02/SlackSecret9 failed')).not.toContain('SlackSecret9');
   });
 
   it('the delivery log and the channel never store them', async () => {

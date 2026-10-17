@@ -9,14 +9,16 @@ import { emit } from '../notify/pipeline.js';
 import { buildProjectView, compareItems, toItemView } from '../rules.js';
 import { createItemSchema, createProjectSchema, createUpdateSchema, parseBody, patchItemSchema, patchProjectSchema } from '../schemas.js';
 import { ConflictError, type Store } from '../store/store.js';
-import type { Item, Project, Update } from '../types.js';
-import { activeProjectViews, isInvolved } from '../views.js';
+import type { Item, Project, Update, User } from '../types.js';
+import { activeProjectViews, isInvolved, visibleSnapshot } from '../views.js';
 
 export const projects = new Hono<AppEnv>();
 
-async function loadProject(store: Store, id: string): Promise<Project> {
+/** A project `me` may not see answers 404 like a missing one, for reads and writes alike. */
+async function loadProject(store: Store, id: string, me: User): Promise<Project> {
   const p = await store.getProject(id.toUpperCase());
-  if (!p || p.deletedAt) throw new HTTPException(404, { message: l(`Không tìm thấy dự án ${id}`, `プロジェクト ${id} が見つかりません`) });
+  const visible = p && !p.deletedAt && can.viewProject(me, p, me.role === 'OTHER' ? await store.listItems(p.id) : []);
+  if (!visible) throw new HTTPException(404, { message: l(`Không tìm thấy dự án ${id}`, `プロジェクト ${id} が見つかりません`) });
   return p;
 }
 
@@ -54,7 +56,7 @@ projects.get('/', async (c) => {
   const now = c.get('now');
   const me = c.get('user');
   const { scope, gl, state } = c.req.query();
-  const snap = await store.snapshot();
+  const snap = visibleSnapshot(me, await store.snapshot());
   let views =
     state === 'all' || state === 'paused' || state === 'closed'
       ? snap.projects
@@ -112,7 +114,7 @@ projects.post('/', async (c) => {
 projects.get('/:id', async (c) => {
   const store = c.get('store');
   const now = c.get('now');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const [updates, items, settings] = await Promise.all([store.listUpdates(project.id), store.listItems(project.id), store.getSettings()]);
   return c.json({
     project: buildProjectView(project, updates, items, settings, now),
@@ -124,7 +126,7 @@ projects.get('/:id', async (c) => {
 projects.patch('/:id', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   ensure(
     can.editProject(me, project),
     l('Chỉ PMO, quản lý, GL hoặc PL của dự án mới được sửa', 'プロジェクトの編集は PMO・管理者・そのプロジェクトの GL / PL のみ行えます'),
@@ -138,7 +140,7 @@ projects.patch('/:id', async (c) => {
 
 projects.get('/:id/updates', async (c) => {
   const store = c.get('store');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const { before, limit } = c.req.query();
   const size = Math.min(Math.max(Number(limit) || UPDATES_PAGE, 1), 100);
   return c.json(updatesPage(await store.listUpdates(project.id), before, size));
@@ -147,7 +149,7 @@ projects.get('/:id/updates', async (c) => {
 projects.post('/:id/updates', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const body = await parseBody(c.req, createUpdateSchema);
   const now = c.get('now');
   const [updates, items, settings] = await Promise.all([store.listUpdates(project.id), store.listItems(project.id), store.getSettings()]);
@@ -171,7 +173,7 @@ projects.post('/:id/updates', async (c) => {
 
 projects.get('/:id/items', async (c) => {
   const store = c.get('store');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const [items, settings] = await Promise.all([store.listItems(project.id), store.getSettings()]);
   return c.json({ items: items.map((i) => toItemView(i, c.get('now'), settings)).sort(compareItems) });
 });
@@ -179,7 +181,7 @@ projects.get('/:id/items', async (c) => {
 projects.post('/:id/items', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const body = await parseBody(c.req, createItemSchema);
   await checkUsers(store, [body.owner]);
   const now = c.get('now').toISOString();
@@ -198,7 +200,7 @@ projects.post('/:id/items', async (c) => {
 
 projects.patch('/:id/items/:itemId', async (c) => {
   const store = c.get('store');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const item = await loadItem(store, project, c.req.param('itemId'));
   const body = await parseBody(c.req, patchItemSchema);
   await checkUsers(store, [body.owner]);
@@ -213,7 +215,7 @@ projects.patch('/:id/items/:itemId', async (c) => {
 projects.delete('/:id', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   ensure(can.deleteProject(me), l('Chỉ PMO / quản lý mới được xoá dự án', 'プロジェクトの削除は PMO / 管理者のみ行えます'));
   const now = c.get('now').toISOString();
   await store.putProject({ ...project, deletedAt: now, deletedBy: me.id });
@@ -224,7 +226,7 @@ projects.delete('/:id', async (c) => {
 projects.delete('/:id/items/:itemId', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const item = await loadItem(store, project, c.req.param('itemId'));
   ensure(
     can.deleteItem(me, project, item),
@@ -240,7 +242,7 @@ projects.delete('/:id/items/:itemId', async (c) => {
 projects.delete('/:id/updates/:updateId', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'));
+  const project = await loadProject(store, c.req.param('id'), c.get('user'));
   const update = (await store.listUpdates(project.id)).find((u) => u.id === c.req.param('updateId'));
   if (!update) throw new HTTPException(404, { message: l('Không tìm thấy cập nhật', '報告が見つかりません') });
   ensure(

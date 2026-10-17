@@ -373,7 +373,7 @@ describe('AI questions (read-only)', () => {
     const snap = await store.snapshot();
     const old = { ...snap.updates[0], id: 'old', at: new Date(now.getTime() - 90 * 86_400_000).toISOString(), summary: 'Cập nhật rất cũ' };
     const closed = { ...snap.projects[0], id: 'P99', name: 'Dự án đã đóng', state: 'closed' as const };
-    const context = buildAskContext({ ...snap, updates: [...snap.updates, old], projects: [...snap.projects, closed] }, now);
+    const context = buildAskContext({ ...snap, updates: [...snap.updates, old], projects: [...snap.projects, closed] }, now, snap.users[0]);
     expect(context).not.toContain('Cập nhật rất cũ');
     const block = context.split('\n### ').find((b) => b.startsWith('P99'))!;
     expect(block.trim().split('\n')).toHaveLength(1);

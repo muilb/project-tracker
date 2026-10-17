@@ -1,7 +1,26 @@
 // Read models shared by the internal dashboard, the public dashboard and (later) alerts.
 import { buildProjectView, compareItems, compareProjects, type ItemView, type ProjectView } from './rules.js';
+import { can, takesPart } from './auth.js';
 import type { Snapshot } from './store/store.js';
-import type { User } from './types.js';
+import type { Project, User } from './types.js';
+
+/** The projects `me` may see (`can.viewProject`); every role but OTHER sees all of them. */
+export function visibleProjects(me: User, snap: Pick<Snapshot, 'projects' | 'items'>): Project[] {
+  return snap.projects.filter((p) => can.viewProject(me, p, snap.items));
+}
+
+/** The snapshot limited to the projects `me` may see, with their updates and items. Users stay. */
+export function visibleSnapshot(me: User, snap: Snapshot): Snapshot {
+  if (me.role !== 'OTHER') return snap;
+  const projects = visibleProjects(me, snap);
+  const ids = new Set(projects.map((p) => p.id));
+  return {
+    ...snap,
+    projects,
+    updates: snap.updates.filter((u) => ids.has(u.projectId)),
+    items: snap.items.filter((i) => ids.has(i.projectId)),
+  };
+}
 
 export function activeProjectViews(snap: Snapshot, now: Date): ProjectView[] {
   return snap.projects
@@ -52,11 +71,12 @@ export interface DashboardFilter {
 }
 
 export function isInvolved(v: ProjectView, userId: string): boolean {
-  return v.gl === userId || v.pl === userId || v.pmo === userId || v.supporters.includes(userId);
+  return takesPart(v, userId);
 }
 
+/** Only the projects `me` may see, so the KPIs and the GL statistics count those too. */
 export function buildDashboard(snap: Snapshot, now: Date, me: User, filter: DashboardFilter) {
-  const all = activeProjectViews(snap, now);
+  const all = activeProjectViews(visibleSnapshot(me, snap), now);
   const views = all.filter(
     (v) => (filter.scope === 'all' || isInvolved(v, me.id)) && (!filter.gl || v.gl === filter.gl),
   );

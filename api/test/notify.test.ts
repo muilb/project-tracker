@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
-import { runHourly } from '../src/notify/pipeline.js';
+import { flushDue, runHourly } from '../src/notify/pipeline.js';
 import { isTeamsWebhookUrl } from '../src/notify/teams.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';
@@ -119,6 +119,8 @@ describe('immediate alerts', () => {
     await addChannel();
     await call('POST', '/projects/P01/items', 'an', { type: 'issue', title: 'Server test hỏng', priority: 'high', date: '2026-10-10' });
     await call('POST', '/projects/P01/items', 'an', { type: 'issue', title: 'Lỗi chính tả', priority: 'low', date: '2026-10-10' });
+    expect(sent).toHaveLength(0); // held 2 minutes so a burst becomes one message
+    await flushDue(deps(), new Date(now.getTime() + 120_000));
     expect(sent).toHaveLength(1);
     expect(sent[0].text).toContain('Server test hỏng');
   });

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Channel, OutboxEntry, OutboxTarget } from '../types.js';
 import type { NotifyDeps } from './deps.js';
 import type { Message } from './message.js';
+import { hold } from './policy.js';
 
 /** A message ready to go: built in the recipient's language, not yet delivered. */
 export interface Outgoing {
@@ -62,6 +63,10 @@ async function deliverPersonal(deps: NotifyDeps, userId: string, via: 'inbox' | 
 
 /** Delivers one message now; true when it arrived. */
 export async function send(deps: NotifyDeps, o: Outgoing, now: Date): Promise<boolean> {
+  // track D: burst grouping and anti-flapping; undefined = held in the outbox or dropped.
+  const next = await hold(deps, o, now);
+  if (!next) return true;
+  o = next;
   let ok: boolean;
   if ('channelId' in o.target) {
     const ch = o.channel ?? (await deps.store.getChannel(o.target.channelId));

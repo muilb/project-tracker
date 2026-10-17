@@ -484,6 +484,34 @@ export function HelpPage() {
             <B>Ngôn ngữ tin nhắn</B>: mỗi kênh chọn tiếng Việt hoặc tiếng Nhật (mặc định theo ngôn ngữ của người đăng ký). Sửa kênh để đổi.
           </li>
         </ul>
+        <h3>Lịch gửi</h3>
+        <p>
+          Khi đăng ký hoặc <B>Sửa</B> kênh, phần <B>Lịch gửi</B> cho chọn:
+        </p>
+        <ul className="howto">
+          <li>
+            <b>Giờ yên lặng</b> từ … đến … (có thể qua đêm, ví dụ 23h–6h): không gửi nhắc nhở mỗi giờ; tin bị giữ lại sẽ gửi ở lượt đầu tiên
+            sau đó. Bỏ chọn = gửi cả ngày.
+          </li>
+          <li>
+            <b>Không gửi vào thứ 7, Chủ nhật</b>: bỏ nhắc nhở mỗi giờ và tóm tắt trong hai ngày này.
+          </li>
+          <li>
+            <b>Giờ gửi tóm tắt</b> và <b>kiểu tóm tắt</b>: hằng ngày, ngày làm việc (thứ 2 – thứ 6), hoặc <b>tóm tắt tuần</b> sáng thứ 2 (dự
+            án đổi màu so với tuần trước, mục đã đóng trong tuần, mốc / sự kiện 7 ngày tới).
+          </li>
+          <li>
+            <b>Báo trước mốc / sự kiện</b>: chọn 1, 2, 3, 7, 14 ngày (ví dụ 7, 3 và 1 ngày). Mỗi mốc chỉ nhắc một lần cho mỗi số ngày.
+          </li>
+          <li>
+            <b>Tạm dừng đến hết ngày</b>: kênh không nhận tin nào (kể cả tin ngay) đến hết ngày đã chọn. Bấm <B>Bỏ tạm dừng</B> để nhận lại.
+          </li>
+          <li>
+            Chống làm phiền tự động: nhiều vấn đề Cao mới trong khoảng 2 phút được gộp thành một tin (ví dụ "3 vấn đề ưu tiên cao mới ở
+            P03"); dự án chuyển Đỏ → hết Đỏ → lại Đỏ trong 6 giờ chỉ báo lần đầu.
+          </li>
+          <li>Kênh đã có từ trước giữ nguyên cách gửi cũ (yên lặng 22h–7h nếu đang bật, tóm tắt 8h mỗi ngày, báo trước 1 ngày).</li>
+        </ul>
         <h3>Gửi thử</h3>
         <p>
           Ở mỗi kênh, chọn mẫu tin (kết nối, chuyển Đỏ, vấn đề Cao, nhắc mỗi giờ, tóm tắt 8h) rồi bấm <B>Gửi thử</B> để xem trước tin thật

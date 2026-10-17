@@ -211,7 +211,23 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 
 ### Lịch gửi
 
-_Nhánh D (`docs/plans/notifications.md`)._
+Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `schedule` (`ChannelSchedule`) và `pausedUntil`. Quy tắc nằm ở `notify/policy.ts`; mọi giờ / ngày tính theo giờ Việt Nam.
+
+| Trường | Ý nghĩa | Mặc định (kênh cũ không có `schedule`) |
+|---|---|---|
+| `quietFrom`, `quietTo` | Giờ yên lặng `[từ, đến)`, có thể qua đêm (23 → 6). Bằng nhau = không có giờ yên lặng | 22 → 7 nếu `quietHours`, không có nếu tắt |
+| `skipWeekends` | Không gửi tin của job mỗi giờ và tóm tắt vào thứ 7, CN | tắt |
+| `digestHour` | Giờ gửi tóm tắt (lượt chạy của giờ đó) | 8 |
+| `digestDays` | `daily` mỗi ngày · `weekdays` thứ 2–6 · `monday` tóm tắt tuần sáng thứ 2 | `daily` |
+| `milestoneLeadDays` | Báo trước mốc / sự kiện bao nhiêu ngày, ví dụ `[1, 3, 7]` | `[1]` |
+| `pausedUntil` | Không gửi gì (kể cả tin ngay) trước thời điểm này. Web chọn "đến hết ngày" = 00:00 ngày hôm sau | — |
+
+- `schedule` thay cho `quietHours` khi có; web vẫn ghi `quietHours` = (có giờ yên lặng) để kênh cũ / danh sách hiển thị đúng.
+- Giờ yên lặng và bỏ cuối tuần chỉ chặn tin của job mỗi giờ (trễ cập nhật, quá hạn, báo trước mốc); tin bị chặn được gửi ở lượt đầu tiên sau đó. Tóm tắt theo `digestHour` / `digestDays` (cuối tuần bị bỏ nếu `skipWeekends`), không bị giờ yên lặng chặn. Cảnh báo Đỏ và vấn đề Cao không bị chặn.
+- **Báo trước mốc:** mục được nhắc ở mốc nhỏ nhất ≥ số ngày còn lại (≥ 1), mỗi mục × mốc một lần (khoá `soon#<mục>#<ngày>#<mốc>`; mốc 1 giữ khoá cũ `soon#<mục>#<ngày>`). Mục thêm muộn (còn 5 ngày, mốc `[1, 7]`) vẫn được nhắc một lần "còn 5 ngày".
+- **Tóm tắt tuần** (`monday`): so với đúng thời điểm này tuần trước: dự án đổi màu (màu tuần trước dựng lại từ các cập nhật trước thời điểm đó; mục đóng sau thời điểm đó coi như còn mở; dự án mới tạo trong tuần không tính), mục đã đóng (`done`) trong tuần, mốc / sự kiện trong 7 ngày tới.
+- **Gộp vấn đề Cao:** `deliver.send` gọi `policy.hold` trước mỗi lần gửi. Vấn đề Cao mới không gửi ngay mà vào hàng đợi với `dueAt` = +2 phút. Khi `flushDue` gửi tin đó, các tin vấn đề Cao khác của cùng kênh đã đến hạn được lấy (claim) và gộp thành một tin ("▲ 3 vấn đề ưu tiên cao mới ở P03"; nhiều dự án thì không ghi mã), sự kiện `high_issue_group`. Chỉ một vấn đề thì gửi nguyên tin cũ.
+- **Chống nhấp nháy:** kênh đã được báo dự án chuyển Đỏ thì trong 6 giờ sau không báo lại cho dự án đó (Đỏ → không Đỏ → Đỏ). Ghi bằng `markSent` theo ô 15 phút (`<kênh>#red#<dự án>#<ô>`), chỉ khi gửi thành công; kiểm tra 24 ô gần nhất.
 
 ### Độ tin cậy
 

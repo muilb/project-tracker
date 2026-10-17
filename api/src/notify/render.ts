@@ -122,4 +122,104 @@ export function digestMessage(deps: NotifyDeps, ch: Channel, views: ProjectView[
   });
 }
 
+/** Several new high-priority issues of one channel, merged into one message (policy.hold). */
+export function highIssueGroupMessage(deps: NotifyDeps, parts: { projectId?: string; message: Message }[]) {
+  const ids = [...new Set(parts.map((p) => p.projectId).filter(Boolean))] as string[];
+  const lines: MessageLine[] = [];
+  for (const p of parts.slice(0, MAX_LINES)) {
+    const [title, detail] = p.message.lines;
+    lines.push({
+      text: `▲ ${p.projectId ? `**${p.projectId}**: ` : ''}${title?.text ?? p.message.title}`,
+    });
+    if (detail) lines.push({ ...detail, subtle: true });
+  }
+  if (parts.length > MAX_LINES)
+    lines.push({
+      text: l(`… và ${parts.length - MAX_LINES} vấn đề khác`, `… ほか ${parts.length - MAX_LINES} 件`),
+      subtle: true,
+    });
+  const n = parts.length;
+  return message({
+    title:
+      ids.length === 1
+        ? l(`▲ ${n} vấn đề ưu tiên cao mới ở ${ids[0]}`, `▲ ${ids[0]} に優先度「高」の新しい課題が ${n} 件`)
+        : l(`▲ ${n} vấn đề ưu tiên cao mới`, `▲ 優先度「高」の新しい課題が ${n} 件`),
+    tone: 'warning',
+    lines,
+    link:
+      ids.length === 1
+        ? link(deps, `/projects/${ids[0]}`, l('Mở dự án', 'プロジェクトを開く'))
+        : link(deps, '/', l('Mở tổng quan', 'ダッシュボードを開く')),
+  });
+}
+
+/** What changed since the same time last week (built by events.weeklyChanges). */
+export interface WeeklyChanges {
+  /** Projects whose colour differs from a week ago. */
+  colour: { view: ProjectView; before: Health }[];
+  /** Items marked done during the week. */
+  closed: Item[];
+}
+
+/** The Monday digest: colour changes vs last week, items closed, events / milestones in the next 7 days. */
+export function weeklyDigestMessage(
+  deps: NotifyDeps,
+  ch: Channel,
+  views: ProjectView[],
+  changes: WeeklyChanges,
+  now: Date,
+  name: (id?: string) => string,
+) {
+  const count = (h: Health) => views.filter((v) => v.health === h).length;
+  const more = (n: number) => ({
+    text: l(`… và ${n} mục khác`, `… ほか ${n} 件`),
+    subtle: true,
+  });
+  const lines: MessageLine[] = [
+    {
+      text: `${l('Đang chạy', '進行中')} ${views.length} · ${HEALTH('red')} ${count('red')} · ${HEALTH('yellow')} ${count('yellow')} · ${HEALTH('green')} ${count('green')}`,
+    },
+  ];
+
+  lines.push({
+    text: `**${l('Đổi màu so với tuần trước', '先週から色が変わったプロジェクト')}** (${changes.colour.length})`,
+  });
+  if (!changes.colour.length) lines.push({ text: l('Không có', 'なし'), subtle: true });
+  for (const { view, before } of changes.colour.slice(0, 8))
+    lines.push({
+      text: `${view.id} · ${view.name}: ${HEALTH(before)} → ${HEALTH(view.health)}`,
+      tone: view.health === 'red' ? 'attention' : 'default',
+    });
+  if (changes.colour.length > 8) lines.push(more(changes.colour.length - 8));
+
+  lines.push({
+    text: `**${l('Đã đóng trong tuần', '今週完了した項目')}** (${changes.closed.length})`,
+  });
+  for (const i of changes.closed.slice(0, 8))
+    lines.push({
+      text: `✔ ${i.projectId}: ${TYPE(i.type)} ${l(`"${i.title}"`, `「${i.title}」`)} (${name(i.owner)})`,
+    });
+  if (changes.closed.length > 8) lines.push(more(changes.closed.length - 8));
+
+  const ahead: [ProjectView, ItemView][] = views
+    .flatMap((v) =>
+      v.openItems.filter((i) => i.type !== 'issue' && i.daysLeft >= 0 && i.daysLeft <= 7).map((i): [ProjectView, ItemView] => [v, i]),
+    )
+    .sort((a, b) => a[1].date.localeCompare(b[1].date));
+  lines.push({
+    text: `**${l('Mốc / sự kiện 7 ngày tới', '今後 7 日間のマイルストーン / イベント')}** (${ahead.length})`,
+  });
+  for (const [v, i] of ahead.slice(0, 10))
+    lines.push({
+      text: `${dm(i.date)} – ${v.id}: ${TYPE(i.type)} ${l(`"${i.title}"`, `「${i.title}」`)} (${name(i.owner)})`,
+    });
+  if (ahead.length > 10) lines.push(more(ahead.length - 10));
+
+  return message({
+    title: `🗓 ${l('Tóm tắt tuần', '週次サマリー')} ${dm(vnDate(now))} – ${ch.name}`,
+    lines,
+    link: link(deps, '/', l('Mở tổng quan', 'ダッシュボードを開く')),
+  });
+}
+
 // track E: compact(msg) — drops user-entered text for channels with detail = 'compact'.

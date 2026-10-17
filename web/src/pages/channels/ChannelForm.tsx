@@ -32,7 +32,11 @@ export function ChannelForm({
   const [gl, setGl] = useState(channel?.scope.gl ?? (me.role === 'GL' ? me.id : ''));
   const [picked, setPicked] = useState<string[]>(channel?.scope.projects ?? []);
   const [events, setEvents] = useState<AlertEvent[]>(channel?.events ?? [...ALERT_EVENTS]);
-  const [timing, setTiming] = useState<Timing>({ quietHours: channel?.quietHours ?? true, schedule: channel?.schedule });
+  const [timing, setTiming] = useState<Timing>({
+    quietHours: channel?.quietHours ?? true,
+    schedule: channel?.schedule,
+    pausedUntil: channel?.pausedUntil,
+  });
   const [msgLang, setMsgLang] = useState<Lang>(channel?.lang ?? lang);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();

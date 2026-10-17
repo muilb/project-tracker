@@ -1,5 +1,5 @@
-// Where a channel posts: Telegram group (connect code) or Teams Workflows URL. Track E adds Slack.
-import type { ChannelKind } from '../../../../api/src/types';
+// Where a channel posts: Telegram group (connect code), Teams Workflows URL or Slack Incoming Webhook; and how detailed messages are.
+import type { ChannelDetail, ChannelKind } from '../../../../api/src/types';
 import { l, lang } from '../../i18n';
 import { useSession } from '../../session';
 import type { BotStatus, PublicChannel } from './shared';
@@ -46,6 +46,8 @@ export function KindFields({
   setUrl,
   regroup,
   setRegroup,
+  detail,
+  setDetail,
 }: {
   kind: ChannelKind;
   channel?: PublicChannel;
@@ -56,6 +58,8 @@ export function KindFields({
   /** Editing a Telegram channel: move it to another group with a new connect line. */
   regroup: boolean;
   setRegroup: (on: boolean) => void;
+  detail: ChannelDetail;
+  setDetail: (d: ChannelDetail) => void;
 }) {
   const { isSystemAdmin } = useSession();
   const connectLine = `/connect@${bot?.username ?? 'bot'} ${code}`;
@@ -160,6 +164,74 @@ export function KindFields({
           )}
         </label>
       )}
+
+      {kind === 'slack' && (
+        <label>
+          {l('URL Incoming Webhook của Slack', 'Slack の Incoming Webhook URL')}{' '}
+          {channel && (
+            <small className="muted">
+              {l(`(để trống = giữ URL hiện tại: ${channel.webhookUrlMasked})`, `（空欄 = 現在の URL のまま: ${channel.webhookUrlMasked}）`)}
+            </small>
+          )}
+          <input
+            type="url"
+            required={!channel}
+            value={url}
+            placeholder="https://hooks.slack.com/services/…"
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          {!channel && (
+            <ol className="howto">
+              <li>
+                {lang === 'ja' ? (
+                  <>
+                    api.slack.com/apps で <b>Create New App</b> → <b>From scratch</b>（ワークスペースを選択）。
+                  </>
+                ) : (
+                  <>
+                    Vào api.slack.com/apps → <b>Create New App</b> → <b>From scratch</b> (chọn workspace).
+                  </>
+                )}
+              </li>
+              <li>
+                {lang === 'ja' ? (
+                  <>
+                    <b>Incoming Webhooks</b> をオン → <b>Add New Webhook to Workspace</b>。
+                  </>
+                ) : (
+                  <>
+                    Bật <b>Incoming Webhooks</b> → <b>Add New Webhook to Workspace</b>.
+                  </>
+                )}
+              </li>
+              <li>{l('Chọn kênh Slack muốn nhận thông báo → Allow.', '通知を受け取る Slack チャネルを選択 → Allow。')}</li>
+              <li>
+                {l(
+                  'Copy URL (https://hooks.slack.com/services/…) và dán vào ô trên. URL này như mật khẩu: không chia sẻ.',
+                  'URL（https://hooks.slack.com/services/…）をコピーして上の欄に貼り付けます。この URL はパスワードと同じです。共有しないでください。',
+                )}
+              </li>
+            </ol>
+          )}
+          {channel && (
+            <small className="muted">{l('Đổi URL sẽ gửi tin thử trước khi lưu.', 'URL を変更すると、保存前にテストメッセージを送信します。')}</small>
+          )}
+        </label>
+      )}
+
+      <label>
+        {l('Mức chi tiết của tin', 'メッセージの詳細度')}
+        <select value={detail} onChange={(e) => setDetail(e.target.value as ChannelDetail)}>
+          <option value="full">{l('Đầy đủ', '詳細')}</option>
+          <option value="compact">{l('Rút gọn', '簡易')}</option>
+        </select>
+        <small className="muted">
+          {l(
+            'Rút gọn: không gửi nội dung người dùng nhập (tóm tắt, cần hỗ trợ, ghi chú, tên mục), chỉ mã và tên dự án, trạng thái, hạn, số lượng và link. Dùng cho kênh có người ngoài. PMO có thể bắt buộc rút gọn cho mọi kênh (Cài đặt).',
+            '簡易: ユーザーが入力した内容（報告内容、支援依頼、メモ、項目名）を送らず、プロジェクトのコードと名前、状態、期限、件数、リンクのみ送ります。外部の人がいるチャネル向けです。PMO はすべてのチャネルを簡易に固定できます（設定）。',
+          )}
+        </small>
+      </label>
     </>
   );
 }

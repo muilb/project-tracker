@@ -127,11 +127,11 @@ describe('emit from the routes', () => {
 });
 
 describe('channels: new fields', () => {
-  it('does not accept Slack yet, and a null pause clears it', async () => {
+  it('accepts only Slack webhook URLs, and a null pause clears it', async () => {
     const slack = await call('POST', '/channels', 'lan', {
       kind: 'slack',
       name: 'S',
-      webhookUrl: 'https://hooks.slack.com/services/T/B/X',
+      webhookUrl: 'https://example.com/services/T/B/X',
       scope: { type: 'all' },
       events: ['became_red'],
     });
@@ -189,10 +189,5 @@ describe('/me notification settings and inbox', () => {
     expect((await (await call('POST', '/me/inbox/read', 'an', { ids: ['M1'] })).json()).unread).toBe(34);
     expect((await (await call('POST', '/me/inbox/read', 'an', { all: true })).json()).unread).toBe(0);
     expect((await call('POST', '/me/inbox/read', 'an', {})).status).toBe(400);
-  });
-
-  it('answers 501 for the parts track A builds', async () => {
-    expect((await call('POST', '/me/notify/telegram/link', 'an')).status).toBe(501);
-    expect((await call('POST', '/me/notify/test', 'an')).status).toBe(501);
   });
 });

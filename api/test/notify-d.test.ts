@@ -269,7 +269,7 @@ describe('anti-flapping', () => {
     expect(sent[1].msg.title).toContain('P07 · Web thương mại chuyển sang ĐỎ');
   });
 
-  it('is per channel, and a failed alert does not count', async () => {
+  it('is per channel; a failed alert is retried and still counts', async () => {
     await addChannel({ events: ['became_red'] });
     let failing = true;
     const flaky = async (ch: Channel, msg: Message) => {
@@ -286,10 +286,12 @@ describe('anti-flapping', () => {
         body: JSON.stringify({ health, summary: health }),
       });
     };
-    await postWith('red', 0); // fails
-    await postWith('green', 1);
+    await postWith('red', 0); // fails → queued for a retry in 1 minute
     failing = false;
-    await postWith('red', 2);
+    await flushDue({ store, send: flaky }, new Date(now.getTime() + 60_000));
+    expect(sent).toHaveLength(1);
+    await postWith('green', 1);
+    await postWith('red', 2); // within 6 hours of the first alert
     expect(sent).toHaveLength(1);
     await addChannel({ id: 'C2', events: ['became_red'] });
     await postWith('green', 3);

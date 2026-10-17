@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { api, setUnauthorizedHandler } from './api';
 import { auth } from './auth';
+import { InboxBell } from './components/InboxBell';
 import { ErrorBox, LangSwitch } from './components/ui';
 import { l } from './i18n';
 import { ROLE_LABEL } from './labels';
@@ -115,6 +116,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           <NavLink to="/" className="brand">
             {l('Theo dõi dự án', 'プロジェクト管理')}
           </NavLink>
+          <InboxBell />
           <button
             type="button"
             className="menu-toggle"
@@ -132,6 +134,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             <NavLink to="/projects">{l('Dự án', 'プロジェクト')}</NavLink>
             <NavLink to="/ai">✦ AI</NavLink>
             <NavLink to="/channels">{l('Kênh thông báo', '通知チャネル')}</NavLink>
+            <NavLink to="/me/notify">{l('Thông báo của tôi', '自分の通知')}</NavLink>
             {canManageUsers && (
               <NavLink to="/users">
                 {l('Người dùng', 'ユーザー')}

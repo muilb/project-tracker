@@ -3,7 +3,7 @@ import { fmtDateTime } from '../../format';
 import { l } from '../../i18n';
 import { LANG_LABEL } from '../../labels';
 import { useSession } from '../../session';
-import { ChannelExtras } from './ChannelExtras';
+import { ChannelExtras, type ChannelFlags } from './ChannelExtras';
 import { EVENT_LABEL, KIND_LABEL, SAMPLE_LABEL, scopeLabel, type PublicChannel } from './shared';
 import { TestSender } from './TestSender';
 
@@ -13,12 +13,12 @@ export function ChannelList({
   act,
   reload,
 }: {
-  channels: PublicChannel[];
+  channels: ChannelFlags[];
   onEdit: (ch: PublicChannel) => void;
   act: (fn: () => Promise<unknown>, ok: string) => Promise<void>;
   reload: () => void;
 }) {
-  const { name } = useSession();
+  const { name, isAdmin } = useSession();
   return (
     <ul className="rows">
       {channels.map((ch) => (
@@ -30,6 +30,22 @@ export function ChannelList({
               <span className={`badge ${ch.enabled ? 'tone-green' : ''}`}>
                 <span aria-hidden>{ch.enabled ? '●' : '○'}</span> {ch.enabled ? l('Đang bật', '有効') : l('Đã tắt', '無効')}
               </span>
+              {ch.autoPausedAt && !ch.enabled && (
+                <span className="badge tone-red" title={fmtDateTime(ch.autoPausedAt)}>
+                  <span aria-hidden>■</span> {l('Tự tắt do gửi lỗi', '送信エラーで自動停止')}
+                </span>
+              )}
+              {isAdmin && ch.orphan && (
+                <span
+                  className="badge tone-yellow"
+                  title={l(
+                    'Người phụ trách không còn tài khoản hoặc không xem được dự án trong phạm vi — hãy chuyển người phụ trách',
+                    '担当者のアカウントがないか、範囲内のプロジェクトを閲覧できません。担当者を変更してください',
+                  )}
+                >
+                  <span aria-hidden>▲</span> {l('Mồ côi', '担当者不在')}
+                </span>
+              )}
               <span className="muted">{scopeLabel(ch.scope, name)}</span>
             </div>
             <p className="row-text">{ch.events.map((e) => EVENT_LABEL[e].replace(/\s*[(（].*[)）]$/, '')).join(' · ')}</p>
@@ -44,8 +60,19 @@ export function ChannelList({
             {ch.lastError && (
               <div className="warn">
                 ⚠ {l('Lỗi gửi gần nhất', '直近の送信エラー')}: {ch.lastError}
+                {ch.failCount ? l(` (${ch.failCount} tin lỗi liên tiếp)`, `（${ch.failCount} 件連続で失敗）`) : ''}
               </div>
             )}
+            {ch.legacyWebhook && (
+              <div className="warn">
+                ▲{' '}
+                {l(
+                  'Webhook kiểu cũ (…webhook.office.com) — Microsoft đã ngừng. Tạo Workflow mới trong Teams rồi Sửa → dán URL mới.',
+                  '旧形式の Webhook（…webhook.office.com）は Microsoft により廃止されました。Teams で新しい Workflow を作成し、編集 → 新しい URL を貼り付けてください。',
+                )}
+              </div>
+            )}
+            <ChannelExtras channel={ch} reload={reload} />
           </div>
           <div className="row-side actions-col">
             <TestSender

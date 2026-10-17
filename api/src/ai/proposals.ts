@@ -4,6 +4,7 @@ import { createItemSchema, createProjectSchema, createUpdateSchema, patchItemSch
 import type { Snapshot } from '../store/store.js';
 import { vnDate } from '../time.js';
 import type { Health, Item, ItemStatus, ItemType, Priority, Project, ProjectState, User } from '../types.js';
+import { visibleSnapshot } from '../views.js';
 import type { AiOutput, AiRawAction } from './assistant.js';
 
 export interface ProjectFields {
@@ -68,7 +69,8 @@ export function calendar(now: Date, days: number): string {
 }
 
 /** What the model needs to resolve names and relative dates: open projects, their open items, people, calendar. */
-export function buildContext(snap: Snapshot, now: Date, me: User, defaultProjectId?: string): string {
+export function buildContext(all: Snapshot, now: Date, me: User, defaultProjectId?: string): string {
+  const snap = visibleSnapshot(me, all);
   const projects = snap.projects.filter((p) => p.state !== 'closed').sort((a, b) => a.id.localeCompare(b.id));
   const mine = (p: Project) => p.pl === me.id || p.gl === me.id || p.pmo === me.id || p.supporters.includes(me.id);
   const def = projects.find((p) => p.id === defaultProjectId);
@@ -288,10 +290,12 @@ function toProposal(a: AiRawAction, ctx: Ctx): Proposal {
 
 export function toProposals(
   out: AiOutput,
-  snap: Snapshot,
+  all: Snapshot,
   me: User,
   defaultProjectId?: string,
 ): { proposals: Proposal[]; questions: string[] } {
+  // Projects `me` may not see are unknown here, so actions on them come back as "not found".
+  const snap = visibleSnapshot(me, all);
   // Give every new project a NEW<n> ref the web can resolve once it is created.
   const newProjects = new Map<string, string>();
   const renamed = new Map<string, string>();

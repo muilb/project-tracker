@@ -55,7 +55,8 @@ describe('deleting items', () => {
     expect((await call('DELETE', `/projects/P01/items/${id}`, 'an')).status).toBe(200); // PL of P01
     const detail = await json(await call('GET', '/projects/P01', 'an'));
     expect(detail.body.items.map((i: { id: string }) => i.id)).not.toContain(id);
-    expect(buildAskContext(await store.snapshot(), now)).not.toContain('Mục nhập nhầm');
+    const snap = await store.snapshot();
+    expect(buildAskContext(snap, now, snap.users[0])).not.toContain('Mục nhập nhầm');
     expect((await call('PATCH', `/projects/P01/items/${id}`, 'an', { status: 'done' })).status).toBe(404);
   });
 });

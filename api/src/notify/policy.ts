@@ -79,6 +79,8 @@ export function isPaused(t: Timing, now: Date): boolean {
 
 /** High-priority issues wait this long so a burst becomes one message. */
 export const BURST_MS = 2 * 60_000;
+/** Event of a high-priority issue waiting in the outbox for others to join it. */
+export const BURST_HELD_EVENT = 'high_issue_held';
 /** Event of a merged burst (never held or merged again, e.g. when retried). */
 export const BURST_GROUP_EVENT = 'high_issue_group';
 /** A project that turns red again within this window is not announced again. */
@@ -92,49 +94,48 @@ export function flapKeys(channelId: string, projectId: string, now: Date): strin
 }
 
 /**
- * Runs before every delivery. Returns the message to send now, or undefined when it was
- * held (queued for grouping) or dropped (flapping).
- * - A new high-priority issue routed to a channel is queued for BURST_MS. When the outbox
- *   delivers it, other due high-priority issues of the same channel are merged into it.
- * - A channel is told a project turned red only if it was not told so in the last FLAP_MS.
- * Messages straight from routing carry `channel`; outbox entries (and retries) never do.
+ * Runs before every delivery (first attempts and retries). Returns the message to send now, or
+ * undefined when it was held (queued for grouping) or dropped (flapping). Retries (`attempts`)
+ * pass through unchanged, so the retry / auto-pause handling in deliver.ts applies to them.
+ * - A new high-priority issue to a channel is queued for BURST_MS as `high_issue_held`. When the
+ *   outbox delivers it, the other due held issues of the same channel are claimed and merged
+ *   into one `high_issue_group` message (a lone issue goes out as plain `high_issue`).
+ * - A channel is told a project turned red only if it was not told so in the last FLAP_MS. The
+ *   alert counts from its first attempt; a failed one is retried by deliver.ts.
  */
 export async function hold(deps: NotifyDeps, o: Outgoing, now: Date): Promise<Outgoing | undefined> {
-  if (!('channelId' in o.target)) return o;
+  if (!('channelId' in o.target) || o.attempts) return o;
   const channelId = o.target.channelId;
 
-  if (o.event === 'high_issue' && o.channel) {
-    await enqueue(deps, o, now, new Date(now.getTime() + BURST_MS));
+  if (o.event === 'high_issue') {
+    await enqueue(deps, { ...o, event: BURST_HELD_EVENT }, now, new Date(now.getTime() + BURST_MS));
     return undefined;
   }
 
-  if (o.event === 'high_issue') {
+  if (o.event === BURST_HELD_EVENT) {
     const due = (await deps.store.listDue(now, 50)).filter(
-      (e) => e.event === 'high_issue' && 'channelId' in e.target && e.target.channelId === channelId,
+      (e) => e.event === BURST_HELD_EVENT && 'channelId' in e.target && e.target.channelId === channelId,
     );
     const merged: Outgoing[] = [];
     for (const e of due) if (await deps.store.claimOutbox(e)) merged.push({ ...e });
-    if (!merged.length) return o;
+    if (!merged.length) return { ...o, event: 'high_issue' };
     const all = [o, ...merged];
     const projects = new Set(all.map((x) => x.projectId));
-    const ch = await deps.store.getChannel(channelId);
+    const ch = o.channel ?? (await deps.store.getChannel(channelId));
     return {
-      target: o.target,
+      ...o,
       event: BURST_GROUP_EVENT,
       projectId: projects.size === 1 ? o.projectId : undefined,
-      sentKeys: all.flatMap((x) => x.sentKeys ?? []),
+      sentKeys: undefined,
       message: withLang(ch?.lang, () => highIssueGroupMessage(deps, all)),
     };
   }
 
-  if (o.event === 'became_red' && o.channel && o.projectId) {
+  if (o.event === 'became_red' && o.projectId) {
     const keys = flapKeys(channelId, o.projectId, now);
     const seen = await Promise.all(keys.map((k) => deps.store.hasSent(k)));
     if (seen.some(Boolean)) return undefined;
-    return {
-      ...o,
-      sentKeys: [...(o.sentKeys ?? []), { key: keys[0], ttlDays: 1 }],
-    };
+    await deps.store.markSent(keys[0], 1);
   }
   return o;
 }

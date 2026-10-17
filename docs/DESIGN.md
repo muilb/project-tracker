@@ -41,6 +41,7 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 
 | Thao tác | Ai được làm |
 |---|---|
+| Xem dự án | Mọi người; riêng `OTHER` chỉ xem dự án mình tham gia (xem "Quyền xem") |
 | Tạo dự án | PL trở lên (mọi vai trò trừ `OTHER`) |
 | Sửa dự án, đổi trạng thái | PMO / SUBMNG / MNG, hoặc GL / PL của dự án |
 | Ghi cập nhật, thêm/sửa vấn đề và sự kiện | Mọi người đã đăng nhập |
@@ -160,7 +161,7 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 
 **Kết nối Teams:**
 - Mỗi kênh Teams tạo một Workflow từ mẫu *"Send webhook alerts to a channel"* (tên cũ: *"Post to a channel when a webhook request is received"*), rồi dán URL vào trang **Kênh thông báo**. Việc tạo Workflow cần quyền Power Automate (có môi trường Default).
-- Hệ thống chỉ chấp nhận URL `https` thuộc `*.logic.azure.com`, `*.powerplatform.com` hoặc `*.webhook.office.com`.
+- Hệ thống chỉ chấp nhận URL `https` thuộc `*.logic.azure.com` hoặc `*.powerplatform.com`. URL `*.webhook.office.com` (Office 365 connector, Microsoft đã ngừng) không nhận nữa; kênh cũ dùng host này vẫn gửi nhưng hiện cảnh báo (xem Độ tin cậy).
 - URL này có tác dụng như mật khẩu: API không bao giờ trả về đầy đủ, chỉ trả về tên máy chủ và đầu đường dẫn.
 
 **Telegram** (dùng khi tài khoản không có quyền Power Automate để tạo Workflows trong Teams):
@@ -208,6 +209,30 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 | DELETE | `/me/notify/telegram` | Gỡ Telegram cá nhân |
 | GET | `/me/inbox?before=` | 30 tin mới nhất, `unread`, `nextBefore` |
 | POST | `/me/inbox/read` | `{ ids }` hoặc `{ all: true }`; trả `unread` |
+| POST | `/me/notify/telegram/link` | Tạo mã `PT-XXXXX` (hiệu lực 1 ngày, dùng 1 lần); trả `{ code, url: https://t.me/<bot>?start=<mã>, bot }`. 400 nếu chưa cài bot |
+| POST | `/me/notify/telegram/confirm` | `{ code }`: tìm tin `/start <mã>` bot nhận được (`findChatByText`), **chỉ nhận chat riêng**, gửi tin thử rồi lưu (`telegram: true`); trả `{ prefs }`. Lỗi rõ ràng: mã sai / hết hạn / của người khác, bot chưa nhận được mã, mã gửi trong nhóm (400), không đọc được / không gửi được Telegram (502). Không liệt kê chat của người khác |
+| POST | `/me/notify/test` | Tin thử vào hộp thư, và vào Telegram nếu đã liên kết (kể cả khi đang tắt): `{ inbox, telegram?: { ok, error? } }` |
+
+**Ai nhận gì** (`notify/routePersonal.ts`, mặc định theo vai trò ở `notify/personal.ts`):
+
+| Sự kiện | Khi nào | Người nhận | Mặc định bật cho |
+|---|---|---|---|
+| `update_due_soon` | Còn ≤ 4 giờ đến hạn cập nhật (một lần mỗi hạn) | PL (không có PL thì GL) | PL |
+| `late_update_mine` | Đã trễ cập nhật; nhắc lại mỗi 24 giờ | PL (không có PL thì GL) | PL |
+| `escalation` | Trễ ≥ 2 lần chu kỳ → GL; ≥ 4 lần → PMO của dự án (mỗi mức một lần mỗi hạn) | GL, PMO | GL, PMO / quản lý |
+| `assigned_to_me` | Mục mới có người phụ trách, hoặc đổi người phụ trách (mục chưa đóng) | người phụ trách mới | mọi người |
+| `my_item_due` | Mục mình phụ trách đến hạn ngày mai hoặc quá hạn; một tin mỗi ngày, từ giờ tóm tắt (08:00) | người phụ trách | mọi người |
+| `need_help` | Cập nhật có "cần hỗ trợ" | GL, PMO của dự án | GL, PMO / quản lý |
+| `health_changed` | Trạng thái tổng hợp đổi (cả hai chiều) sau một cập nhật | GL, PL, người theo dõi | GL |
+| `watched_red` | Dự án theo dõi chuyển sang Đỏ | người theo dõi (`watch`) | mọi người |
+| `watched_high_issue` | Vấn đề ưu tiên Cao mới ở dự án theo dõi | người theo dõi | mọi người |
+
+- Chỉ gửi cho người có trong danh sách người dùng, **không gửi cho chính người gây ra sự kiện**, người nhận phải `can.viewProject`, và loại tin đó phải đang bật trong cài đặt.
+- Một thay đổi chỉ tạo **một tin cho mỗi người**: nếu một người nhận vì nhiều lý do (ví dụ GL vừa `health_changed` vừa `need_help`), tiêu đề theo lý do quan trọng nhất (`watched_red` > `health_changed` > `need_help`; `assigned_to_me` > `watched_high_issue`), nội dung luôn có "cần hỗ trợ" nếu có. Nhắc việc theo giờ được gộp thành một tin "🔔 Nhắc việc của bạn (n)".
+- Chỉ dự án đang chạy; riêng `assigned_to_me` gửi cả khi dự án tạm dừng.
+- **Tạm dừng** (`pausedUntil`): không gửi gì, kể cả hộp thư. **Giờ yên lặng**: mặc định 22:00–07:00 giờ VN; tắt bằng `schedule.quietFrom = quietTo` (giờ tuỳ chỉnh do nhánh D làm trong `policy.ts`). Tin tức thời trong giờ yên lặng vẫn vào hộp thư nhưng không gửi Telegram; nhắc việc theo giờ thì chờ hết giờ yên lặng mới gửi (cả hộp thư lẫn Telegram).
+- Chống trùng bằng `markSent` với khoá `P#<email>#<sự kiện>#…` (14 ngày), chỉ ghi khi đã gửi được.
+- Tin được dựng trong `withLang(prefs.lang)`; `lang` lưu theo ngôn ngữ lúc người dùng lưu cài đặt / liên kết Telegram (chưa có thì tiếng Việt).
 
 ### Lịch gửi
 
@@ -226,20 +251,62 @@ Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `sc
 - Giờ yên lặng và bỏ cuối tuần chỉ chặn tin của job mỗi giờ (trễ cập nhật, quá hạn, báo trước mốc); tin bị chặn được gửi ở lượt đầu tiên sau đó. Tóm tắt theo `digestHour` / `digestDays` (cuối tuần bị bỏ nếu `skipWeekends`), không bị giờ yên lặng chặn. Cảnh báo Đỏ và vấn đề Cao không bị chặn.
 - **Báo trước mốc:** mục được nhắc ở mốc nhỏ nhất ≥ số ngày còn lại (≥ 1), mỗi mục × mốc một lần (khoá `soon#<mục>#<ngày>#<mốc>`; mốc 1 giữ khoá cũ `soon#<mục>#<ngày>`). Mục thêm muộn (còn 5 ngày, mốc `[1, 7]`) vẫn được nhắc một lần "còn 5 ngày".
 - **Tóm tắt tuần** (`monday`): so với đúng thời điểm này tuần trước: dự án đổi màu (màu tuần trước dựng lại từ các cập nhật trước thời điểm đó; mục đóng sau thời điểm đó coi như còn mở; dự án mới tạo trong tuần không tính), mục đã đóng (`done`) trong tuần, mốc / sự kiện trong 7 ngày tới.
-- **Gộp vấn đề Cao:** `deliver.send` gọi `policy.hold` trước mỗi lần gửi. Vấn đề Cao mới không gửi ngay mà vào hàng đợi với `dueAt` = +2 phút. Khi `flushDue` gửi tin đó, các tin vấn đề Cao khác của cùng kênh đã đến hạn được lấy (claim) và gộp thành một tin ("▲ 3 vấn đề ưu tiên cao mới ở P03"; nhiều dự án thì không ghi mã), sự kiện `high_issue_group`. Chỉ một vấn đề thì gửi nguyên tin cũ.
-- **Chống nhấp nháy:** kênh đã được báo dự án chuyển Đỏ thì trong 6 giờ sau không báo lại cho dự án đó (Đỏ → không Đỏ → Đỏ). Ghi bằng `markSent` theo ô 15 phút (`<kênh>#red#<dự án>#<ô>`), chỉ khi gửi thành công; kiểm tra 24 ô gần nhất.
+- **Gộp vấn đề Cao:** `deliver.send` gọi `policy.hold` trước mỗi lần gửi. Vấn đề Cao mới không gửi ngay mà vào hàng đợi (`high_issue_held`) với `dueAt` = +2 phút. Khi `flushDue` gửi tin đó, các tin vấn đề Cao khác của cùng kênh đang chờ và đã đến hạn được lấy (claim) và gộp thành một tin ("▲ 3 vấn đề ưu tiên cao mới ở P03"; nhiều dự án thì không ghi mã), sự kiện `high_issue_group`. Chỉ một vấn đề thì gửi nguyên tin cũ. Lần thử lại (`attempts` > 0) đi thẳng qua, nên tin gộp vẫn được thử lại, tính `failCount` và tự tạm dừng kênh như mọi tin khác.
+- **Chống nhấp nháy:** kênh đã được báo dự án chuyển Đỏ thì trong 6 giờ sau không báo lại cho dự án đó (Đỏ → không Đỏ → Đỏ). Ghi bằng `markSent` theo ô 15 phút (`<kênh>#red#<dự án>#<ô>`) ngay lần gửi đầu; gửi lỗi thì hàng đợi thử lại như mọi tin khác. Kiểm tra 24 ô gần nhất.
 
 ### Độ tin cậy
 
-_Nhánh C._
+**Thử lại** (`deliver.ts`):
+- `send()` lỗi thì đưa tin vào hàng đợi (`enqueue`, `attempts` + 1, `lastError`), `flushDue` gửi lại sau 1 → 5 → 15 → 60 → 60 phút: tối đa 6 lần gửi cho một tin, kể cả lần đầu.
+- Lỗi vĩnh viễn (`PermanentDeliveryError`, `notify/errors.ts`) không thử lại: Teams và Slack HTTP 4xx trừ 408 / 429 (Teams 404 / 410 = Workflow đã bị xoá; Slack 404 `no_service` / 410 `channel_is_archived`); Telegram 4xx trừ 429 ("bot was kicked", "chat not found", "bot was blocked", token sai).
+- Tin của job mỗi giờ (có `sentKeys`) **không** vào hàng đợi khi lỗi: giờ sau job tự dựng lại, xếp hàng sẽ gửi trùng.
+- Tin cá nhân (hộp thư, Telegram riêng) thử lại theo cùng quy tắc.
+- Khi tới lượt gửi lại mà kênh đã bị xoá hoặc tắt thì bỏ tin.
+
+**Tự tắt kênh:**
+- `failCount` đếm số **tin bị mất** liên tiếp của kênh (lỗi vĩnh viễn, hết lượt thử lại, hoặc tin mỗi giờ lỗi); các lần thử lại giữa chừng không tính, nên Teams chập chờn vài phút không làm tắt kênh. Gửi thành công thì `failCount = 0`.
+- Mất 5 tin liên tiếp: `enabled = false`, `autoPausedAt`, ghi audit `channel_auto_pause` (người thực hiện `system`), báo vào hộp thư của người phụ trách kênh (ngôn ngữ theo `NotifyPrefs.lang`, không có thì theo kênh).
+- Bật lại kênh bằng tay thì xoá `autoPausedAt`, `failCount = 0`. "Gửi thử" lỗi không tính vào `failCount`.
+
+**Telegram:** lỗi `migrate_to_chat_id` (nhóm lên supergroup) thì gửi lại vào chat mới và lưu `telegramChatId` mới vào kênh. "bot was kicked" / "chat not found" có thông báo rõ bằng hai ngôn ngữ, kèm cách sửa (Sửa → Đổi sang nhóm khác).
+
+**Teams kiểu cũ:** kênh có URL `*.webhook.office.com` vẫn gửi, API trả `legacyWebhook: true` và web hiện cảnh báo "kiểu cũ, Microsoft đã ngừng — tạo Workflow mới".
+
+**Không lộ bí mật:** lỗi được làm sạch (`scrubError`: bỏ token bot, bỏ phần query của mọi URL, bỏ đường dẫn của URL webhook Slack) trước khi ghi vào kênh, nhật ký gửi, hàng đợi, log Lambda hay trả về.
+
+**Nhật ký, audit, người phụ trách:**
+
+| Method | Path | Ghi chú |
+|---|---|---|
+| GET | `/channels/:id/deliveries` | 20 lần gửi gần nhất (`DeliveryLog`); người phụ trách hoặc PMO / quản lý |
+| POST | `/channels/:id/transfer` | `{ to }`: người phụ trách hoặc PMO / quản lý. Người nhận phải là người dùng có tài khoản đăng nhập (`Accounts.statuses` khác `none` / `pending`) |
+
+- Audit: `channel_create`, `channel_update` (ghi các trường đổi: phạm vi, loại tin, bật / tắt, đổi nhóm Telegram, đổi URL — không ghi URL), `channel_delete`, `channel_transfer` (`cũ → mới`).
+- "Người phụ trách" của kênh là `createdBy`.
+- **Kênh mồ côi** (`orphan: true`, chỉ trong danh sách của PMO / quản lý): người phụ trách không còn trong danh sách người dùng, không có tài khoản đăng nhập, hoặc là OTHER không xem được dự án nào đó trong phạm vi. Web hiện nhãn ▲ **Mồ côi**.
 
 ### Slack
 
-_Nhánh E._
+- `kind: 'slack'`, `webhookUrl` là Slack Incoming Webhook. Chỉ chấp nhận `https://hooks.slack.com/services/T…/B…/…` (https, không port, không user). API chỉ trả `webhookUrlMasked` = `https://hooks.slack.com/services/T…/…` (không bao giờ có phần kênh / khoá bí mật).
+- Tạo kênh, hoặc đổi URL của kênh Slack, đều gửi tin thử trước khi lưu (như Teams khi tạo).
+- `notify/slack.ts` dựng Block Kit từ `Message`: `header` (plain text, ≤ 150 ký tự); các dòng liền nhau cùng loại gộp vào một khối `section` (mrkdwn) hoặc `context` (dòng phụ), mỗi khối ≤ 3000 ký tự; nút link (`actions`). Escape `& < >` (chặn `<!channel>` và link giả), `**x**` → `*x*`. Có `text` thuần làm dự phòng cho thông báo điện thoại. Tối đa 50 khối; thừa thì khối cuối là "…".
+
+**Mức chi tiết** (mọi loại kênh nhóm):
+- `Channel.detail`: `full` (mặc định) hoặc `compact`. `Settings.maxChannelDetail = 'compact'` (PMO, Cài đặt) bắt mọi kênh nhóm rút gọn.
+- `render.compact(msg)` bỏ nội dung người dùng nhập (tóm tắt, cần hỗ trợ, ghi chú, tên mục) và tên người; giữ tiêu đề (mã + tên dự án, số lượng), trạng thái, hạn, số lượng và link. Mỗi `MessageLine` có thể mang `compact` (chuỗi thay thế, hoặc `true` nếu dòng không có nội dung người dùng); dòng không có `compact` bị bỏ — dòng mới mặc định an toàn.
+- Áp ở `createSender` (một chỗ cho mọi loại kênh, kể cả tin thử / tin mẫu). Thông báo cá nhân (`U:<email>`) không bị rút gọn.
 
 ### Quyền xem
 
-_Nhánh F._
+- `can.viewProject(user, project, items?)` (`api/src/auth.ts`): mọi vai trò xem tất cả, trừ `OTHER`. `OTHER` chỉ xem dự án mình **tham gia** — là PL / GL / PMO / người hỗ trợ — **hoặc** phụ trách (`owner`) ít nhất một mục chưa xoá của dự án.
+- `visibleProjects(user, snap)` / `visibleSnapshot(user, snap)` (`api/src/views.ts`) lọc dữ liệu trước khi dựng read model.
+- Áp cho:
+  - `GET /dashboard` (KPI, danh sách, thống kê theo GL chỉ đếm dự án xem được), `GET /projects`;
+  - `/projects/:id` và mọi đường con (`/updates`, `/items`, ghi cập nhật / mục, xoá): dự án không xem được trả **404** như không tồn tại;
+  - AI: `/ai/ask` chỉ gửi dự án xem được; `/ai/parse` không đề xuất cho dự án không xem được (báo "không tìm thấy");
+  - kênh nhóm: chỉ gửi tin của dự án mà **người tạo kênh** xem được, kiểm tra lúc gửi (`creatorSees` trong `routeChannels.ts`); tin mẫu `/channels/:id/test` cũng vậy. Lúc gửi, việc phụ trách mục được xét theo các mục đang mở của dự án (tin theo giờ, tóm tắt) hoặc mục vừa lưu (vấn đề Cao).
+- Không đổi: danh sách người dùng (cần để hiện tên), trang public.
+- Web: `OTHER` không có lựa chọn "Của tôi / Tất cả" ở Tổng quan và Dự án; trang ghi "chỉ hiện dự án bạn tham gia".
 
 
 ## Nhập bằng AI

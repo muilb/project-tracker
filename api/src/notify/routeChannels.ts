@@ -3,7 +3,7 @@ import { can } from '../auth.js';
 import { withLang } from '../i18n.js';
 import type { ProjectView } from '../rules.js';
 import { vnDate } from '../time.js';
-import type { AlertEvent, Channel, Project, User } from '../types.js';
+import type { AlertEvent, Channel, Item, Project, User } from '../types.js';
 import type { NotifyDeps } from './deps.js';
 import { collectAlerts, weeklyChanges, type NotifyEvent, type Pending } from './events.js';
 import type { Outgoing } from './deliver.js';
@@ -22,16 +22,22 @@ export function inScope(ch: Channel, p: Pick<Project, 'id' | 'gl'>): boolean {
 }
 
 /**
- * A channel only carries projects its creator may see, checked at send time.
- * A creator without a user record keeps today's behaviour (track F decides otherwise).
+ * A channel only carries projects its creator may see (`can.viewProject`), checked at send time.
+ * Item ownership is judged from the items at hand: a view's open items, or the saved item.
+ * A creator without a user record keeps today's behaviour (only PMO / managers see such channels).
  */
-function creatorSees(ch: Channel, p: Project, ctx: RouteContext): boolean {
-  const owner = ctx.users.get(ch.createdBy);
-  return !owner || can.viewProject(owner, p);
+export function creatorSees(ch: Channel, p: Project | ProjectView, users: Map<string, User>, items?: Item[]): boolean {
+  const owner = users.get(ch.createdBy);
+  return !owner || can.viewProject(owner, p, items);
 }
 
-export function wants(ch: Channel, event: AlertEvent, now: Date, p?: Project, ctx?: RouteContext) {
-  return ch.enabled && !isPaused(ch, now) && ch.events.includes(event) && (!p || (inScope(ch, p) && (!ctx || creatorSees(ch, p, ctx))));
+export function wants(ch: Channel, event: AlertEvent, now: Date, p?: Project | ProjectView, ctx?: RouteContext, items?: Item[]) {
+  return (
+    ch.enabled &&
+    !isPaused(ch, now) &&
+    ch.events.includes(event) &&
+    (!p || (inScope(ch, p) && (!ctx || creatorSees(ch, p, ctx.users, items))))
+  );
 }
 
 const toChannel = (ch: Channel, event: string, message: Outgoing['message'], projectId?: string): Outgoing => ({
@@ -49,13 +55,13 @@ export function channelMessages(deps: NotifyDeps, event: NotifyEvent, channels: 
     const { after, before, update, project } = event;
     if (after.health !== 'red' || before.health === 'red') return [];
     return channels
-      .filter((c) => wants(c, 'became_red', now, project, ctx))
+      .filter((c) => wants(c, 'became_red', now, after, ctx))
       .map((c) => withLang(c.lang, () => toChannel(c, 'became_red', becameRedMessage(deps, after, update, ctx.name), project.id)));
   }
   const { item, previous, project } = event;
   if (previous || item.type !== 'issue' || item.priority !== 'high' || item.status === 'done') return [];
   return channels
-    .filter((c) => wants(c, 'high_issue', now, project, ctx))
+    .filter((c) => wants(c, 'high_issue', now, project, ctx, [item]))
     .map((c) => withLang(c.lang, () => toChannel(c, 'high_issue', highIssueMessage(deps, project, item, ctx.name), project.id)));
 }
 
@@ -69,7 +75,7 @@ export async function hourlyChannelMessages(
 ): Promise<Outgoing[]> {
   if (!ch.enabled || isPaused(ch, now)) return [];
   const out: Outgoing[] = [];
-  const scoped = views.filter((v) => inScope(ch, v) && creatorSees(ch, v, ctx));
+  const scoped = views.filter((v) => inScope(ch, v) && creatorSees(ch, v, ctx.users));
 
   if (!isQuiet(ch, now)) {
     const pending: Pending[] = [];

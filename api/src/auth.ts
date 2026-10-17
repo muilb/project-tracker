@@ -83,6 +83,11 @@ export const can = {
   /** Managing one account (role, password): ADMIN accounts are only touched by ADMIN. */
   manageAccount: (u: User, target: Pick<User, 'role'> | undefined) =>
     can.manageUsers(u) && (target?.role !== 'ADMIN' || u.role === 'ADMIN'),
+  /**
+   * Whether `u` may see project `p` (pages, AI context, alerts of channels `u` created).
+   * Track F restricts OTHER to the projects they take part in.
+   */
+  viewProject: (_u: User, _p: Project) => true,
   /** PL and above. */
   createProject: (u: User) => u.role !== 'OTHER',
   editProject: (u: User, p: Project) => can.admin(u) || p.gl === u.id || p.pl === u.id,

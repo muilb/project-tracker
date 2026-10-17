@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { langFromHeader } from '../src/i18n.js';
-import { runHourly } from '../src/notify/alerts.js';
+import { runHourly } from '../src/notify/pipeline.js';
 import type { Message } from '../src/notify/message.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';

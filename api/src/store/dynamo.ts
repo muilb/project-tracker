@@ -14,14 +14,31 @@ import {
   type AuditEntry,
   type Channel,
   type ChannelKind,
+  type DeliveryLog,
+  type InboxEntry,
   type Item,
+  type NotifyPrefs,
+  type OutboxEntry,
   type Project,
   type Settings,
   type TelegramBot,
   type Update,
   type User,
 } from '../types.js';
-import { AUDIT_DAYS, ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot, type Store } from './store.js';
+import {
+  AUDIT_DAYS,
+  ConflictError,
+  DELIVERY_LOG_DAYS,
+  INBOX_DAYS,
+  inboxCursor,
+  liveRows,
+  liveSnapshot,
+  OUTBOX_DAYS,
+  outboxKey,
+  type ListOptions,
+  type Snapshot,
+  type Store,
+} from './store.js';
 
 /*
  * Single-table layout (pk / sk):
@@ -32,10 +49,16 @@ import { AUDIT_DAYS, ConflictError, liveRows, liveSnapshot, type ListOptions, ty
  *   CHANNEL#<id>      CHANNEL
  *   SENT#<key>        SENT              (alert de-duplication, expires via the `ttl` attribute)
  *   AUDIT             <iso time>#<id>   (administrative log, expires via `ttl` after AUDIT_DAYS)
+ *   NOTIFY            <email>           (personal notification settings)
+ *   INBOX#<email>     <iso time>#<id>   (web inbox, expires via `ttl` after INBOX_DAYS)
+ *   OUTBOX            <iso due>#<id>    (messages waiting for delivery, expire after OUTBOX_DAYS)
+ *   DELIVERY#<chan>   <iso time>#<id>   (delivery attempts, expire after DELIVERY_LOG_DAYS)
  *   CONFIG            SETTINGS | TELEGRAM | SEQ#project | SEQ#item | SEQ#channel
  * Every row also has `kind` so a full scan can be grouped cheaply.
  */
-type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT';
+type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT' | 'NOTIFY' | 'INBOX' | 'OUTBOX' | 'DELIVERY';
+
+const ttlAfter = (iso: string, days: number) => Math.floor(Date.parse(iso) / 1000) + days * 86_400;
 
 export class DynamoStore implements Store {
   private db: DynamoDBDocumentClient;
@@ -65,6 +88,31 @@ export class DynamoStore implements Store {
       if (e instanceof ConditionalCheckFailedException) throw new ConflictError(`${pk} already exists`);
       throw e;
     }
+  }
+
+  /** Newest first (descending sk), up to `limit`, optionally below the `before` sort key. */
+  private async latest<T>(pk: string, limit: number, before?: string, filter?: { expr: string; values: Record<string, unknown> }) {
+    const out: T[] = [];
+    let start: Record<string, unknown> | undefined;
+    do {
+      const res = await this.db.send(
+        new QueryCommand({
+          TableName: this.table,
+          KeyConditionExpression: before ? 'pk = :pk AND sk < :before' : 'pk = :pk',
+          ExpressionAttributeValues: { ':pk': pk, ...(before ? { ':before': before } : {}), ...filter?.values },
+          ...(filter ? { FilterExpression: filter.expr } : {}),
+          ScanIndexForward: false,
+          Limit: limit,
+          ExclusiveStartKey: start,
+        }),
+      );
+      for (const row of res.Items ?? []) {
+        const { ttl: _ttl, ...rest } = strip<Record<string, unknown>>(row);
+        out.push(rest as T);
+      }
+      start = res.LastEvaluatedKey;
+    } while (start && out.length < limit);
+    return out.slice(0, limit);
   }
 
   private async query<T>(pk: string, skPrefix: string): Promise<T[]> {
@@ -203,6 +251,90 @@ export class DynamoStore implements Store {
       const { ttl: _ttl, ...entry } = strip<AuditEntry & { ttl?: number }>(row);
       return entry as AuditEntry;
     });
+  }
+
+  getNotifyPrefs(userId: string) {
+    return this.get<NotifyPrefs>('NOTIFY', userId);
+  }
+  putNotifyPrefs(prefs: NotifyPrefs) {
+    return this.put('NOTIFY', prefs.userId, 'NOTIFY', prefs);
+  }
+  async listNotifyPrefs() {
+    return this.latest<NotifyPrefs>('NOTIFY', 10_000);
+  }
+
+  addInbox(entry: InboxEntry) {
+    return this.put(`INBOX#${entry.userId}`, inboxCursor(entry), 'INBOX', { ...entry, ttl: ttlAfter(entry.at, INBOX_DAYS) });
+  }
+  listInbox(userId: string, limit: number, before?: string) {
+    return this.latest<InboxEntry>(`INBOX#${userId}`, limit, before);
+  }
+  async markInboxRead(userId: string, ids: string[] | 'all', at: string) {
+    const unread = await this.latest<InboxEntry>(`INBOX#${userId}`, 1000, undefined, {
+      expr: 'attribute_not_exists(readAt)',
+      values: {},
+    });
+    const pick = ids === 'all' ? unread : unread.filter((e) => ids.includes(e.id));
+    await Promise.all(
+      pick.map((e) =>
+        this.db.send(
+          new UpdateCommand({
+            TableName: this.table,
+            Key: { pk: `INBOX#${userId}`, sk: inboxCursor(e) },
+            UpdateExpression: 'SET readAt = :at',
+            ExpressionAttributeValues: { ':at': at },
+          }),
+        ),
+      ),
+    );
+  }
+  async countUnread(userId: string) {
+    return (await this.latest<InboxEntry>(`INBOX#${userId}`, 1000, undefined, { expr: 'attribute_not_exists(readAt)', values: {} }))
+      .length;
+  }
+
+  enqueue(entry: OutboxEntry) {
+    return this.put('OUTBOX', outboxKey(entry), 'OUTBOX', { ...entry, ttl: ttlAfter(entry.createdAt, OUTBOX_DAYS) });
+  }
+  async listDue(now: Date, limit: number) {
+    const res = await this.db.send(
+      new QueryCommand({
+        TableName: this.table,
+        // '~' sorts after '#', so every entry due at or before now is included.
+        KeyConditionExpression: 'pk = :pk AND sk <= :now',
+        ExpressionAttributeValues: { ':pk': 'OUTBOX', ':now': `${now.toISOString()}~` },
+        Limit: limit,
+      }),
+    );
+    return (res.Items ?? []).map((row) => {
+      const { ttl: _ttl, ...entry } = strip<OutboxEntry & { ttl?: number }>(row);
+      return entry as OutboxEntry;
+    });
+  }
+  async claimOutbox(entry: OutboxEntry) {
+    try {
+      await this.db.send(
+        new DeleteCommand({
+          TableName: this.table,
+          Key: { pk: 'OUTBOX', sk: outboxKey(entry) },
+          ConditionExpression: 'attribute_exists(pk)',
+        }),
+      );
+      return true;
+    } catch (e) {
+      if (e instanceof ConditionalCheckFailedException) return false;
+      throw e;
+    }
+  }
+
+  addDeliveryLog(entry: DeliveryLog) {
+    return this.put(`DELIVERY#${entry.channelId}`, `${entry.at}#${entry.id}`, 'DELIVERY', {
+      ...entry,
+      ttl: ttlAfter(entry.at, DELIVERY_LOG_DAYS),
+    });
+  }
+  listDeliveryLog(channelId: string, limit: number) {
+    return this.latest<DeliveryLog>(`DELIVERY#${channelId}`, limit);
   }
 
   async nextSeq(name: 'project' | 'item' | 'channel') {

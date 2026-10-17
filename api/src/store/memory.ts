@@ -3,14 +3,28 @@ import {
   type AiConfig,
   type AuditEntry,
   type Channel,
+  type DeliveryLog,
+  type InboxEntry,
   type Item,
+  type NotifyPrefs,
+  type OutboxEntry,
   type Project,
   type Settings,
   type TelegramBot,
   type Update,
   type User,
 } from '../types.js';
-import { auditCursor, ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot, type Store } from './store.js';
+import {
+  auditCursor,
+  ConflictError,
+  inboxCursor,
+  liveRows,
+  liveSnapshot,
+  outboxKey,
+  type ListOptions,
+  type Snapshot,
+  type Store,
+} from './store.js';
 
 /** In-memory store for tests and local development. */
 export class MemoryStore implements Store {
@@ -25,6 +39,10 @@ export class MemoryStore implements Store {
   aiConfig?: AiConfig;
   seqs = { project: 0, item: 0, channel: 0 };
   audit: AuditEntry[] = [];
+  notifyPrefs = new Map<string, NotifyPrefs>();
+  inbox: InboxEntry[] = [];
+  outbox = new Map<string, OutboxEntry>();
+  deliveries: DeliveryLog[] = [];
 
   async getUser(id: string) {
     return clone(this.users.get(id));
@@ -115,6 +133,60 @@ export class MemoryStore implements Store {
       .reverse() // same timestamp: newest written first
       .sort((a, b) => b.at.localeCompare(a.at))
       .filter((e) => !before || auditCursor(e) < before)
+      .slice(0, limit)
+      .map(clone);
+  }
+
+  async getNotifyPrefs(userId: string) {
+    return clone(this.notifyPrefs.get(userId));
+  }
+  async putNotifyPrefs(prefs: NotifyPrefs) {
+    this.notifyPrefs.set(prefs.userId, clone(prefs));
+  }
+  async listNotifyPrefs() {
+    return [...this.notifyPrefs.values()].map(clone);
+  }
+
+  async addInbox(entry: InboxEntry) {
+    this.inbox.push(clone(entry));
+  }
+  async listInbox(userId: string, limit: number, before?: string) {
+    return this.inbox
+      .filter((e) => e.userId === userId && (!before || inboxCursor(e) < before))
+      .sort((a, b) => inboxCursor(b).localeCompare(inboxCursor(a)))
+      .slice(0, limit)
+      .map(clone);
+  }
+  async markInboxRead(userId: string, ids: string[] | 'all', at: string) {
+    for (const e of this.inbox)
+      if (e.userId === userId && !e.readAt && (ids === 'all' || ids.includes(e.id))) e.readAt = at;
+  }
+  async countUnread(userId: string) {
+    return this.inbox.filter((e) => e.userId === userId && !e.readAt).length;
+  }
+
+  async enqueue(entry: OutboxEntry) {
+    this.outbox.set(entry.id, clone(entry));
+  }
+  async listDue(now: Date, limit: number) {
+    return [...this.outbox.values()]
+      .filter((e) => Date.parse(e.dueAt) <= now.getTime())
+      .sort((a, b) => outboxKey(a).localeCompare(outboxKey(b)))
+      .slice(0, limit)
+      .map(clone);
+  }
+  async claimOutbox(entry: OutboxEntry) {
+    return this.outbox.delete(entry.id);
+  }
+
+  async addDeliveryLog(entry: DeliveryLog) {
+    this.deliveries.push(clone(entry));
+  }
+  async listDeliveryLog(channelId: string, limit: number) {
+    return this.deliveries
+      .filter((e) => e.channelId === channelId)
+      .reverse() // same timestamp: newest written first
+      .sort((a, b) => b.at.localeCompare(a.at))
       .slice(0, limit)
       .map(clone);
   }

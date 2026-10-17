@@ -156,6 +156,8 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 
 ## Thông báo Teams / Telegram — `api/src/notify/`
 
+### Kênh nhóm
+
 **Kết nối Teams:**
 - Mỗi kênh Teams tạo một Workflow từ mẫu *"Send webhook alerts to a channel"* (tên cũ: *"Post to a channel when a webhook request is received"*), rồi dán URL vào trang **Kênh thông báo**. Việc tạo Workflow cần quyền Power Automate (có môi trường Default).
 - Hệ thống chỉ chấp nhận URL `https` thuộc `*.logic.azure.com`, `*.powerplatform.com` hoặc `*.webhook.office.com`.
@@ -187,6 +189,41 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 **Giờ yên lặng** (22h–7h, tuỳ chọn cho từng kênh) chỉ chặn các tin của job mỗi giờ. Cảnh báo Đỏ và vấn đề Cao vẫn gửi ngay.
 
 Teams lỗi không làm thất bại thao tác của người dùng, ví dụ lưu cập nhật vẫn thành công.
+
+### Luồng xử lý (các file trong `api/src/notify/`)
+
+- Route chỉ gọi `emit()` (`pipeline.ts`) sau khi lưu: `update_posted` (kèm trạng thái tổng hợp trước / sau) và `item_saved` (kèm bản trước khi sửa). Job mỗi giờ gọi `runHourly()`.
+- `events.ts`: kiểu sự kiện và phần quét dữ liệu mỗi giờ (trễ, quá hạn, mốc). `routeChannels.ts`: chọn kênh nhóm theo phạm vi, loại tin, bật / tắt / tạm dừng, và `can.viewProject(người tạo kênh, dự án)` kiểm tra lúc gửi. `routePersonal.ts`: chọn người nhận cá nhân. `policy.ts`: giờ yên lặng, giờ tóm tắt, tạm dừng. `render.ts`: dựng tin. `deliver.ts`: gửi, ghi nhật ký gửi, hàng đợi. `sender.ts`: cách gửi theo loại kênh.
+- Tin gửi ngay vẫn gửi trực tiếp trong request. Hàng đợi (`OUTBOX`) dành cho tin gửi trễ, gộp tin và gửi lại; Lambda `FlushFn` chạy mỗi phút (`flushDue`), mỗi tin chỉ được một lượt lấy (xoá có điều kiện) nên không gửi trùng.
+- Mỗi lần gửi tới kênh nhóm được ghi vào `DELIVERY#<kênh>` (giữ 30 ngày).
+
+### Thông báo cá nhân
+
+- Cài đặt riêng của mỗi người (`NotifyPrefs`, khoá `NOTIFY` / email): loại tin, Telegram cá nhân, dự án theo dõi, lịch, tạm dừng. Chưa lưu thì dùng mặc định theo vai trò (`notify/personal.ts`).
+- Hộp thư web (`INBOX#<email>`, giữ 60 ngày) luôn nhận; Telegram cá nhân nhận thêm nếu đã liên kết. `chatId` cá nhân không bao giờ được trả về.
+
+| Method | Path | Ghi chú |
+|---|---|---|
+| GET / PUT | `/me/notify` | Cài đặt của chính mình (`telegramLinked`, không có `chatId`); `telegram: true` chỉ có hiệu lực khi đã liên kết |
+| DELETE | `/me/notify/telegram` | Gỡ Telegram cá nhân |
+| GET | `/me/inbox?before=` | 30 tin mới nhất, `unread`, `nextBefore` |
+| POST | `/me/inbox/read` | `{ ids }` hoặc `{ all: true }`; trả `unread` |
+
+### Lịch gửi
+
+_Nhánh D (`docs/plans/notifications.md`)._
+
+### Độ tin cậy
+
+_Nhánh C._
+
+### Slack
+
+_Nhánh E._
+
+### Quyền xem
+
+_Nhánh F._
 
 
 ## Nhập bằng AI

@@ -34,6 +34,11 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   telegram_remove: l('Gỡ bot Telegram', 'Telegram ボット削除'),
   project_delete: l('Xoá dự án', 'プロジェクト削除'),
   restore: l('Khôi phục từ thùng rác', 'ごみ箱から復元'),
+  channel_create: l('Tạo kênh thông báo', '通知チャネル作成'),
+  channel_update: l('Sửa kênh thông báo', '通知チャネル変更'),
+  channel_delete: l('Xoá kênh thông báo', '通知チャネル削除'),
+  channel_transfer: l('Chuyển người phụ trách kênh', 'チャネル担当者の変更'),
+  channel_auto_pause: l('Tự tạm dừng kênh lỗi', 'エラーによるチャネル自動停止'),
 };
 
 /** Administrative log (ADMIN only). */

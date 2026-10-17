@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
-import { runHourly } from '../src/notify/alerts.js';
+import { runHourly } from '../src/notify/pipeline.js';
 import { isTeamsWebhookUrl } from '../src/notify/teams.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';

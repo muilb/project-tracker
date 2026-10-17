@@ -518,10 +518,16 @@ export function HelpPage() {
             <B>Chờ duyệt</B>: các tài khoản đã đăng ký nhưng chưa xác nhận email. Chọn vai trò rồi duyệt, hoặc xoá đăng ký lạ. Menu Người
             dùng có số đỏ khi có người chờ.
           </li>
-          <li>Đổi vai trò, sửa tên; thêm trước người chưa đăng nhập để gán vào dự án.</li>
+          <li>
+            Đổi vai trò, sửa tên; thêm trước người chưa đăng nhập để gán vào dự án. Thêm trước <b>chưa tạo tài khoản đăng nhập</b>: người đó
+            vẫn phải tự <B>Đăng ký tài khoản</B> bằng đúng email đó (vai trò đã chọn được giữ nguyên).
+          </li>
+          <li>
+            Cột <B>Tài khoản đăng nhập</B>: ● Đã có tài khoản, ▲ Mật khẩu tạm (chưa đổi), ▲ Chờ duyệt, ■ Chưa có tài khoản (chưa đăng ký).
+          </li>
           <li>
             <B>Đặt lại mật khẩu</B> (cuối mỗi dòng): tạo mật khẩu tạm, hiện một lần. Gửi riêng cho người đó; lần đăng nhập đầu họ phải đặt
-            mật khẩu mới. Tài khoản đang chờ duyệt thì duyệt trước.
+            mật khẩu mới. Chỉ có với người đã có tài khoản; tài khoản đang chờ duyệt thì duyệt trước.
           </li>
         </ul>
         <h3>Xoá và Thùng rác</h3>

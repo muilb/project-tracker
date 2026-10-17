@@ -92,7 +92,8 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET / POST | `/projects/:id/updates` | Cập nhật tình hình: `health`, `summary`, `needHelp` |
 | GET / POST | `/projects/:id/items` | Vấn đề / sự kiện / mốc: `type` = `issue` / `event` / `milestone` |
 | PATCH | `/projects/:id/items/:itemId` | Sửa, đóng mục (`status: done`) |
-| GET / POST | `/users`, PATCH `/users/:email` | Người dùng; PMO tạo trước người chưa đăng nhập |
+| GET / POST | `/users`, PATCH `/users/:email` | Người dùng; PMO tạo trước người chưa đăng nhập (chỉ tạo hồ sơ trong DynamoDB, **không** tạo tài khoản Cognito — người đó tự đăng ký bằng đúng email) |
+| GET | `/users/accounts` | PMO / MNG: trạng thái tài khoản đăng nhập của từng người dùng (đọc từ Cognito): `none` (chưa đăng ký), `pending` (chờ xác nhận), `temp` (mật khẩu tạm chưa đổi), `active` |
 | GET | `/users/pending` | PMO / MNG: các tài khoản đã đăng ký nhưng chưa xác nhận email (đọc từ Cognito) |
 | POST | `/users/pending/:email/approve` | PMO / MNG / ADMIN (vai trò `ADMIN` thì chỉ ADMIN): xác nhận tài khoản và đánh dấu email đã xác minh. Body `{ "role"?: … }`; nếu không truyền vai trò thì lấy theo `ADMIN_EMAILS`, không có thì PL |
 | POST | `/users/pending/:email/reject` | PMO / MNG: xoá đăng ký chưa xác nhận |

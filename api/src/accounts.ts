@@ -10,6 +10,7 @@ import {
   ListUsersCommand,
   type AttributeType,
 } from '@aws-sdk/client-cognito-identity-provider';
+import type { AccountStatus } from './types.js';
 
 export interface PendingAccount {
   email: string;
@@ -31,7 +32,12 @@ export interface Accounts {
   reject(email: string): Promise<void>;
   /** Sets a temporary password; the user must choose a new one at the next sign-in. */
   setTemporaryPassword(email: string, password: string): Promise<void>;
+  /** Login account state of each email. */
+  statuses(emails: string[]): Promise<Record<string, AccountStatus>>;
 }
+
+const statusOf = (cognitoStatus: string | undefined): AccountStatus =>
+  cognitoStatus === 'UNCONFIRMED' ? 'pending' : cognitoStatus === 'FORCE_CHANGE_PASSWORD' ? 'temp' : 'active';
 
 const attr = (attrs: AttributeType[] | undefined, name: string) => attrs?.find((a) => a.Name === name)?.Value;
 
@@ -108,6 +114,20 @@ export class CognitoAccounts implements Accounts {
       new AdminSetUserPasswordCommand({ UserPoolId: this.userPoolId, Username: email, Password: password, Permanent: false }),
     );
   }
+
+  async statuses(emails: string[]) {
+    const found = new Map<string, AccountStatus>();
+    let token: string | undefined;
+    do {
+      const res = await this.client.send(new ListUsersCommand({ UserPoolId: this.userPoolId, PaginationToken: token }));
+      for (const u of res.Users ?? []) {
+        const email = attr(u.Attributes, 'email')?.toLowerCase();
+        if (email) found.set(email, statusOf(u.UserStatus));
+      }
+      token = res.PaginationToken;
+    } while (token);
+    return Object.fromEntries(emails.map((e) => [e, found.get(e) ?? 'none'])) as Record<string, AccountStatus>;
+  }
 }
 
 /** Tests and local dev. */
@@ -137,5 +157,16 @@ export class MemoryAccounts implements Accounts {
     if (this.pendingAccounts.some((a) => a.email === email)) throw new UnconfirmedError(email);
     if (this.confirmed && !this.confirmed.has(email)) throw new NoAccountError(email);
     this.resets.push({ email, password });
+  }
+  async statuses(emails: string[]) {
+    const status = (email: string): AccountStatus =>
+      this.pendingAccounts.some((a) => a.email === email)
+        ? 'pending'
+        : this.confirmed && !this.confirmed.has(email)
+          ? 'none'
+          : this.resets.some((r) => r.email === email)
+            ? 'temp'
+            : 'active';
+    return Object.fromEntries(emails.map((e) => [e, status(e)])) as Record<string, AccountStatus>;
   }
 }

@@ -10,6 +10,10 @@ export type Health = (typeof HEALTHS)[number];
 export const ROLES = ['PL', 'GL', 'PMO', 'SUBMNG', 'MNG', 'OTHER', 'ADMIN'] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Login account state in Cognito: none = never signed up, pending = sign-up not confirmed,
+ * temp = temporary password not changed yet, active = can sign in with their own password. */
+export type AccountStatus = 'none' | 'pending' | 'temp' | 'active';
+
 export const PROJECT_STATES = ['active', 'paused', 'closed'] as const;
 export type ProjectState = (typeof PROJECT_STATES)[number];
 

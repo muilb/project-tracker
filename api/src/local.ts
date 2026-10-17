@@ -20,11 +20,15 @@ const send = process.env.LOCAL_SEND
   ? createSender(store)
   : async (ch: { kind: string; name: string }, msg: Message) =>
       console.log(`[${ch.kind} → ${ch.name}] ${msg.title}\n  ${msg.lines.map((l) => l.text).join('\n  ')}`);
-// Two sample sign-ups waiting for PMO approval.
-const accounts = new MemoryAccounts([
-  { email: 'thao@example.com', name: 'Thảo', createdAt: new Date().toISOString() },
-  { email: 'vinh@example.com', name: 'Vinh', createdAt: new Date().toISOString() },
-]);
+// Two sample sign-ups waiting for PMO approval; the sample users have login accounts,
+// users added later (Users page or a new x-dev-user) show as "no login account".
+const accounts = new MemoryAccounts(
+  [
+    { email: 'thao@example.com', name: 'Thảo', createdAt: new Date().toISOString() },
+    { email: 'vinh@example.com', name: 'Vinh', createdAt: new Date().toISOString() },
+  ],
+  new Set((await store.listUsers()).map((u) => u.id)),
+);
 // Fake Telegram (any token accepted, every connect code "found") unless LOCAL_SEND=1.
 const telegram: TelegramClient = process.env.LOCAL_SEND
   ? telegramClient

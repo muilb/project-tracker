@@ -28,6 +28,13 @@ admin.get('/users/pending', async (c) => {
   return c.json({ pending: await c.get('accounts').listPending() });
 });
 
+/** Which users can actually sign in (a user added beforehand has no login account until they sign up). */
+admin.get('/users/accounts', async (c) => {
+  ensure(can.manageUsers(c.get('user')), l('Chỉ PMO / MNG mới xem tài khoản đăng nhập', 'ログインアカウントの確認は PMO / MNG のみ行えます'));
+  const users = await c.get('store').listUsers();
+  return c.json({ accounts: await c.get('accounts').statuses(users.map((u) => u.id)) });
+});
+
 admin.post('/users/pending/:email/approve', async (c) => {
   ensure(can.manageUsers(c.get('user')), l('Chỉ PMO / MNG mới duyệt tài khoản', 'アカウントの承認は PMO / MNG のみ行えます'));
   const email = decodeURIComponent(c.req.param('email')).trim().toLowerCase();

@@ -41,6 +41,7 @@ export function ScheduleFields({
   onChange,
   digest = true,
   milestones = true,
+  pause = true,
 }: {
   value: Timing;
   onChange: (t: Timing) => void;
@@ -48,6 +49,8 @@ export function ScheduleFields({
   digest?: boolean;
   /** Show the milestone lead days (group channels). */
   milestones?: boolean;
+  /** Show the pause date (off where the page has its own, as on "My notifications"). */
+  pause?: boolean;
 }) {
   const s = resolveSchedule(value);
   const quiet = s.quietFrom !== s.quietTo;
@@ -149,18 +152,20 @@ export function ScheduleFields({
           </div>
         )}
 
-        <div className="form-grid">
-          <label>
-            {l('Tạm dừng đến hết ngày', 'この日の終わりまで一時停止')}
-            <input
-              type="date"
-              value={paused}
-              min={vnDate(Date.now())}
-              onChange={(e) => onChange({ ...value, pausedUntil: e.target.value ? endOfVnDay(e.target.value) : null })}
-            />
-          </label>
-        </div>
-        {paused && (
+        {pause && (
+          <div className="form-grid">
+            <label>
+              {l('Tạm dừng đến hết ngày', 'この日の終わりまで一時停止')}
+              <input
+                type="date"
+                value={paused}
+                min={vnDate(Date.now())}
+                onChange={(e) => onChange({ ...value, pausedUntil: e.target.value ? endOfVnDay(e.target.value) : null })}
+              />
+            </label>
+          </div>
+        )}
+        {pause && paused && (
           <div className="muted">
             ⏸{' '}
             {l(`Đang tạm dừng: không gửi tin nào đến hết ngày ${dm(paused)}.`, `一時停止中: ${dm(paused)} の終わりまで何も送信しません。`)}{' '}

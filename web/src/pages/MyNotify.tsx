@@ -162,7 +162,13 @@ export function MyNotifyPage() {
 
       <Section title={l('Lịch', 'スケジュール')}>
         <div className="form">
-          <ScheduleFields value={toTiming(draft.schedule)} onChange={(t) => set({ schedule: fromTiming(t) })} />
+          <ScheduleFields
+            value={toTiming(draft.schedule)}
+            onChange={(t) => set({ schedule: fromTiming(t) })}
+            digest={false}
+            milestones={false}
+            pause={false}
+          />
           <div className="notify-pause">
             <label>
               {l('Tạm dừng đến hết ngày', 'この日まで一時停止')}

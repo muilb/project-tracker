@@ -19,17 +19,21 @@ export interface Store {
   putUser(user: User): Promise<void>;
   listUsers(): Promise<User[]>;
 
+  /** Returns soft-deleted projects too (callers check `deletedAt`). */
   getProject(id: string): Promise<Project | undefined>;
   /** Throws ConflictError when the id already exists. */
   createProject(project: Project): Promise<void>;
   putProject(project: Project): Promise<void>;
 
-  addUpdate(update: Update): Promise<void>;
-  listUpdates(projectId: string): Promise<Update[]>;
+  /** Adds or replaces (same id and time) an update. */
+  putUpdate(update: Update): Promise<void>;
+  /** Soft-deleted updates are left out unless `includeDeleted`. */
+  listUpdates(projectId: string, opts?: ListOptions): Promise<Update[]>;
 
+  /** Returns soft-deleted items too (callers check `deletedAt`). */
   getItem(projectId: string, id: string): Promise<Item | undefined>;
   putItem(item: Item): Promise<void>;
-  listItems(projectId: string): Promise<Item[]>;
+  listItems(projectId: string, opts?: ListOptions): Promise<Item[]>;
 
   getSettings(): Promise<Settings>;
   putSettings(settings: Settings): Promise<void>;
@@ -54,5 +58,28 @@ export interface Store {
   /** Atomically increments and returns a named counter (project / item ids). */
   nextSeq(name: 'project' | 'item' | 'channel'): Promise<number>;
 
-  snapshot(): Promise<Snapshot>;
+  /** Live data only, unless `includeDeleted` (the trash). */
+  snapshot(opts?: ListOptions): Promise<Snapshot>;
+}
+
+export interface ListOptions {
+  includeDeleted?: boolean;
+}
+
+const live = (r: { deletedAt?: string }) => !r.deletedAt;
+
+/** Drops soft-deleted rows, and everything under a soft-deleted project. */
+export function liveSnapshot(snap: Snapshot): Snapshot {
+  const projects = snap.projects.filter(live);
+  const ids = new Set(projects.map((p) => p.id));
+  return {
+    ...snap,
+    projects,
+    updates: snap.updates.filter((u) => live(u) && ids.has(u.projectId)),
+    items: snap.items.filter((i) => live(i) && ids.has(i.projectId)),
+  };
+}
+
+export function liveRows<T extends { deletedAt?: string }>(rows: T[], opts?: ListOptions): T[] {
+  return opts?.includeDeleted ? rows : rows.filter(live);
 }

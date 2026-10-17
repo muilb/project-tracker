@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { api, useApi } from '../api';
 import { ErrorBox, Section } from '../components/ui';
 import { l, lang } from '../i18n';
@@ -42,6 +43,32 @@ export function SettingsPage() {
       <h1>{l('Cài đặt', '設定')}</h1>
       <AiSettings />
       <TelegramSettings />
+      <Section title="Microsoft Teams">
+        <p className="muted">
+          {l(
+            'Teams không cần cài ở đây: mỗi kênh Teams có URL webhook riêng (tạo bằng Workflows trong Teams). Đăng ký hoặc đổi URL ở trang Kênh thông báo → ＋ Đăng ký kênh → Teams, hoặc nút Sửa của kênh.',
+            'Teams はここで設定する必要はありません。Teams のチャネルごとに Workflows で作成した Webhook URL を使います。「通知チャネル → ＋ チャネル登録 → Teams」で登録し、URL の変更はチャネルの「編集」から行います。',
+          )}
+        </p>
+        <div className="actions">
+          <Link className="btn" to="/channels">
+            {l('Mở Kênh thông báo', '通知チャネルを開く')}
+          </Link>
+        </div>
+      </Section>
+      <Section title={`🗑 ${l('Thùng rác', 'ごみ箱')}`}>
+        <p className="muted">
+          {l(
+            'Dự án, cập nhật, vấn đề / sự kiện / mốc đã xoá được giữ lại và khôi phục được.',
+            '削除したプロジェクト・報告・課題 / イベント / マイルストーンは保持され、復元できます。',
+          )}
+        </p>
+        <div className="actions">
+          <Link className="btn" to="/trash">
+            {l('Mở thùng rác', 'ごみ箱を開く')}
+          </Link>
+        </div>
+      </Section>
       <form className="card form" onSubmit={submit}>
         <fieldset>
           <legend>{l('Tần suất cập nhật theo trạng thái (giờ)', '状態別の報告頻度（時間）')}</legend>
@@ -101,14 +128,26 @@ function TelegramSettings() {
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [changing, setChanging] = useState(false);
+  const [notice, setNotice] = useState<string>();
 
   async function save(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(undefined);
     try {
-      await api.put('/settings/telegram', { token });
+      const before = data?.username;
+      const r = await api.put<{ username: string }>('/settings/telegram', { token });
       setToken('');
+      setChanging(false);
+      setNotice(
+        before && before !== r.username
+          ? l(
+              `Đã đổi sang bot @${r.username}. Thêm @${r.username} vào từng nhóm Telegram đang nhận thông báo (kênh nhận riêng: mở chat với bot và bấm Start), rồi bấm "Gửi thử" ở trang Kênh thông báo.`,
+              `ボット @${r.username} に切り替えました。通知を受け取っている各 Telegram グループに @${r.username} を追加し（個人チャネルはボットとのチャットで Start）、「通知チャネル」画面で「テスト送信」してください。`,
+            )
+          : l('Đã lưu token mới.', '新しいトークンを保存しました。'),
+      );
       reload();
     } catch (err) {
       setError((err as Error).message);
@@ -133,7 +172,8 @@ function TelegramSettings() {
 
   return (
     <Section title={l('Bot Telegram', 'Telegram ボット')}>
-      {data?.configured ? (
+      {notice && <div className="info-box">{notice}</div>}
+      {data?.configured && !changing ? (
         <div className="form">
           <div className="info-box">
             {lang === 'ja' ? (
@@ -147,6 +187,15 @@ function TelegramSettings() {
             )}
           </div>
           <div className="actions gap">
+            <button
+              className="btn"
+              onClick={() => {
+                setChanging(true);
+                setNotice(undefined);
+              }}
+            >
+              {l('Đổi token', 'トークンを変更')}
+            </button>
             <button className="btn" onClick={remove}>
               {l('Gỡ bot', 'ボットを削除')}
             </button>
@@ -154,7 +203,15 @@ function TelegramSettings() {
         </div>
       ) : (
         <form className="form" onSubmit={save}>
-          <ol className="howto">
+          {changing && (
+            <p className="muted">
+              {l(
+                `Cùng bot @${data?.username}, chỉ đổi token (gửi /revoke cho @BotFather): các nhóm vẫn nhận tin, không cần kết nối lại. Dán token của bot khác: phải thêm bot mới vào từng nhóm. Bot cũ vẫn chạy cho đến khi lưu token mới.`,
+                `同じボット @${data?.username} のトークンだけを変更する場合（@BotFather に /revoke）、グループはそのまま通知を受け取れます。別のボットのトークンを貼り付けた場合は、新しいボットを各グループに追加してください。新しいトークンを保存するまでは現在のボットが動作します。`,
+              )}
+            </p>
+          )}
+          <ol className="howto" hidden={changing}>
             <li>
               {lang === 'ja' ? (
                 <>
@@ -209,7 +266,12 @@ function TelegramSettings() {
             </small>
           </label>
           <ErrorBox error={error} />
-          <div className="actions">
+          <div className="actions gap">
+            {changing && (
+              <button type="button" className="btn" onClick={() => setChanging(false)}>
+                {l('Huỷ', 'キャンセル')}
+              </button>
+            )}
             <button className="btn btn-primary" disabled={busy}>
               {busy ? l('Đang kiểm tra…', '確認中…') : l('Lưu bot', 'ボットを保存')}
             </button>

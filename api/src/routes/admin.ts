@@ -3,7 +3,8 @@ import { HTTPException } from 'hono/http-exception';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
-import { NotPendingError } from '../accounts.js';
+import { randomInt } from 'node:crypto';
+import { NoAccountError, NotPendingError, UnconfirmedError } from '../accounts.js';
 import { looksLikeBotToken } from '../notify/telegram.js';
 import { approveAccountSchema, createUserSchema, parseBody, patchUserSchema, settingsSchema, telegramBotSchema } from '../schemas.js';
 import type { User } from '../types.js';
@@ -84,6 +85,52 @@ admin.patch('/users/:id', async (c) => {
   const updated = { ...user, ...(await parseBody(c.req, patchUserSchema)) };
   await store.putUser(updated);
   return c.json({ user: updated });
+});
+
+/** 10 characters, lowercase letters and digits (the pool policy), no look-alikes (l / 1, o / 0). */
+function temporaryPassword(): string {
+  const letters = 'abcdefghijkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const all = letters + digits;
+  const chars = [letters[randomInt(letters.length)], digits[randomInt(digits.length)]];
+  while (chars.length < 10) chars.push(all[randomInt(all.length)]);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
+/** Forgotten password when the reset email does not arrive: PMO / MNG hand out a one-time password. */
+admin.post('/users/:id/reset-password', async (c) => {
+  const me = c.get('user');
+  ensure(can.manageUsers(me), l('Chỉ PMO / MNG mới đặt lại mật khẩu', 'パスワードの再設定は PMO / MNG のみ行えます'));
+  const email = decodeURIComponent(c.req.param('id')).trim().toLowerCase();
+  if (email === me.id)
+    throw new HTTPException(400, {
+      message: l(
+        'Không tự đặt lại mật khẩu của mình ở đây — dùng "Quên mật khẩu" ở trang đăng nhập',
+        '自分のパスワードはここでは再設定できません。ログイン画面の「パスワードを忘れた場合」を使ってください',
+      ),
+    });
+  const password = temporaryPassword();
+  try {
+    await c.get('accounts').setTemporaryPassword(email, password);
+  } catch (e) {
+    if (e instanceof NoAccountError)
+      throw new HTTPException(404, {
+        message: l(`${email} chưa đăng ký tài khoản đăng nhập`, `${email} はログインアカウントを登録していません`),
+      });
+    if (e instanceof UnconfirmedError)
+      throw new HTTPException(400, {
+        message: l(
+          `${email} đang chờ duyệt — duyệt ở mục "Chờ duyệt" trước`,
+          `${email} は承認待ちです。先に「承認待ち」で承認してください`,
+        ),
+      });
+    throw e;
+  }
+  return c.json({ password });
 });
 
 admin.get('/settings', async (c) => c.json({ settings: await c.get('store').getSettings() }));

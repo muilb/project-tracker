@@ -8,8 +8,19 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { DEFAULT_SETTINGS, type AiConfig, type Channel, type ChannelKind, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
-import { ConflictError, type Snapshot, type Store } from './store.js';
+import {
+  DEFAULT_SETTINGS,
+  type AiConfig,
+  type Channel,
+  type ChannelKind,
+  type Item,
+  type Project,
+  type Settings,
+  type TelegramBot,
+  type Update,
+  type User,
+} from '../types.js';
+import { ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot, type Store } from './store.js';
 
 /*
  * Single-table layout (pk / sk):
@@ -92,11 +103,11 @@ export class DynamoStore implements Store {
     return this.put(`PROJECT#${project.id}`, 'PROJECT', 'PROJECT', project);
   }
 
-  addUpdate(update: Update) {
+  putUpdate(update: Update) {
     return this.put(`PROJECT#${update.projectId}`, `UPDATE#${update.at}#${update.id}`, 'UPDATE', update);
   }
-  listUpdates(projectId: string) {
-    return this.query<Update>(`PROJECT#${projectId}`, 'UPDATE#');
+  async listUpdates(projectId: string, opts?: ListOptions) {
+    return liveRows(await this.query<Update>(`PROJECT#${projectId}`, 'UPDATE#'), opts);
   }
 
   getItem(projectId: string, id: string) {
@@ -105,8 +116,8 @@ export class DynamoStore implements Store {
   putItem(item: Item) {
     return this.put(`PROJECT#${item.projectId}`, `ITEM#${item.id}`, 'ITEM', item);
   }
-  listItems(projectId: string) {
-    return this.query<Item>(`PROJECT#${projectId}`, 'ITEM#');
+  async listItems(projectId: string, opts?: ListOptions) {
+    return liveRows(await this.query<Item>(`PROJECT#${projectId}`, 'ITEM#'), opts);
   }
 
   async getSettings() {
@@ -184,7 +195,7 @@ export class DynamoStore implements Store {
     return Number(res.Attributes?.value);
   }
 
-  async snapshot(): Promise<Snapshot> {
+  async snapshot(opts?: ListOptions): Promise<Snapshot> {
     const snap: Snapshot = { users: [], projects: [], updates: [], items: [], settings: DEFAULT_SETTINGS };
     let start: Record<string, unknown> | undefined;
     do {
@@ -199,7 +210,7 @@ export class DynamoStore implements Store {
       }
       start = res.LastEvaluatedKey;
     } while (start);
-    return snap;
+    return opts?.includeDeleted ? snap : liveSnapshot(snap);
   }
 }
 

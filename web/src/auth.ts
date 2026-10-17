@@ -79,6 +79,15 @@ async function cognito<T>(action: string, body: object): Promise<T> {
 
 interface AuthResult {
   AuthenticationResult?: { IdToken: string; RefreshToken?: string; ExpiresIn: number };
+  ChallengeName?: string;
+  Session?: string;
+}
+
+/** Signed in with a temporary password set by PMO / MNG: a new password must be chosen. */
+export class NewPasswordRequired extends Error {
+  constructor(readonly session: string) {
+    super('NEW_PASSWORD_REQUIRED');
+  }
 }
 
 function store(email: string, r: AuthResult, refreshToken?: string) {
@@ -101,6 +110,18 @@ export const auth = {
     const r = await cognito<AuthResult>('InitiateAuth', {
       AuthFlow: 'USER_PASSWORD_AUTH',
       AuthParameters: { USERNAME: email, PASSWORD: password },
+    });
+    if (r.ChallengeName === 'NEW_PASSWORD_REQUIRED' && r.Session) throw new NewPasswordRequired(r.Session);
+    store(email, r);
+  },
+
+  /** Answers the NEW_PASSWORD_REQUIRED challenge and signs in. */
+  async completeNewPassword(email: string, session: string, newPassword: string) {
+    email = email.trim().toLowerCase();
+    const r = await cognito<AuthResult>('RespondToAuthChallenge', {
+      ChallengeName: 'NEW_PASSWORD_REQUIRED',
+      Session: session,
+      ChallengeResponses: { USERNAME: email, NEW_PASSWORD: newPassword },
     });
     store(email, r);
   },

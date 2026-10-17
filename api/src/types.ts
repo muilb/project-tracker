@@ -47,6 +47,9 @@ export interface Project {
   createdBy: string;
   createdAt: string; // ISO
   updatedAt: string; // ISO
+  /** Soft delete: hidden everywhere, PMO can restore it from the trash. */
+  deletedAt?: string;
+  deletedBy?: string;
 }
 
 export interface Update {
@@ -59,6 +62,8 @@ export interface Update {
   summary: string;
   needHelp?: string;
   rawText?: string; // original natural-language text when entered through AI
+  deletedAt?: string; // soft delete
+  deletedBy?: string;
 }
 
 export interface Item {
@@ -74,6 +79,8 @@ export interface Item {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string; // soft delete
+  deletedBy?: string;
 }
 
 export interface Settings {

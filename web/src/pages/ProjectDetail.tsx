@@ -13,10 +13,33 @@ export function ProjectDetailPage() {
   const { id } = useParams();
   const { me, name, isAdmin } = useSession();
   const { data, error, reload } = useApi<ProjectDetail>(`/projects/${id}`);
+  const [notice, setNotice] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
   if (error) return <ErrorBox error={error} />;
   if (!data) return <p className="loading">{l('Đang tải…', '読み込み中…')}</p>;
   const p = data.project;
   const canEdit = isAdmin || p.gl === me.id || p.pl === me.id;
+  const now = Date.now();
+  const canDeleteUpdate = (u: { author: string; at: string }) => isAdmin || (u.author === me.id && now - Date.parse(u.at) < 24 * 3600_000);
+
+  /** Soft delete; PMO / managers can bring it back from the trash. */
+  async function remove(path: string, what: string) {
+    if (!confirm(l(`Xoá ${what}?`, `${what}を削除しますか？`))) return;
+    setNotice(undefined);
+    setActionError(undefined);
+    try {
+      await api.del(path);
+      setNotice(
+        l(
+          'Đã xoá. PMO / quản lý có thể khôi phục ở Cài đặt → Thùng rác.',
+          '削除しました。PMO / 管理者は「設定 → ごみ箱」から復元できます。',
+        ),
+      );
+      reload();
+    } catch (e) {
+      setActionError((e as Error).message);
+    }
+  }
 
   return (
     <div className="stack">
@@ -42,6 +65,8 @@ export function ProjectDetailPage() {
         )}
       </div>
 
+      {notice && <div className="info-box">{notice}</div>}
+      <ErrorBox error={actionError} />
       <section className="card">
         <dl className="facts">
           <Fact label={l('Khách hàng', '顧客')}>{p.customer || '—'}</Fact>
@@ -89,6 +114,15 @@ export function ProjectDetailPage() {
                     <b>{name(u.author)}</b>
                     <span className="muted">{ROLE_LABEL[u.authorRole]}</span>
                     {u.health && <HealthBadge health={u.health} />}
+                    {canDeleteUpdate(u) && (
+                      <button
+                        type="button"
+                        className="btn-link danger-link"
+                        onClick={() => remove(`/projects/${p.id}/updates/${u.id}`, l('cập nhật này', 'この報告'))}
+                      >
+                        {l('Xoá', '削除')}
+                      </button>
+                    )}
                   </div>
                   <p>{u.summary}</p>
                   {u.needHelp && <p className="help">🙋 {u.needHelp}</p>}
@@ -99,7 +133,13 @@ export function ProjectDetailPage() {
         </Section>
       </div>
 
-      <Items projectId={p.id} items={data.items} onChange={reload} />
+      <Items
+        projectId={p.id}
+        items={data.items}
+        onChange={reload}
+        canDelete={(i) => canEdit || i.createdBy === me.id}
+        onDelete={(i) => remove(`/projects/${p.id}/items/${i.id}`, `"${i.title}"`)}
+      />
     </div>
   );
 }
@@ -165,7 +205,19 @@ function UpdateForm({ projectId, defaultHealth, onDone }: { projectId: string; d
   );
 }
 
-function Items({ projectId, items, onChange }: { projectId: string; items: ItemView[]; onChange: () => void }) {
+function Items({
+  projectId,
+  items,
+  onChange,
+  canDelete,
+  onDelete,
+}: {
+  projectId: string;
+  items: ItemView[];
+  onChange: () => void;
+  canDelete: (item: ItemView) => boolean;
+  onDelete: (item: ItemView) => void;
+}) {
   const { users, name } = useSession();
   const [showClosed, setShowClosed] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -221,6 +273,7 @@ function Items({ projectId, items, onChange }: { projectId: string; items: ItemV
                 <th>{l('Ngày', '日付')}</th>
                 <th>{l('Phụ trách', '担当者')}</th>
                 <th>{l('Trạng thái', 'ステータス')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -251,6 +304,18 @@ function Items({ projectId, items, onChange }: { projectId: string; items: ItemV
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td>
+                    {canDelete(i) && (
+                      <button
+                        type="button"
+                        className="btn-link danger-link"
+                        aria-label={l(`Xoá "${i.title}"`, `「${i.title}」を削除`)}
+                        onClick={() => onDelete(i)}
+                      >
+                        {l('Xoá', '削除')}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

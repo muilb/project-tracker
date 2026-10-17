@@ -1,5 +1,15 @@
-import { DEFAULT_SETTINGS, type AiConfig, type Channel, type Item, type Project, type Settings, type TelegramBot, type Update, type User } from '../types.js';
-import { ConflictError, type Snapshot, type Store } from './store.js';
+import {
+  DEFAULT_SETTINGS,
+  type AiConfig,
+  type Channel,
+  type Item,
+  type Project,
+  type Settings,
+  type TelegramBot,
+  type Update,
+  type User,
+} from '../types.js';
+import { ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot, type Store } from './store.js';
 
 /** In-memory store for tests and local development. */
 export class MemoryStore implements Store {
@@ -35,11 +45,13 @@ export class MemoryStore implements Store {
     this.projects.set(project.id, clone(project));
   }
 
-  async addUpdate(update: Update) {
-    this.updates.push(clone(update));
+  async putUpdate(update: Update) {
+    const i = this.updates.findIndex((u) => u.id === update.id && u.projectId === update.projectId);
+    if (i >= 0) this.updates[i] = clone(update);
+    else this.updates.push(clone(update));
   }
-  async listUpdates(projectId: string) {
-    return this.updates.filter((u) => u.projectId === projectId).map(clone);
+  async listUpdates(projectId: string, opts?: ListOptions) {
+    return liveRows(this.updates.filter((u) => u.projectId === projectId).map(clone), opts);
   }
 
   async getItem(projectId: string, id: string) {
@@ -49,8 +61,8 @@ export class MemoryStore implements Store {
   async putItem(item: Item) {
     this.items.set(item.id, clone(item));
   }
-  async listItems(projectId: string) {
-    return [...this.items.values()].filter((i) => i.projectId === projectId).map(clone);
+  async listItems(projectId: string, opts?: ListOptions) {
+    return liveRows([...this.items.values()].filter((i) => i.projectId === projectId).map(clone), opts);
   }
 
   async getSettings() {
@@ -97,14 +109,15 @@ export class MemoryStore implements Store {
     return ++this.seqs[name];
   }
 
-  async snapshot(): Promise<Snapshot> {
-    return clone({
+  async snapshot(opts?: ListOptions): Promise<Snapshot> {
+    const snap = clone({
       users: [...this.users.values()],
       projects: [...this.projects.values()],
       updates: this.updates,
       items: [...this.items.values()],
       settings: this.settings,
     });
+    return opts?.includeDeleted ? snap : liveSnapshot(snap);
   }
 }
 

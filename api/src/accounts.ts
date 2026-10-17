@@ -4,6 +4,7 @@ import {
   AdminConfirmSignUpCommand,
   AdminDeleteUserCommand,
   AdminGetUserCommand,
+  AdminSetUserPasswordCommand,
   AdminUpdateUserAttributesCommand,
   CognitoIdentityProviderClient,
   ListUsersCommand,
@@ -17,6 +18,10 @@ export interface PendingAccount {
 }
 
 export class NotPendingError extends Error {}
+/** No Cognito account for this email (the user never signed up). */
+export class NoAccountError extends Error {}
+/** The sign-up is still waiting for confirmation: approve it first. */
+export class UnconfirmedError extends Error {}
 
 export interface Accounts {
   listPending(): Promise<PendingAccount[]>;
@@ -24,6 +29,8 @@ export interface Accounts {
   approve(email: string): Promise<PendingAccount>;
   /** Deletes the unconfirmed sign-up. */
   reject(email: string): Promise<void>;
+  /** Sets a temporary password; the user must choose a new one at the next sign-in. */
+  setTemporaryPassword(email: string, password: string): Promise<void>;
 }
 
 const attr = (attrs: AttributeType[] | undefined, name: string) => attrs?.find((a) => a.Name === name)?.Value;
@@ -47,7 +54,12 @@ export class CognitoAccounts implements Accounts {
       );
       for (const u of res.Users ?? []) {
         const email = attr(u.Attributes, 'email');
-        if (email) out.push({ email: email.toLowerCase(), name: attr(u.Attributes, 'name'), createdAt: (u.UserCreateDate ?? new Date()).toISOString() });
+        if (email)
+          out.push({
+            email: email.toLowerCase(),
+            name: attr(u.Attributes, 'name'),
+            createdAt: (u.UserCreateDate ?? new Date()).toISOString(),
+          });
       }
       token = res.PaginationToken;
     } while (token);
@@ -82,11 +94,31 @@ export class CognitoAccounts implements Accounts {
     await this.pending(email);
     await this.client.send(new AdminDeleteUserCommand({ UserPoolId: this.userPoolId, Username: email }));
   }
+
+  async setTemporaryPassword(email: string, password: string) {
+    let status: string | undefined;
+    try {
+      status = (await this.client.send(new AdminGetUserCommand({ UserPoolId: this.userPoolId, Username: email }))).UserStatus;
+    } catch (e) {
+      if ((e as Error).name === 'UserNotFoundException') throw new NoAccountError(email);
+      throw e;
+    }
+    if (status === 'UNCONFIRMED') throw new UnconfirmedError(email);
+    await this.client.send(
+      new AdminSetUserPasswordCommand({ UserPoolId: this.userPoolId, Username: email, Password: password, Permanent: false }),
+    );
+  }
 }
 
 /** Tests and local dev. */
 export class MemoryAccounts implements Accounts {
-  constructor(public pendingAccounts: PendingAccount[] = []) {}
+  /** Temporary passwords set, newest last. */
+  resets: { email: string; password: string }[] = [];
+  constructor(
+    public pendingAccounts: PendingAccount[] = [],
+    /** Emails with a confirmed account; undefined = every email not pending. */
+    public confirmed?: Set<string>,
+  ) {}
   async listPending() {
     return [...this.pendingAccounts];
   }
@@ -100,5 +132,10 @@ export class MemoryAccounts implements Accounts {
   }
   async reject(email: string) {
     this.take(email);
+  }
+  async setTemporaryPassword(email: string, password: string) {
+    if (this.pendingAccounts.some((a) => a.email === email)) throw new UnconfirmedError(email);
+    if (this.confirmed && !this.confirmed.has(email)) throw new NoAccountError(email);
+    this.resets.push({ email, password });
   }
 }

@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from './env.js';
 import { audit } from './audit.js';
+import type { ProjectView } from './rules.js';
 import { l } from './i18n.js';
 import { ROLES, type Item, type Project, type Role, type Update, type User } from './types.js';
 
@@ -73,6 +74,11 @@ export function requireUser(config: AuthConfig): MiddlewareHandler<AppEnv> {
   };
 }
 
+/** PL / GL / PMO / supporter of the project. */
+export function takesPart(p: Pick<Project, 'gl' | 'pl' | 'pmo' | 'supporters'>, userId: string): boolean {
+  return p.gl === userId || p.pl === userId || p.pmo === userId || p.supporters.includes(userId);
+}
+
 const ADMIN_ROLES: Role[] = ['PMO', 'SUBMNG', 'MNG', 'ADMIN'];
 
 export const can = {
@@ -85,9 +91,13 @@ export const can = {
     can.manageUsers(u) && (target?.role !== 'ADMIN' || u.role === 'ADMIN'),
   /**
    * Whether `u` may see project `p` (pages, AI context, alerts of channels `u` created).
-   * Track F restricts OTHER to the projects they take part in.
+   * OTHER only sees projects they take part in (PL / GL / PMO / supporter) or where they own
+   * an item; `items` may hold any project's items. Without `items`, a project view's open items are used.
    */
-  viewProject: (_u: User, _p: Project) => true,
+  viewProject: (u: User, p: Project | ProjectView, items?: Pick<Item, 'projectId' | 'owner' | 'deletedAt'>[]) =>
+    u.role !== 'OTHER' ||
+    takesPart(p, u.id) ||
+    (items ?? ('openItems' in p ? p.openItems : [])).some((i) => i.projectId === p.id && i.owner === u.id && !i.deletedAt),
   /** PL and above. */
   createProject: (u: User) => u.role !== 'OTHER',
   editProject: (u: User, p: Project) => can.admin(u) || p.gl === u.id || p.pl === u.id,

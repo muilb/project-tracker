@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { useApi } from '../api';
 import { Empty, ErrorBox, HealthBadge, TypeIcon, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay } from '../format';
-import { STATE_LABEL } from '../labels';
+import { ONLY_MINE, STATE_LABEL } from '../labels';
 import { useSession } from '../session';
 import type { ProjectView } from '../types';
 import { l } from '../i18n';
@@ -12,7 +12,9 @@ export function Projects() {
   const { me, name } = useSession();
   const [params, setParams] = useSearchParams();
   const state = params.get('state') ?? 'active';
-  const scope = params.get('scope') ?? 'all';
+  // OTHER only gets the projects they take part in, so there is no "mine" / "all" choice.
+  const limited = me.role === 'OTHER';
+  const scope = limited ? 'all' : (params.get('scope') ?? 'all');
   const [q, setQ] = useState('');
   const { data, error, loading } = useApi<{ projects: ProjectView[] }>(`/projects?state=${state}&scope=${scope}`);
 
@@ -44,14 +46,18 @@ export function Projects() {
             <option value="closed">{STATE_LABEL.closed}</option>
             <option value="all">{l('Tất cả', 'すべて')}</option>
           </select>
-          <div className="segmented" role="group" aria-label={l('Phạm vi', '対象範囲')}>
-            <button className={scope === 'mine' ? 'active' : ''} onClick={() => set('scope', 'mine')}>
-              {l('Của tôi', '自分の')}
-            </button>
-            <button className={scope === 'all' ? 'active' : ''} onClick={() => set('scope', 'all')}>
-              {l('Tất cả', 'すべて')}
-            </button>
-          </div>
+          {limited ? (
+            <span className="muted">{ONLY_MINE}</span>
+          ) : (
+            <div className="segmented" role="group" aria-label={l('Phạm vi', '対象範囲')}>
+              <button className={scope === 'mine' ? 'active' : ''} onClick={() => set('scope', 'mine')}>
+                {l('Của tôi', '自分の')}
+              </button>
+              <button className={scope === 'all' ? 'active' : ''} onClick={() => set('scope', 'all')}>
+                {l('Tất cả', 'すべて')}
+              </button>
+            </div>
+          )}
           {me.role !== 'OTHER' && (
             <Link className="btn btn-primary" to="/projects/new">
               ＋ {l('Tạo dự án', 'プロジェクト作成')}
@@ -64,7 +70,10 @@ export function Projects() {
         {loading && !data ? (
           <p className="loading">{l('Đang tải…', '読み込み中…')}</p>
         ) : projects.length === 0 ? (
-          <Empty>{l('Không có dự án nào', 'プロジェクトはありません')}</Empty>
+          <Empty>
+            {l('Không có dự án nào', 'プロジェクトはありません')}
+            {limited && <> — {ONLY_MINE}</>}
+          </Empty>
         ) : (
           <div className="table-wrap">
             <table className="projects-table">

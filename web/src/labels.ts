@@ -37,3 +37,9 @@ export const STATE_LABEL: Record<ProjectState, string> = {
 export const LANGS: Lang[] = ['vi', 'ja'];
 /** Language names are shown in their own language. */
 export const LANG_LABEL: Record<Lang, string> = { vi: 'Tiếng Việt', ja: '日本語' };
+
+/** Shown to OTHER, who only see the projects they take part in. */
+export const ONLY_MINE = l(
+  'Chỉ hiện dự án bạn tham gia (PL / GL / PMO / hỗ trợ, hoặc phụ trách một mục)',
+  '参加しているプロジェクトのみ表示します（PL / GL / PMO / サポート、または項目の担当）',
+);

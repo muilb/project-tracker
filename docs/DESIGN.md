@@ -41,6 +41,7 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 
 | Thao tác | Ai được làm |
 |---|---|
+| Xem dự án | Mọi người; riêng `OTHER` chỉ xem dự án mình tham gia (xem "Quyền xem") |
 | Tạo dự án | PL trở lên (mọi vai trò trừ `OTHER`) |
 | Sửa dự án, đổi trạng thái | PMO / SUBMNG / MNG, hoặc GL / PL của dự án |
 | Ghi cập nhật, thêm/sửa vấn đề và sự kiện | Mọi người đã đăng nhập |
@@ -223,7 +224,15 @@ _Nhánh E._
 
 ### Quyền xem
 
-_Nhánh F._
+- `can.viewProject(user, project, items?)` (`api/src/auth.ts`): mọi vai trò xem tất cả, trừ `OTHER`. `OTHER` chỉ xem dự án mình **tham gia** — là PL / GL / PMO / người hỗ trợ — **hoặc** phụ trách (`owner`) ít nhất một mục chưa xoá của dự án.
+- `visibleProjects(user, snap)` / `visibleSnapshot(user, snap)` (`api/src/views.ts`) lọc dữ liệu trước khi dựng read model.
+- Áp cho:
+  - `GET /dashboard` (KPI, danh sách, thống kê theo GL chỉ đếm dự án xem được), `GET /projects`;
+  - `/projects/:id` và mọi đường con (`/updates`, `/items`, ghi cập nhật / mục, xoá): dự án không xem được trả **404** như không tồn tại;
+  - AI: `/ai/ask` chỉ gửi dự án xem được; `/ai/parse` không đề xuất cho dự án không xem được (báo "không tìm thấy");
+  - kênh nhóm: chỉ gửi tin của dự án mà **người tạo kênh** xem được, kiểm tra lúc gửi (`creatorSees` trong `routeChannels.ts`); tin mẫu `/channels/:id/test` cũng vậy. Lúc gửi, việc phụ trách mục được xét theo các mục đang mở của dự án (tin theo giờ, tóm tắt) hoặc mục vừa lưu (vấn đề Cao).
+- Không đổi: danh sách người dùng (cần để hiện tên), trang public.
+- Web: `OTHER` không có lựa chọn "Của tôi / Tất cả" ở Tổng quan và Dự án; trang ghi "chỉ hiện dự án bạn tham gia".
 
 
 ## Nhập bằng AI

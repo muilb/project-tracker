@@ -6,7 +6,7 @@ import { activeProjectViews } from '../views.js';
 import type { NotifyDeps } from './deps.js';
 import { collectAlerts } from './events.js';
 import type { Message, MessageLine } from './message.js';
-import { inScope } from './routeChannels.js';
+import { creatorSees, inScope } from './routeChannels.js';
 import { becameRedMessage, digestMessage, highIssueMessage, hourlyMessage, message, testMessage } from './render.js';
 
 export const TEST_SAMPLES = ['connect', 'became_red', 'high_issue', 'hourly', 'daily_digest'] as const;
@@ -23,7 +23,9 @@ export function sampleMessage(deps: NotifyDeps, ch: Channel, sample: TestSample,
 async function buildSample(deps: NotifyDeps, ch: Channel, sample: TestSample, now: Date): Promise<Message> {
   if (sample === 'connect') return testMessage(ch, deps.webUrl);
   const snap = await deps.store.snapshot();
-  const views = activeProjectViews(snap, now).filter((v) => inScope(ch, v)); // worst first
+  const users = new Map(snap.users.map((u) => [u.id, u]));
+  // Same projects as real alerts: in scope and visible to the channel's creator. Worst first.
+  const views = activeProjectViews(snap, now).filter((v) => inScope(ch, v) && creatorSees(ch, v, users, snap.items));
   const byId = new Map(snap.users.map((u) => [u.id, u.name]));
   const name = (id?: string) => (id ? (byId.get(id) ?? id.split('@')[0]) : '—');
   const note: MessageLine = {

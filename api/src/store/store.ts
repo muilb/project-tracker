@@ -8,6 +8,8 @@ import type {
   NotifyPrefs,
   OutboxEntry,
   Project,
+  PushConfig,
+  PushSubscriptionRecord,
   Settings,
   TelegramBot,
   Update,
@@ -113,6 +115,17 @@ export interface Store {
 
   /** Live data only, unless `includeDeleted` (the trash). */
   snapshot(opts?: ListOptions): Promise<Snapshot>;
+
+  // track H: Web Push.
+  /** VAPID keys (secret private key). */
+  getPushConfig(): Promise<PushConfig | undefined>;
+  /** Saves `config` unless keys already exist; returns the stored keys (two first requests agree on one pair). */
+  initPushConfig(config: PushConfig): Promise<PushConfig>;
+  /** Adds or replaces (same user and id) a browser / phone subscription. */
+  putPushSubscription(sub: PushSubscriptionRecord): Promise<void>;
+  getPushSubscription(userId: string, id: string): Promise<PushSubscriptionRecord | undefined>;
+  listPushSubscriptions(userId: string): Promise<PushSubscriptionRecord[]>;
+  deletePushSubscription(userId: string, id: string): Promise<void>;
 }
 
 export interface ListOptions {

@@ -18,7 +18,7 @@ const SECTIONS: [id: string, title: string][] = [
   ['ai', '8. Trợ lý AI: nhập và hỏi'],
   ['tao-du-an', '9. Tạo và sửa dự án'],
   ['thong-bao', '10. Kênh thông báo (Telegram / Teams)'],
-  ['thong-bao-ca-nhan', '11. Thông báo cá nhân (🔔, Telegram riêng)'],
+  ['thong-bao-ca-nhan', '11. Thông báo cá nhân (🔔, Telegram riêng, trình duyệt)'],
   ['public', '12. Trang public'],
   ['pmo', '13. Dành cho PMO / quản lý'],
   ['hoi-dap', '14. Câu hỏi thường gặp'],
@@ -606,9 +606,34 @@ export function HelpPage() {
             <B>Gỡ liên kết</B> để ngừng nhận qua Telegram.
           </li>
           <li>
-            <B>Gửi thử</B>: gửi một tin thử vào 🔔 (và Telegram nếu đã bật).
+            <B>Gửi thử</B>: gửi một tin thử vào 🔔 (và Telegram, thông báo trình duyệt nếu đã bật).
           </li>
           <li className="muted">Nếu thấy ▲ "chưa khả dụng" thì chức năng đó chưa được bật trên máy chủ; hộp thư web vẫn nhận tin bình thường.</li>
+        </ul>
+        <h3>Thông báo trên trình duyệt</h3>
+        <p>
+          Hiện thông báo trên máy tính hoặc điện thoại (như tin nhắn của ứng dụng), kể cả khi không mở trang. Bật riêng cho từng thiết bị
+          ở mục <B>📱 Thông báo trên trình duyệt / điện thoại</B>.
+        </p>
+        <ul className="howto">
+          <li>
+            Trên thiết bị muốn nhận, bấm <B>Bật trên thiết bị này</B> → trình duyệt hỏi quyền → chọn <b>Cho phép</b>. Nhãn đổi thành{' '}
+            <b>● Đã bật trên thiết bị này</b> và thiết bị hiện trong danh sách (ví dụ "Chrome · Windows").
+          </li>
+          <li>
+            Ô <B>Gửi thông báo tới các thiết bị dưới đây</B> bật / tắt cho mọi thiết bị (nhớ bấm <B>Lưu</B>). Bấm <B>Gỡ</B> để bỏ một thiết bị.
+          </li>
+          <li>
+            <b>iPhone / iPad</b> (iOS 16.4 trở lên): mở trang bằng Safari → nút Chia sẻ → <b>Thêm vào MH chính</b>, mở ứng dụng từ Màn hình
+            chính rồi mới bật được. Trang hiện ▲ <b>Cần thêm vào Màn hình chính</b> nếu chưa làm bước này.
+          </li>
+          <li>
+            Nếu thấy ✕ <b>Đã bị chặn trên thiết bị này</b>: bấm biểu tượng 🔒 cạnh địa chỉ trang → Thông báo → Cho phép, rồi tải lại trang.
+            Cửa sổ ẩn danh không nhận được thông báo.
+          </li>
+          <li>
+            Theo cùng giờ yên lặng và tạm dừng như Telegram. Khi đăng xuất, trình duyệt đó tự ngừng nhận thông báo của bạn (máy dùng chung).
+          </li>
         </ul>
         <h3>Loại tin</h3>
         <p>Chọn loại tin muốn nhận; dưới mỗi ô có ghi khi nào tin được gửi. Mặc định theo vai trò:</p>

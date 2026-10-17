@@ -20,6 +20,8 @@ import {
   type NotifyPrefs,
   type OutboxEntry,
   type Project,
+  type PushConfig,
+  type PushSubscriptionRecord,
   type Settings,
   type TelegramBot,
   type Update,
@@ -53,10 +55,11 @@ import {
  *   INBOX#<email>     <iso time>#<id>   (web inbox, expires via `ttl` after INBOX_DAYS)
  *   OUTBOX            <iso due>#<id>    (messages waiting for delivery, expire after OUTBOX_DAYS)
  *   DELIVERY#<chan>   <iso time>#<id>   (delivery attempts, expire after DELIVERY_LOG_DAYS)
- *   CONFIG            SETTINGS | TELEGRAM | SEQ#project | SEQ#item | SEQ#channel
+ *   CONFIG            SETTINGS | TELEGRAM | AI | PUSH | SEQ#project | SEQ#item | SEQ#channel
+ *   PUSH#<email>      <subscription id> (Web Push browsers / phones, track H)
  * Every row also has `kind` so a full scan can be grouped cheaply.
  */
-type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT' | 'NOTIFY' | 'INBOX' | 'OUTBOX' | 'DELIVERY';
+type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT' | 'NOTIFY' | 'INBOX' | 'OUTBOX' | 'DELIVERY' | 'PUSH';
 
 const ttlAfter = (iso: string, days: number) => Math.floor(Date.parse(iso) / 1000) + days * 86_400;
 
@@ -367,6 +370,33 @@ export class DynamoStore implements Store {
       start = res.LastEvaluatedKey;
     } while (start);
     return opts?.includeDeleted ? snap : liveSnapshot(snap);
+  }
+
+  // track H: Web Push.
+  async getPushConfig() {
+    return (await this.get<{ value: PushConfig }>('CONFIG', 'PUSH'))?.value;
+  }
+  async initPushConfig(config: PushConfig) {
+    try {
+      await this.put('CONFIG', 'PUSH', 'CONFIG', { value: config }, true);
+      return config;
+    } catch (e) {
+      if (!(e instanceof ConflictError)) throw e;
+      return (await this.getPushConfig())!;
+    }
+  }
+  putPushSubscription(sub: PushSubscriptionRecord) {
+    return this.put(`PUSH#${sub.userId}`, sub.id, 'PUSH', sub);
+  }
+  getPushSubscription(userId: string, id: string) {
+    return this.get<PushSubscriptionRecord>(`PUSH#${userId}`, id);
+  }
+  async listPushSubscriptions(userId: string) {
+    const subs = await this.latest<PushSubscriptionRecord>(`PUSH#${userId}`, 100);
+    return subs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+  async deletePushSubscription(userId: string, id: string) {
+    await this.db.send(new DeleteCommand({ TableName: this.table, Key: { pk: `PUSH#${userId}`, sk: id } }));
   }
 }
 

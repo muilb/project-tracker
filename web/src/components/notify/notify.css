@@ -253,3 +253,11 @@ p.notify-unavailable {
 .watch-btn > span[aria-hidden] {
   color: var(--warning);
 }
+
+/* ---- Browser / phone push (track H) ---- */
+.notify-devices {
+  margin-top: 0.5rem;
+}
+.notify-devices .row-title {
+  flex-wrap: wrap;
+}

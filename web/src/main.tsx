@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { App } from './App';
 import { loadConfig } from './config';
+import { registerServiceWorker } from './push';
 import './styles.css';
+
+registerServiceWorker();
 
 const root = createRoot(document.getElementById('root')!);
 

@@ -91,6 +91,7 @@ export async function savePrefs(current: MyPrefs, change: Partial<MyPrefs>): Pro
     schedule: next.schedule,
     pausedUntil: next.pausedUntil ?? null,
     lang: next.lang,
+    push: next.push ?? false, // track H
   });
   window.dispatchEvent(new Event('notify-prefs-changed'));
   return r.prefs;

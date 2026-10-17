@@ -4,8 +4,15 @@ import { l } from '../../i18n';
 import { LANG_LABEL } from '../../labels';
 import { useSession } from '../../session';
 import { ChannelExtras, type ChannelFlags } from './ChannelExtras';
+import { resolveSchedule } from './ScheduleFields';
 import { EVENT_LABEL, KIND_LABEL, SAMPLE_LABEL, scopeLabel, type PublicChannel } from './shared';
 import { TestSender } from './TestSender';
+
+/** " · yên lặng 22h–7h" from the channel's schedule (legacy channels: the quietHours switch). */
+function quietLabel(ch: PublicChannel) {
+  const { quietFrom, quietTo } = resolveSchedule(ch);
+  return quietFrom === quietTo ? '' : l(` · yên lặng ${quietFrom}h–${quietTo}h`, ` · 夜間停止 ${quietFrom}:00–${quietTo}:00`);
+}
 
 export function ChannelList({
   channels,
@@ -54,7 +61,7 @@ export function ChannelList({
                 ? `${l('Nhóm Telegram', 'Telegram グループ')}: ${ch.telegramChatTitle ?? ch.telegramChatId}`
                 : ch.webhookUrlMasked}{' '}
               · {l('tạo bởi', '作成者')} {name(ch.createdBy)} · {LANG_LABEL[ch.lang ?? 'vi']}
-              {ch.quietHours ? l(' · yên lặng 22h–7h', ' · 夜間停止 22:00–07:00') : ''}
+              {quietLabel(ch)}
               {ch.lastSentAt ? ` · ${l('gửi lần cuối', '最終送信')} ${fmtDateTime(ch.lastSentAt)}` : ''}
             </small>
             {ch.lastError && (

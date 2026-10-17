@@ -17,7 +17,7 @@ const SECTIONS: [id: string, title: string][] = [
   ['muc', '7. Vấn đề · Sự kiện · Mốc'],
   ['ai', '8. Trợ lý AI: nhập và hỏi'],
   ['tao-du-an', '9. Tạo và sửa dự án'],
-  ['thong-bao', '10. Kênh thông báo (Telegram / Teams)'],
+  ['thong-bao', '10. Kênh thông báo (Telegram / Teams / Slack)'],
   ['thong-bao-ca-nhan', '11. Thông báo cá nhân (🔔, Telegram riêng, trình duyệt)'],
   ['public', '12. Trang public'],
   ['pmo', '13. Dành cho PMO / quản lý'],
@@ -494,15 +494,14 @@ export function HelpPage() {
         <h3>Nhận được những gì</h3>
         <ul className="howto">
           <li>
-            <b>Ngay lập tức</b>: dự án chuyển Đỏ; vấn đề ưu tiên Cao mới.
+            <b>Ngay lập tức</b>: dự án chuyển Đỏ; vấn đề ưu tiên Cao mới (nhiều vấn đề trong 2 phút gộp thành một tin).
           </li>
           <li>
-            <b>Mỗi giờ</b> (gộp thành một tin): trễ cập nhật (nhắc lại mỗi 24 giờ), mục quá hạn, mốc / sự kiện ngày mai.
+            <b>Mỗi giờ</b> (gộp thành một tin): trễ cập nhật (nhắc lại mỗi 24 giờ), mục quá hạn, mốc / sự kiện sắp tới (mặc định ngày mai, xem Lịch gửi).
           </li>
           <li>
-            <b>8h sáng</b>: tóm tắt trong ngày.
+            <b>Tóm tắt</b>: mặc định 8h sáng mỗi ngày (đổi giờ / kiểu ở Lịch gửi).
           </li>
-          <li>Giờ yên lặng 22h–7h: không gửi tin nhắc mỗi giờ (tin Đỏ và vấn đề Cao vẫn gửi ngay). Có thể tắt cho từng kênh.</li>
           <li>
             <B>Ngôn ngữ tin nhắn</B>: mỗi kênh chọn tiếng Việt hoặc tiếng Nhật (mặc định theo ngôn ngữ của người đăng ký). Sửa kênh để đổi.
           </li>
@@ -537,17 +536,17 @@ export function HelpPage() {
         </ul>
         <h3>Gửi thử</h3>
         <p>
-          Ở mỗi kênh, chọn mẫu tin (kết nối, chuyển Đỏ, vấn đề Cao, nhắc mỗi giờ, tóm tắt 8h) rồi bấm <B>Gửi thử</B> để xem trước tin thật
+          Ở mỗi kênh, chọn mẫu tin (kết nối, chuyển Đỏ, vấn đề Cao, nhắc mỗi giờ, tóm tắt) rồi bấm <B>Gửi thử</B> để xem trước tin thật
           trông thế nào. Tin mẫu có chữ <b>[Mẫu]</b> và không ảnh hưởng thông báo thật. Kênh có thể <B>Sửa</B>, <B>Tắt</B> hoặc <B>Xoá</B>.
         </p>
         <h3>Lỗi gửi &amp; nhật ký</h3>
         <ul className="howto">
           <li>
-            Gửi lỗi (Teams / Telegram tạm trục trặc) thì hệ thống tự gửi lại sau 1, 5, 15, 60 phút (tối đa 6 lần). Tin nhắc mỗi giờ không
+            Gửi lỗi (Teams / Slack / Telegram tạm trục trặc) thì hệ thống tự gửi lại sau 1, 5, 15, 60 phút (tối đa 6 lần). Tin nhắc mỗi giờ không
             gửi lại riêng mà vào lượt của giờ sau.
           </li>
           <li>
-            Lỗi không thể tự hết (Workflow đã bị xoá, bot bị đuổi khỏi nhóm, nhóm không còn) thì không gửi lại. Dòng ⚠ ở kênh ghi rõ lý do
+            Lỗi không thể tự hết (Workflow hoặc webhook Slack đã bị xoá, kênh Slack đã lưu trữ, bot bị đuổi khỏi nhóm, nhóm không còn) thì không gửi lại. Dòng ⚠ ở kênh ghi rõ lý do
             và cách sửa.
           </li>
           <li>
@@ -573,7 +572,10 @@ export function HelpPage() {
             Kênh Teams: <B>Sửa</B> → dán URL webhook mới (để trống = giữ URL cũ) → <B>Lưu</B> → <B>Gửi thử</B>. Nhớ xoá Workflow cũ trong
             Teams.
           </li>
-          <li>Loại kênh (Telegram ↔ Teams) không đổi được: đăng ký kênh mới rồi xoá kênh cũ.</li>
+          <li>
+            Kênh Slack: <B>Sửa</B> → dán URL mới (để trống = giữ URL cũ) → <B>Lưu</B>; hệ thống gửi tin thử trước khi lưu.
+          </li>
+          <li>Loại kênh (Telegram / Teams / Slack) không đổi được: đăng ký kênh mới rồi xoá kênh cũ.</li>
         </ul>
         <p className="muted">Teams cũng được hỗ trợ (dán URL webhook của Workflows) khi công ty cho phép dùng Power Automate.</p>
       </H>
@@ -602,11 +604,11 @@ export function HelpPage() {
           </li>
           <li>
             <b>Telegram riêng</b>: bấm <B>Kết nối Telegram</B> → <B>Mở @bot trong Telegram</B> → trong Telegram bấm <b>Start</b> → quay lại
-            web bấm <B>Tôi đã bấm Start</B>. Bot gửi một tin thử là xong. Sau đó chọn <B>Gửi cả vào Telegram</B> và bấm <B>Lưu</B>.{' '}
+            web bấm <B>Tôi đã bấm Start</B>. Bot gửi một tin thử là xong; ô <B>Gửi cả vào Telegram</B> được bật và lưu sẵn (bỏ chọn rồi <B>Lưu</B> để tạm ngừng).{' '}
             <B>Gỡ liên kết</B> để ngừng nhận qua Telegram.
           </li>
           <li>
-            <B>Gửi thử</B>: gửi một tin thử vào 🔔 (và Telegram, thông báo trình duyệt nếu đã bật).
+            <B>Gửi thử</B>: gửi một tin thử vào 🔔 (và Telegram nếu đã kết nối, kể cả khi đang tắt; thông báo trình duyệt nếu đã bật).
           </li>
           <li className="muted">Nếu thấy ▲ "chưa khả dụng" thì chức năng đó chưa được bật trên máy chủ; hộp thư web vẫn nhận tin bình thường.</li>
         </ul>
@@ -642,7 +644,7 @@ export function HelpPage() {
             <b>PL</b>: sắp đến hạn cập nhật (còn 4 giờ), dự án của tôi trễ cập nhật (nhắc mỗi 24 giờ).
           </li>
           <li>
-            <b>GL, PMO</b>: trễ kéo dài (trễ từ 2 lần chu kỳ báo GL, từ 4 lần báo PMO), cần hỗ trợ; GL thêm đổi trạng thái.
+            <b>GL, PMO / quản lý</b>: trễ kéo dài (trễ từ 2 lần chu kỳ báo GL, từ 4 lần báo PMO), cần hỗ trợ; GL thêm đổi trạng thái.
           </li>
           <li>
             <b>Mọi người</b>: được giao mục, mục của tôi đến hạn (ngày mai / quá hạn), dự án theo dõi chuyển Đỏ hoặc có vấn đề Cao mới.
@@ -656,7 +658,11 @@ export function HelpPage() {
         </p>
         <h3>Lịch và tạm dừng</h3>
         <ul className="howto">
-          <li>Giờ yên lặng 22h–7h: không nhận tin nhắc (tin Đỏ và vấn đề Cao vẫn gửi ngay). Có thể bỏ chọn.</li>
+          <li>
+            Giờ yên lặng (mặc định 22h–7h, chọn được giờ từ / đến, có thể bỏ chọn): nhắc việc theo giờ chờ đến hết giờ yên lặng; tin ngay
+            (Đỏ, vấn đề Cao, được giao mục…) vẫn vào 🔔 nhưng không gửi Telegram / trình duyệt. Ô "Không gửi … thứ 7, Chủ nhật" áp dụng giống
+            vậy cho hai ngày cuối tuần.
+          </li>
           <li>
             <B>Tạm dừng đến hết ngày</B>: chọn ngày (ví dụ khi nghỉ phép), không nhận tin nào đến hết ngày đó. <B>Bỏ tạm dừng</B> để nhận lại.
             Đầu trang hiện ● Đang nhận hoặc ▲ Tạm dừng.
@@ -684,7 +690,7 @@ export function HelpPage() {
           </li>
           <li>
             Nút dưới tin: <B>✓ Đóng mục</B> (khi được giao mục, hoặc mục mình phụ trách đến hạn) đóng mục như trên web;{' '}
-            <B>⏰ Hoãn nhắc 1 ngày</B> tạm không nhắc lại các việc trong tin đó đến hôm sau.
+            <B>⏰ Hoãn nhắc 1 ngày</B> tạm không nhắc lại các việc trong tin đó trong 24 giờ.
           </li>
           <li>
             <b>Ghi chú bằng chat</b> (PL trở lên): gõ tự do, ví dụ "P03 xong UAT, chuyển xanh". Bot dùng AI đề xuất các thay đổi, bấm{' '}
@@ -754,9 +760,12 @@ export function HelpPage() {
             Telegram hiện trạng thái webhook, nếu báo ▲ thì bấm <B>Kết nối lại webhook</B>.
           </li>
           <li>
-            <b>Microsoft Teams</b>: không có gì để cài chung — mỗi kênh Teams đăng ký ở trang Kênh thông báo với URL webhook riêng.
+            <b>Microsoft Teams / Slack</b>: không có gì để cài chung — mỗi kênh đăng ký ở trang Kênh thông báo với URL webhook riêng.
           </li>
-          <li>Tần suất cập nhật theo trạng thái, ngưỡng "sắp tới", số ngày hiện trên danh sách sắp tới.</li>
+          <li>
+            Tần suất cập nhật theo trạng thái, ngưỡng "sắp tới", số ngày hiện trên danh sách sắp tới; <b>Mức chi tiết tối đa của kênh nhóm</b>{' '}
+            (Theo từng kênh / Luôn rút gọn).
+          </li>
         </ul>
         <p className="muted">Không bao giờ gửi API key hay token qua chat / email — chỉ dán vào trang Cài đặt.</p>
         <h3>Quản trị hệ thống (ADMIN)</h3>
@@ -768,8 +777,8 @@ export function HelpPage() {
           </li>
           <li>Chỉ ADMIN cấp được vai trò ADMIN. Không ai tự đổi vai trò của mình, nên hệ thống luôn còn ít nhất một ADMIN.</li>
           <li>
-            <B>Cài đặt → Nhật ký quản trị</B>: ai đổi vai trò, duyệt / từ chối tài khoản, đặt lại mật khẩu, cài key / bot, xoá dự án, khôi
-            phục — lúc nào.
+            <B>Cài đặt → Nhật ký quản trị</B>: ai đổi vai trò, thêm người dùng, duyệt / từ chối tài khoản, đặt lại mật khẩu, cài key / bot, xoá dự
+            án, khôi phục, tạo / sửa / xoá / chuyển người phụ trách kênh thông báo, kênh tự tắt do lỗi — lúc nào.
           </li>
         </ul>
       </H>

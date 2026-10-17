@@ -42,6 +42,7 @@ export function ScheduleFields({
   digest = true,
   milestones = true,
   pause = true,
+  personal = false,
 }: {
   value: Timing;
   onChange: (t: Timing) => void;
@@ -51,6 +52,8 @@ export function ScheduleFields({
   milestones?: boolean;
   /** Show the pause date (off where the page has its own, as on "My notifications"). */
   pause?: boolean;
+  /** Personal messages: during quiet hours immediate alerts reach 🔔 only, not Telegram / the browser. */
+  personal?: boolean;
 }) {
   const s = resolveSchedule(value);
   const quiet = s.quietFrom !== s.quietTo;
@@ -72,10 +75,15 @@ export function ScheduleFields({
             checked={quiet}
             onChange={(e) => set(e.target.checked ? { quietFrom: 22, quietTo: 7 } : { quietFrom: 0, quietTo: 0 })}
           />{' '}
-          {l(
-            'Giờ yên lặng: không gửi nhắc nhở mỗi giờ (cảnh báo Đỏ và vấn đề Cao vẫn gửi ngay)',
-            '夜間停止: 毎時のリマインドを送らない（「赤」と優先度「高」の課題は即時送信）',
-          )}
+          {personal
+            ? l(
+                'Giờ yên lặng: nhắc việc chờ đến hết giờ yên lặng; tin ngay (Đỏ, vấn đề Cao…) vẫn vào 🔔 nhưng không gửi Telegram / trình duyệt',
+                '夜間停止: リマインドは夜間停止の終了まで待ちます。即時の通知（「赤」、優先度「高」など）は 🔔 にのみ届き、Telegram・ブラウザには送りません',
+              )
+            : l(
+                'Giờ yên lặng: không gửi nhắc nhở mỗi giờ (cảnh báo Đỏ và vấn đề Cao vẫn gửi ngay)',
+                '夜間停止: 毎時のリマインドを送らない（「赤」と優先度「高」の課題は即時送信）',
+              )}
         </label>
         {quiet && (
           <div className="form-grid">

@@ -11,8 +11,8 @@ export const EVENT_LABEL: Record<AlertEvent, string> = {
   high_issue: l('Vấn đề ưu tiên Cao mới (ngay lập tức)', '優先度「高」の新しい課題（即時）'),
   overdue: l('Mục quá hạn (mỗi ngày một lần)', '期限超過の項目（1 日 1 回）'),
   late_update: l('Trễ cập nhật (nhắc mỗi 24 giờ)', '報告遅れ（24 時間ごとにリマインド）'),
-  milestone_soon: l('Mốc / sự kiện vào ngày mai', '明日のマイルストーン / イベント'),
-  daily_digest: l('Tóm tắt lúc 8h sáng', '朝 8 時のサマリー'),
+  milestone_soon: l('Mốc / sự kiện sắp tới (theo Lịch gửi)', '近日のマイルストーン / イベント（送信スケジュールに従う）'),
+  daily_digest: l('Tóm tắt (theo Lịch gửi)', 'サマリー（送信スケジュールに従う）'),
 };
 export const KIND_LABEL: Record<ChannelKind, string> = { telegram: 'Telegram', teams: 'Teams', slack: 'Slack' };
 
@@ -21,7 +21,7 @@ export const SAMPLE_LABEL: Record<TestSample, string> = {
   became_red: l('Mẫu: dự án chuyển Đỏ', 'サンプル: プロジェクトが「赤」に'),
   high_issue: l('Mẫu: vấn đề ưu tiên Cao', 'サンプル: 優先度「高」の課題'),
   hourly: l('Mẫu: nhắc mỗi giờ', 'サンプル: 毎時リマインド'),
-  daily_digest: l('Mẫu: tóm tắt 8h sáng', 'サンプル: 朝 8 時のサマリー'),
+  daily_digest: l('Mẫu: tóm tắt', 'サンプル: サマリー'),
 };
 
 export function scopeLabel(scope: ChannelScope, name: (id?: string) => string) {

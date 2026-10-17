@@ -1,12 +1,14 @@
 # Kế hoạch: thông báo cá nhân, Slack, độ tin cậy, lịch gửi, giới hạn OTHER
 
+> **Trạng thái:** đã xong. F0 và các nhánh A–H đã merge (PR muilb/project-tracker#21 đến #29); Z (rà soát cuối) là PR sau #29. Các phần bên dưới là kế hoạch như đã viết lúc giao việc, một số chi tiết đã thay đổi khi làm. Hành vi thực tế: xem code và `docs/DESIGN.md` (mục Thông báo).
+
 Kế hoạch này chia việc để **nhiều phiên làm song song**. Đợt 0 là nền chung, làm tuần tự, merge trước. Sau đó các nhánh A–F của Đợt 1 chạy đồng thời. Mỗi nhánh có danh sách file riêng nên ít conflict.
 
 Đã quyết định:
 - Email: chưa làm.
 - Slack: thêm (webhook vào kênh Slack).
 - Vai trò OTHER bị giới hạn xem dự án. Kênh thông báo theo đúng quyền xem của người tạo kênh.
-- Web Push và Telegram hai chiều để Đợt 2.
+- Web Push và Telegram hai chiều làm ở Đợt 2 (đã xong: H, G).
 
 ## Sơ đồ phụ thuộc
 
@@ -41,7 +43,7 @@ Kế hoạch này chia việc để **nhiều phiên làm song song**. Đợt 0 
 
 Mục tiêu: đặt hợp đồng (kiểu dữ liệu, kho lưu, đường đi của sự kiện, khung giao diện) để các nhánh sau chỉ việc điền vào. **Hành vi người dùng thấy không đổi.** Tin gửi ngay vẫn gửi trực tiếp trong request; hàng đợi chỉ dùng cho tin gửi trễ, gộp tin, gửi lại.
 
-**Trạng thái: đã làm** (PR muilb/project-tracker#21). Các mục dưới đây mô tả đúng code đã có.
+**Trạng thái: đã làm** (PR muilb/project-tracker#21). Các mục dưới đây mô tả code lúc F0 merge; các nhánh sau đã điền tiếp (501, `return []`, "chưa hỗ trợ"… không còn đúng).
 
 ### F0.1 Kiểu dữ liệu (`api/src/types.ts`)
 

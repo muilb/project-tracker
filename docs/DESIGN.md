@@ -3,7 +3,7 @@
 ## Mục tiêu
 Thay file Excel theo dõi dự án bằng một hệ thống web nhỏ trên AWS:
 - nhập nhanh, kể cả bằng ngôn ngữ tự nhiên (AI);
-- **chủ động cảnh báo** qua kênh Teams mà người dùng đăng ký;
+- **chủ động cảnh báo** qua kênh Teams / Telegram / Slack mà người dùng đăng ký, và thông báo cá nhân (🔔, Telegram riêng, trình duyệt);
 - dashboard gọn theo người đăng nhập, cộng thêm một dashboard **public** về sự kiện và mức khẩn cấp.
 
 Ưu tiên làm nhanh và chi phí thấp; bảo mật ở mức vừa đủ.
@@ -13,8 +13,9 @@ Thay file Excel theo dõi dự án bằng một hệ thống web nhỏ trên AWS
 ```
 CloudFront ─ S3            web React; trang /public không cần đăng nhập
 API Gateway HTTP API ─ Lambda "api" (Hono) ─ DynamoDB (1 bảng)
-   └ Cognito JWT authorizer (trừ GET /public, GET /health)
-EventBridge (mỗi giờ, phút 05) ─ Lambda "cron" → Teams
+   └ Cognito JWT authorizer (trừ GET /public, GET /health, POST /telegram/webhook)
+EventBridge (mỗi giờ, phút 05) ─ Lambda "cron" → Teams / Telegram / Slack / Web Push
+EventBridge (mỗi phút) ─ Lambda "FlushFn" (hàng đợi OUTBOX: gộp tin, gửi lại)
 Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 ```
 
@@ -23,6 +24,22 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
   - Email nằm trong `ADMIN_EMAILS` nhận vai trò ghi kèm (`email:MNG`), hoặc PMO nếu không ghi vai trò.
   - Mail công ty hay chặn thư xác nhận của Cognito (`no-reply@verificationemail.com`). Vì vậy PMO / MNG có thể **duyệt** tài khoản chờ xác nhận ở trang Người dùng; menu hiện số tài khoản đang chờ. Lambda API được cấp các quyền `ListUsers`, `AdminGetUser`, `AdminConfirmSignUp`, `AdminUpdateUserAttributes`, `AdminDeleteUser`, chỉ trên user pool này.
 - Dữ liệu ít (vài chục dự án), nên dashboard đọc toàn bộ bảng rồi tính trong bộ nhớ.
+- Một bảng DynamoDB (`pk` / `sk`, chi tiết ở `api/src/store/dynamo.ts`):
+
+  | `pk` | `sk` | Nội dung |
+  |---|---|---|
+  | `USER#<email>` | `USER` | Người dùng, vai trò |
+  | `PROJECT#<id>` | `PROJECT` · `UPDATE#<giờ>#<id>` · `ITEM#<id>` | Dự án, cập nhật, mục |
+  | `CHANNEL#<id>` | `CHANNEL` | Kênh nhóm |
+  | `SENT#<khoá>` | `SENT` | Chống trùng cảnh báo (TTL) |
+  | `AUDIT` | `<giờ>#<id>` | Nhật ký quản trị (400 ngày) |
+  | `NOTIFY` | `<email>` | Cài đặt thông báo cá nhân |
+  | `INBOX#<email>` | `<giờ>#<id>` | Hộp thư web (60 ngày) |
+  | `OUTBOX` | `<giờ đến hạn>#<id>` | Hàng đợi gửi (7 ngày) |
+  | `DELIVERY#<kênh>` | `<giờ>#<id>` | Nhật ký gửi (30 ngày) |
+  | `PUSH#<email>` | `<id>` | Thiết bị Web Push |
+  | `TEMP#<khoá>` | `TEMP` | Trạng thái ngắn hạn của bot Telegram (TTL) |
+  | `CONFIG` | `SETTINGS` · `TELEGRAM` · `AI` · `PUSH` · `SEQ#…` | Cài đặt, bí mật, bộ đếm mã |
 - `GET /public` không cần đăng nhập:
   - chỉ trả về các trường được phép công khai;
   - được cache 30 giây;
@@ -47,11 +64,12 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 | Ghi cập nhật, thêm/sửa vấn đề và sự kiện | Mọi người đã đăng nhập |
 | Thêm/sửa người dùng, duyệt tài khoản, đặt lại mật khẩu | PMO / MNG / ADMIN (tài khoản `ADMIN` thì chỉ ADMIN) |
 | Sửa cài đặt (tần suất, ngưỡng), xoá dự án, thùng rác | PMO / SUBMNG / MNG / ADMIN |
+| Đăng ký kênh thông báo | Mọi người; sửa / xoá / gửi thử / nhật ký / chuyển người phụ trách: người tạo hoặc PMO / SUBMNG / MNG / ADMIN (thấy mọi kênh, nhãn Mồ côi) |
 | API key AI, bot Telegram, cấp vai trò `ADMIN`, nhật ký quản trị | Chỉ `ADMIN` |
 
 `ADMIN` đầu tiên: `ADMIN_EMAILS` (biến GitHub) có `email:ADMIN` → lần đăng nhập sau tài khoản đó được nâng lên ADMIN (các vai trò khác trong `ADMIN_EMAILS` chỉ áp dụng ở lần đăng nhập đầu). Không ai tự đổi vai trò của mình nên luôn còn ít nhất một ADMIN.
 
-Nhật ký quản trị (`GET /audit`, ADMIN): đổi vai trò, thêm / duyệt / từ chối tài khoản, đặt lại mật khẩu, cài / gỡ key AI và bot, xoá dự án, khôi phục. Lưu ở `pk = AUDIT`, tự xoá sau 400 ngày (TTL).
+Nhật ký quản trị (`GET /audit`, ADMIN): đổi vai trò, thêm / duyệt / từ chối tài khoản, đặt lại mật khẩu, cài / gỡ key AI và bot, xoá dự án, khôi phục, tạo / sửa / xoá / chuyển kênh (`channel_*`), kênh tự tắt (`channel_auto_pause`, người thực hiện `system`). Lưu ở `pk = AUDIT`, tự xoá sau 400 ngày (TTL).
 
 ## Quy tắc (giữ nguyên từ file Excel) — `api/src/rules.ts`
 
@@ -76,7 +94,7 @@ Nhật ký quản trị (`GET /audit`, ADMIN): đổi vai trò, thêm / duyệt 
 
 ## API
 
-Mọi endpoint, trừ `/health` và `/public`, cần header `Authorization: <Cognito ID token>`.
+Mọi endpoint, trừ `/health`, `/public` và `POST /telegram/webhook` (kiểm tra secret token), cần header `Authorization: <Cognito ID token>`.
 
 Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng Nhật, còn lại → tiếng Việt); web luôn gửi ngôn ngữ người dùng đang chọn.
 
@@ -98,14 +116,14 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET | `/users/pending` | PMO / MNG: các tài khoản đã đăng ký nhưng chưa xác nhận email (đọc từ Cognito) |
 | POST | `/users/pending/:email/approve` | PMO / MNG / ADMIN (vai trò `ADMIN` thì chỉ ADMIN): xác nhận tài khoản và đánh dấu email đã xác minh. Body `{ "role"?: … }`; nếu không truyền vai trò thì lấy theo `ADMIN_EMAILS`, không có thì PL |
 | POST | `/users/pending/:email/reject` | PMO / MNG: xoá đăng ký chưa xác nhận |
-| GET / PUT | `/settings` | Tần suất cập nhật và các ngưỡng |
-| GET / POST | `/channels` | Kênh thông báo `kind: teams` (`webhookUrl`) hoặc `kind: telegram` (`connectCode`). Mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được. `lang` (`vi` / `ja`) là ngôn ngữ tin gửi vào kênh, mặc định theo ngôn ngữ người tạo |
+| GET / PUT | `/settings` | Tần suất cập nhật và các ngưỡng, `maxChannelDetail` (PMO / quản lý) |
+| GET / POST | `/channels` | Kênh thông báo `kind: teams` / `slack` (`webhookUrl`) hoặc `kind: telegram` (`connectCode`); thêm `detail`, `schedule`, `pausedUntil`. Mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được. `lang` (`vi` / `ja`) là ngôn ngữ tin gửi vào kênh, mặc định theo ngôn ngữ người tạo |
 | GET / PUT / DELETE | `/settings/telegram` | Trạng thái bot (`configured`, `username`, `webhook: { active, url?, error? }`; ai đăng nhập cũng xem được; ADMIN thấy thêm `pendingUpdates`, `lastError`, `lastErrorAt`, `elsewhere` lấy từ `getWebhookInfo`). Cài token (`PUT { token }`: kiểm tra bằng `getMe`, rồi `setWebhook` tới `<URL API>/telegram/webhook` với `secret_token` ngẫu nhiên) hoặc gỡ bot (`deleteWebhook`): ADMIN. `setWebhook` lỗi thì bot vẫn được lưu, chạy một chiều (`webhook.error`) |
 | POST | `/settings/telegram/webhook` | ADMIN: đặt lại webhook cho bot đã lưu (bot cài trước khi có webhook, hoặc sau khi lỗi), secret mới |
 | POST | `/telegram/webhook` | **Không cần đăng nhập** — Telegram gọi. Từ chối (401, body `{}`) nếu header `X-Telegram-Bot-Api-Secret-Token` không khớp (so sánh thời gian hằng). Hợp lệ thì luôn trả `200 { ok: true }`, không bao giờ trả dữ liệu; xem "Telegram hai chiều" |
-| PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, ngôn ngữ tin `lang`, bật / tắt, URL Teams; Telegram: `connectCode` để chuyển sang nhóm khác — tìm nhóm như khi tạo và gửi tin thử) hoặc xoá: người tạo, PMO / quản lý |
+| PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng / `schedule` / `pausedUntil`, `detail`, ngôn ngữ tin `lang`, bật / tắt, URL Teams / Slack — đổi URL Slack thì gửi tin thử trước khi lưu; Telegram: `connectCode` để chuyển sang nhóm khác — tìm nhóm như khi tạo và gửi tin thử) hoặc xoá: người tạo, PMO / quản lý |
 | POST | `/channels/:id/test` | Gửi tin thử. Body `{ sample }`: `connect` (mặc định), hoặc mẫu tin thật lấy từ dữ liệu hiện tại trong phạm vi kênh: `became_red`, `high_issue`, `hourly`, `daily_digest`. Tiêu đề có `[Mẫu]`, không đánh dấu đã gửi nên không ảnh hưởng cảnh báo thật |
-| GET / PUT / DELETE | `/settings/ai` | Trạng thái API key Claude (`configured`, `model`). Cài (`PUT { apiKey }`, được kiểm tra với Claude trước khi lưu) hoặc gỡ: PMO / quản lý. Key không bao giờ được trả về |
+| GET / PUT / DELETE | `/settings/ai` | Trạng thái API key Claude (`configured`, `model`). Cài (`PUT { apiKey }`, được kiểm tra với Claude trước khi lưu) hoặc gỡ: ADMIN. Key không bao giờ được trả về |
 | POST | `/ai/parse` | PL trở lên. Body `{ text, projectId? }` (≤ 4000 ký tự; `projectId` = dự án mặc định khi ghi chú không nêu dự án). Không xác định được dự án thì đề xuất vẫn được trả về với `needsProject: true` để người dùng chọn. Trả về `proposals` (đề xuất `update` / `item` / `item_status` / `item_update` / `project_create` / `project_update`, đã kiểm tra hợp lệ, có `error` nếu không ghi được) và `questions`. **Không ghi gì** — web hiển thị để người dùng sửa / bỏ chọn, rồi tự gọi các endpoint ở trên |
 | POST | `/ai/ask` | Mọi người đã đăng nhập. Body `{ messages }`: hội thoại xen kẽ `user` / `assistant`, kết thúc bằng câu hỏi, tối đa 20 tin. Trả về `{ answer, truncated }`. Chỉ đọc |
 | DELETE | `/projects/:id` | Xoá mềm dự án: PMO / quản lý |
@@ -113,7 +131,7 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | DELETE | `/projects/:id/updates/:updateId` | Xoá mềm cập nhật: người viết trong 24 giờ, hoặc PMO / quản lý |
 | GET | `/trash` | PMO / quản lý: dự án, mục, cập nhật đã xoá (ai xoá, lúc nào) |
 | POST | `/trash/restore` | PMO / quản lý. Body `{ kind: project \| item \| update, projectId, id? }`. Khôi phục mục của dự án đang bị xoá thì phải khôi phục dự án trước |
-| POST | `/users/:email/reset-password` | PMO / MNG (không cho chính mình). Đặt mật khẩu tạm trong Cognito (`Permanent: false`), trả về `{ password }` một lần; lần đăng nhập sau Cognito yêu cầu `NEW_PASSWORD_REQUIRED`, web hiện bước đặt mật khẩu mới |
+| POST | `/users/:email/reset-password` | PMO / MNG / ADMIN (không cho chính mình; tài khoản ADMIN thì chỉ ADMIN). Đặt mật khẩu tạm trong Cognito (`Permanent: false`), trả về `{ password }` một lần; lần đăng nhập sau Cognito yêu cầu `NEW_PASSWORD_REQUIRED`, web hiện bước đặt mật khẩu mới |
 | GET | `/audit` | ADMIN: 50 thao tác mới nhất mỗi trang, `?before=<nextBefore>` để xem cũ hơn |
 
 Ví dụ tạo dự án:
@@ -133,6 +151,7 @@ POST /projects
 | 3 | Teams: đăng ký kênh, cảnh báo, tóm tắt 8h sáng | Xong |
 | 4 | Trang nhập bằng AI (Claude API, model Haiku 5.5) | Xong |
 | 5 | Giao diện tiếng Nhật (web, lỗi API, tin thông báo theo kênh, hướng dẫn) | Xong |
+| 6 | Thông báo: cá nhân, Slack, lịch gửi, độ tin cậy, giới hạn OTHER, Web Push, bot Telegram hai chiều (`docs/plans/notifications.md`) | Xong |
 
 ## Web
 
@@ -146,7 +165,10 @@ POST /projects
 | `/projects/new`, `/projects/:id/edit` | PL trở lên / người có quyền sửa | Form dự án |
 | `/projects/:id` | Đã đăng nhập | Thông tin, form cập nhật nhanh, lịch sử, vấn đề / sự kiện / mốc (thêm, đổi trạng thái) |
 | `/users` | PMO / MNG | Thêm người dùng trước, đổi vai trò |
-| `/settings` | PMO / SUBMNG / MNG | Tần suất, ngưỡng |
+| `/settings` | PMO / SUBMNG / MNG / ADMIN | Tần suất, ngưỡng, mức chi tiết tối đa của kênh nhóm; ADMIN: AI, bot Telegram, nhật ký quản trị |
+| `/trash` | PMO / quản lý | Thùng rác, khôi phục |
+| `/channels` | Đã đăng nhập | Kênh nhóm (Telegram / Teams / Slack): đăng ký, sửa, gửi thử, nhật ký gửi, chuyển người phụ trách |
+| `/me/notify` | Đã đăng nhập | Thông báo của tôi: nơi nhận (🔔, Telegram riêng, trình duyệt), loại tin, dự án theo dõi, lịch, tạm dừng |
 | `/public` | Mọi người (internet) | Số dự án theo mức khẩn cấp, dự án khẩn cấp / cần chú ý, mốc và sự kiện sắp tới; tự làm mới mỗi phút |
 
 **Điện thoại:** dưới 760px, menu thu vào nút ☰ (đóng lại sau mỗi lần chuyển trang). Trang AI có nút 🎤 nhập giọng nói (Web Speech API, `vi-VN` / `ja-JP` theo ngôn ngữ giao diện), chỉ hiện trên thiết bị cảm ứng; trình duyệt không hỗ trợ thì hướng dẫn dùng micro của bàn phím.
@@ -157,7 +179,7 @@ POST /projects
 
 Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.
 
-## Thông báo Teams / Telegram — `api/src/notify/`
+## Thông báo (Teams / Telegram / Slack, cá nhân, Web Push) — `api/src/notify/`
 
 ### Kênh nhóm
 
@@ -187,21 +209,21 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 
 | Loại | Khi nào gửi | Chống trùng |
 |---|---|---|
-| `became_red` | Ngay khi trạng thái tổng hợp chuyển sang Đỏ, sau một lần cập nhật | Chỉ khi trạng thái thay đổi |
-| `high_issue` | Ngay khi có vấn đề ưu tiên Cao mới | Mỗi vấn đề một lần |
+| `became_red` | Ngay khi trạng thái tổng hợp chuyển sang Đỏ, sau một lần cập nhật | Chỉ khi trạng thái thay đổi; không báo lại trong 6 giờ (chống nhấp nháy) |
+| `high_issue` | Sau 2 phút (gộp các vấn đề Cao cùng kênh) | Mỗi vấn đề một lần |
 | `late_update` | Job mỗi giờ | Một lần cho mỗi hạn bị trễ, nhắc lại sau mỗi 24 giờ còn trễ |
 | `overdue` | Job mỗi giờ | Mỗi mục một lần mỗi ngày |
-| `milestone_soon` | Job mỗi giờ, cho mốc / sự kiện diễn ra ngày mai | Mỗi mục một lần |
-| `daily_digest` | 08:00 giờ Việt Nam | Mỗi kênh một lần mỗi ngày |
+| `milestone_soon` | Job mỗi giờ, trước `milestoneLeadDays` ngày (mặc định ngày mai) | Mỗi mục × mốc một lần |
+| `daily_digest` | `digestHour` / `digestDays` (mặc định 08:00 hằng ngày, giờ Việt Nam) | Mỗi kênh một lần mỗi ngày |
 
 **Cách gửi của job mỗi giờ:**
 - Các cảnh báo của cùng một lượt chạy được gộp thành **một tin** cho mỗi kênh, tối đa 15 dòng.
-- Một cảnh báo chỉ được đánh dấu "đã gửi" khi Teams nhận thành công. Nếu gửi lỗi thì giờ sau gửi lại, và lỗi được hiện trên trang kênh.
+- Một cảnh báo chỉ được đánh dấu "đã gửi" khi kênh nhận thành công. Nếu gửi lỗi thì giờ sau gửi lại, và lỗi được hiện trên trang kênh.
 - Bản ghi chống trùng tự hết hạn nhờ TTL của DynamoDB.
 
 **Ngôn ngữ tin:** mỗi kênh có `lang` (`vi` / `ja`); mọi tin gửi vào kênh (cảnh báo ngay, job mỗi giờ, tóm tắt, tin thử) dùng ngôn ngữ của kênh, không phụ thuộc người thao tác.
 
-**Giờ yên lặng** (22h–7h, tuỳ chọn cho từng kênh) chỉ chặn các tin của job mỗi giờ. Cảnh báo Đỏ và vấn đề Cao vẫn gửi ngay.
+**Giờ yên lặng:** xem "Lịch gửi".
 
 Teams lỗi không làm thất bại thao tác của người dùng, ví dụ lưu cập nhật vẫn thành công.
 
@@ -215,7 +237,7 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 ### Thông báo cá nhân
 
 - Cài đặt riêng của mỗi người (`NotifyPrefs`, khoá `NOTIFY` / email): loại tin, Telegram cá nhân, dự án theo dõi, lịch, tạm dừng. Chưa lưu thì dùng mặc định theo vai trò (`notify/personal.ts`).
-- Hộp thư web (`INBOX#<email>`, giữ 60 ngày) luôn nhận; Telegram cá nhân nhận thêm nếu đã liên kết. `chatId` cá nhân không bao giờ được trả về.
+- Hộp thư web (`INBOX#<email>`, giữ 60 ngày) luôn nhận; Telegram cá nhân nhận thêm nếu đã liên kết và `telegram: true`; Web Push nếu `push: true`. `chatId` cá nhân không bao giờ được trả về.
 
 | Method | Path | Ghi chú |
 |---|---|---|
@@ -225,7 +247,7 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 | POST | `/me/inbox/read` | `{ ids }` hoặc `{ all: true }`; trả `unread` |
 | POST | `/me/notify/telegram/link` | Tạo mã `PT-XXXXX` (hiệu lực 1 ngày, dùng 1 lần); trả `{ code, url: https://t.me/<bot>?start=<mã>, bot }`. 400 nếu chưa cài bot |
 | POST | `/me/notify/telegram/confirm` | `{ code }`: tìm chat đã gửi `/start <mã>` (webhook ghi nhớ; bot chưa có webhook thì `getUpdates`), **chỉ nhận chat riêng**, gửi tin thử rồi lưu (`telegram: true`); trả `{ prefs }`. Lỗi rõ ràng: mã sai / hết hạn / của người khác, bot chưa nhận được mã, mã gửi trong nhóm (400), không đọc được / không gửi được Telegram (502). Không liệt kê chat của người khác |
-| POST | `/me/notify/test` | Tin thử vào hộp thư, và vào Telegram nếu đã liên kết (kể cả khi đang tắt): `{ inbox, telegram?: { ok, error? } }` |
+| POST | `/me/notify/test` | Tin thử vào hộp thư, vào Telegram nếu đã liên kết (kể cả khi đang tắt), và vào trình duyệt nếu `push` bật: `{ inbox, telegram?: { ok, error? }, push?: { sent, failed, errors } }` |
 
 **Ai nhận gì** (`notify/routePersonal.ts`, mặc định theo vai trò ở `notify/personal.ts`):
 
@@ -244,8 +266,9 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 - Chỉ gửi cho người có trong danh sách người dùng, **không gửi cho chính người gây ra sự kiện**, người nhận phải `can.viewProject`, và loại tin đó phải đang bật trong cài đặt.
 - Một thay đổi chỉ tạo **một tin cho mỗi người**: nếu một người nhận vì nhiều lý do (ví dụ GL vừa `health_changed` vừa `need_help`), tiêu đề theo lý do quan trọng nhất (`watched_red` > `health_changed` > `need_help`; `assigned_to_me` > `watched_high_issue`), nội dung luôn có "cần hỗ trợ" nếu có. Nhắc việc theo giờ được gộp thành một tin "🔔 Nhắc việc của bạn (n)".
 - Chỉ dự án đang chạy; riêng `assigned_to_me` gửi cả khi dự án tạm dừng.
-- **Tạm dừng** (`pausedUntil`): không gửi gì, kể cả hộp thư. **Giờ yên lặng**: mặc định 22:00–07:00 giờ VN; tắt bằng `schedule.quietFrom = quietTo` (giờ tuỳ chỉnh do nhánh D làm trong `policy.ts`). Tin tức thời trong giờ yên lặng vẫn vào hộp thư nhưng không gửi Telegram; nhắc việc theo giờ thì chờ hết giờ yên lặng mới gửi (cả hộp thư lẫn Telegram).
+- **Tạm dừng** (`pausedUntil`): không gửi gì, kể cả hộp thư. **Giờ yên lặng**: mặc định 22:00–07:00 giờ VN; tắt bằng `schedule.quietFrom = quietTo` (giờ từ / đến và `skipWeekends` chọn ở "Thông báo của tôi"; `skipWeekends` áp dụng giống giờ yên lặng). Tin tức thời trong giờ yên lặng vẫn vào hộp thư nhưng không gửi Telegram / Web Push (bị bỏ, không gửi bù); nhắc việc theo giờ thì chờ hết giờ yên lặng mới gửi (cả hộp thư lẫn Telegram).
 - Chống trùng bằng `markSent` với khoá `P#<email>#<sự kiện>#…` (14 ngày), chỉ ghi khi đã gửi được.
+- Tin được dựng trong `withLang(prefs.lang)`; `lang` lưu theo ngôn ngữ lúc người dùng lưu cài đặt / liên kết Telegram (chưa có thì tiếng Việt).
 - **Web Push** (nhánh H, `notify/push.ts`, `routes/push.ts`, thư viện `web-push`): nơi nhận thứ ba `via: 'push'`, bật bằng `NotifyPrefs.push` (thiếu = tắt), theo đúng giờ yên lặng / tạm dừng như Telegram.
   - Khoá VAPID tạo lần đầu cần dùng, lưu ở `CONFIG` / `PUSH` (khoá riêng là **bí mật**, không endpoint nào trả về; tạo đồng thời thì giữ cặp ghi trước — `initPushConfig` ghi có điều kiện).
   - Thiết bị: `PUSH#<email>` / `<id>` với `id` = 16 ký tự hex đầu của sha-256(endpoint) (cùng trình duyệt đăng ký lại thì ghi đè), `label` ("Chrome · Windows"), `createdAt`, `lastSentAt`, `lastError`. Tối đa 10 thiết bị / người (bỏ thiết bị cũ nhất). Endpoint chỉ nhận dịch vụ push của trình duyệt (`*.googleapis.com`, `*.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`, https) vì API gửi request tới đó.
@@ -260,7 +283,6 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 | DELETE | `/me/push/subscriptions/:id` | Chỉ thiết bị của mình (của người khác → 404) |
 
 `PUT /me/notify` nhận thêm `push` (thiếu = giữ giá trị đã lưu). `POST /me/notify/test` gửi cả tới mọi thiết bị khi `push` bật: thêm `push: { sent, failed, errors }`.
-- Tin được dựng trong `withLang(prefs.lang)`; `lang` lưu theo ngôn ngữ lúc người dùng lưu cài đặt / liên kết Telegram (chưa có thì tiếng Việt).
 
 ### Lịch gửi
 
@@ -275,6 +297,7 @@ Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `sc
 | `milestoneLeadDays` | Báo trước mốc / sự kiện bao nhiêu ngày, ví dụ `[1, 3, 7]` | `[1]` |
 | `pausedUntil` | Không gửi gì (kể cả tin ngay) trước thời điểm này. Web chọn "đến hết ngày" = 00:00 ngày hôm sau | — |
 
+- Người ("Thông báo của tôi"): chỉ dùng `quietFrom` / `quietTo`, `skipWeekends` (và `digestHour` làm giờ gửi `my_item_due`, không chỉnh trên web); `pausedUntil` nằm ở `NotifyPrefs`.
 - `schedule` thay cho `quietHours` khi có; web vẫn ghi `quietHours` = (có giờ yên lặng) để kênh cũ / danh sách hiển thị đúng.
 - Giờ yên lặng và bỏ cuối tuần chỉ chặn tin của job mỗi giờ (trễ cập nhật, quá hạn, báo trước mốc); tin bị chặn được gửi ở lượt đầu tiên sau đó. Tóm tắt theo `digestHour` / `digestDays` (cuối tuần bị bỏ nếu `skipWeekends`), không bị giờ yên lặng chặn. Cảnh báo Đỏ và vấn đề Cao không bị chặn.
 - **Báo trước mốc:** mục được nhắc ở mốc nhỏ nhất ≥ số ngày còn lại (≥ 1), mỗi mục × mốc một lần (khoá `soon#<mục>#<ngày>#<mốc>`; mốc 1 giữ khoá cũ `soon#<mục>#<ngày>`). Mục thêm muộn (còn 5 ngày, mốc `[1, 7]`) vẫn được nhắc một lần "còn 5 ngày".
@@ -288,7 +311,7 @@ Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `sc
 - `send()` lỗi thì đưa tin vào hàng đợi (`enqueue`, `attempts` + 1, `lastError`), `flushDue` gửi lại sau 1 → 5 → 15 → 60 → 60 phút: tối đa 6 lần gửi cho một tin, kể cả lần đầu.
 - Lỗi vĩnh viễn (`PermanentDeliveryError`, `notify/errors.ts`) không thử lại: Teams và Slack HTTP 4xx trừ 408 / 429 (Teams 404 / 410 = Workflow đã bị xoá; Slack 404 `no_service` / 410 `channel_is_archived`); Telegram 4xx trừ 429 ("bot was kicked", "chat not found", "bot was blocked", token sai).
 - Tin của job mỗi giờ (có `sentKeys`) **không** vào hàng đợi khi lỗi: giờ sau job tự dựng lại, xếp hàng sẽ gửi trùng.
-- Tin cá nhân (hộp thư, Telegram riêng) thử lại theo cùng quy tắc.
+- Tin cá nhân (hộp thư, Telegram riêng, Web Push theo từng thiết bị) thử lại theo cùng quy tắc.
 - Khi tới lượt gửi lại mà kênh đã bị xoá hoặc tắt thì bỏ tin.
 
 **Tự tắt kênh:**

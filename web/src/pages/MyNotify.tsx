@@ -168,6 +168,7 @@ export function MyNotifyPage() {
             digest={false}
             milestones={false}
             pause={false}
+            personal
           />
           <div className="notify-pause">
             <label>

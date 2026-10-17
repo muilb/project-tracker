@@ -1,33 +1,19 @@
-import { randomUUID } from 'node:crypto';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { audit } from '../audit.js';
 import { can, DELETE_UPDATE_HOURS, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
-import { emit } from '../notify/pipeline.js';
+import { addUpdate, createItem, createProject, loadItem, loadProject, patchItem, patchProject, type OpContext } from '../projectOps.js';
 import { buildProjectView, compareItems, toItemView } from '../rules.js';
 import { createItemSchema, createProjectSchema, createUpdateSchema, parseBody, patchItemSchema, patchProjectSchema } from '../schemas.js';
-import { ConflictError, type Store } from '../store/store.js';
-import type { Item, Project, Update, User } from '../types.js';
+import type { Update } from '../types.js';
 import { activeProjectViews, isInvolved, visibleSnapshot } from '../views.js';
 
 export const projects = new Hono<AppEnv>();
 
-/** A project `me` may not see answers 404 like a missing one, for reads and writes alike. */
-async function loadProject(store: Store, id: string, me: User): Promise<Project> {
-  const p = await store.getProject(id.toUpperCase());
-  const visible = p && !p.deletedAt && can.viewProject(me, p, me.role === 'OTHER' ? await store.listItems(p.id) : []);
-  if (!visible) throw new HTTPException(404, { message: l(`Không tìm thấy dự án ${id}`, `プロジェクト ${id} が見つかりません`) });
-  return p;
-}
-
-async function loadItem(store: Store, project: Project, id: string): Promise<Item> {
-  const item = await store.getItem(project.id, id.toUpperCase());
-  if (!item || item.deletedAt)
-    throw new HTTPException(404, { message: l('Không tìm thấy vấn đề / sự kiện', '課題 / イベントが見つかりません') });
-  return item;
-}
+/** The caller of the request, for the shared write paths in projectOps.ts. */
+const op = (c: Context<AppEnv>): OpContext => ({ store: c.get('store'), notify: c.get('notify'), now: c.get('now'), user: c.get('user') });
 
 /** The project page shows this many updates first; "more" loads UPDATES_PAGE older ones at a time. */
 const FIRST_UPDATES = 10;
@@ -40,15 +26,6 @@ function updatesPage(all: Update[], before: string | undefined, size: number) {
   const rest = before ? sorted.filter((u) => cursorOf(u) < before) : sorted;
   const updates = rest.slice(0, size);
   return { updates, nextBefore: rest.length > size ? cursorOf(updates[updates.length - 1]) : undefined };
-}
-
-/** Alerts must never make the user's change fail. */
-/** Referenced people must exist (PMO can pre-create them via POST /users). */
-async function checkUsers(store: Store, ids: (string | undefined)[]) {
-  const known = new Set((await store.listUsers()).map((u) => u.id));
-  const missing = ids.filter((id): id is string => !!id && !known.has(id));
-  if (missing.length)
-    throw new HTTPException(400, { message: l('Người dùng chưa tồn tại: ', '未登録のユーザーです: ') + missing.join(', ') });
 }
 
 projects.get('/', async (c) => {
@@ -69,46 +46,9 @@ projects.get('/', async (c) => {
 });
 
 projects.post('/', async (c) => {
-  const store = c.get('store');
-  const me = c.get('user');
-  ensure(can.createProject(me), l('Chỉ PL trở lên mới được tạo dự án', 'プロジェクトの作成は PL 以上のみ行えます'));
+  ensure(can.createProject(c.get('user')), l('Chỉ PL trở lên mới được tạo dự án', 'プロジェクトの作成は PL 以上のみ行えます'));
   const body = await parseBody(c.req, createProjectSchema);
-  const now = c.get('now').toISOString();
-
-  const project: Project = {
-    id: body.id ?? `P${String(await store.nextSeq('project')).padStart(2, '0')}`,
-    name: body.name,
-    customer: body.customer,
-    gl: body.gl ?? (me.role === 'GL' ? me.id : undefined),
-    pl: body.pl ?? (me.role === 'PL' ? me.id : undefined),
-    supporters: body.supporters ?? [],
-    pmo: body.pmo,
-    startDate: body.startDate,
-    endDate: body.endDate,
-    state: 'active',
-    updateFrequencyHours: body.updateFrequencyHours ?? null,
-    publicVisible: body.publicVisible ?? true,
-    publicName: body.publicName,
-    createdBy: me.id,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await checkUsers(store, [project.gl, project.pl, project.pmo, ...project.supporters]);
-  try {
-    await store.createProject(project);
-  } catch (e) {
-    if (e instanceof ConflictError)
-      throw new HTTPException(409, {
-        message: (await store.getProject(project.id))?.deletedAt
-          ? l(
-              `Mã dự án ${project.id} thuộc một dự án đã xoá — PMO khôi phục ở Thùng rác, hoặc dùng mã khác`,
-              `プロジェクトコード ${project.id} は削除済みのプロジェクトで使われています。PMO がごみ箱から復元するか、別のコードを使ってください`,
-            )
-          : l(`Mã dự án ${project.id} đã tồn tại`, `プロジェクトコード ${project.id} は既に存在します`),
-      });
-    throw e;
-  }
-  return c.json({ project }, 201);
+  return c.json({ project: await createProject(op(c), body) }, 201);
 });
 
 projects.get('/:id', async (c) => {
@@ -126,16 +66,13 @@ projects.get('/:id', async (c) => {
 projects.patch('/:id', async (c) => {
   const store = c.get('store');
   const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'), c.get('user'));
+  const project = await loadProject(store, c.req.param('id'), me);
   ensure(
     can.editProject(me, project),
     l('Chỉ PMO, quản lý, GL hoặc PL của dự án mới được sửa', 'プロジェクトの編集は PMO・管理者・そのプロジェクトの GL / PL のみ行えます'),
   );
   const body = await parseBody(c.req, patchProjectSchema);
-  await checkUsers(store, [body.gl, body.pl, body.pmo, ...(body.supporters ?? [])]);
-  const updated: Project = { ...project, ...body, updatedAt: c.get('now').toISOString() };
-  await store.putProject(updated);
-  return c.json({ project: updated });
+  return c.json({ project: await patchProject(op(c), project.id, body) });
 });
 
 projects.get('/:id/updates', async (c) => {
@@ -147,28 +84,9 @@ projects.get('/:id/updates', async (c) => {
 });
 
 projects.post('/:id/updates', async (c) => {
-  const store = c.get('store');
-  const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'), c.get('user'));
+  const project = await loadProject(c.get('store'), c.req.param('id'), c.get('user'));
   const body = await parseBody(c.req, createUpdateSchema);
-  const now = c.get('now');
-  const [updates, items, settings] = await Promise.all([store.listUpdates(project.id), store.listItems(project.id), store.getSettings()]);
-  const before = buildProjectView(project, updates, items, settings, now);
-  const update: Update = {
-    id: randomUUID().slice(0, 8),
-    projectId: project.id,
-    at: body.at ? new Date(body.at).toISOString() : now.toISOString(),
-    author: me.id,
-    authorRole: me.role,
-    health: body.health,
-    summary: body.summary,
-    needHelp: body.needHelp || undefined,
-    rawText: body.rawText,
-  };
-  await store.putUpdate(update);
-  const after = buildProjectView(project, [...updates, update], items, settings, now);
-  await emit(c.get('notify'), now, { type: 'update_posted', project, update, before, after, actor: me.id });
-  return c.json({ update }, 201);
+  return c.json({ update: await addUpdate(op(c), project.id, body) }, 201);
 });
 
 projects.get('/:id/items', async (c) => {
@@ -179,35 +97,16 @@ projects.get('/:id/items', async (c) => {
 });
 
 projects.post('/:id/items', async (c) => {
-  const store = c.get('store');
-  const me = c.get('user');
-  const project = await loadProject(store, c.req.param('id'), c.get('user'));
+  const project = await loadProject(c.get('store'), c.req.param('id'), c.get('user'));
   const body = await parseBody(c.req, createItemSchema);
-  await checkUsers(store, [body.owner]);
-  const now = c.get('now').toISOString();
-  const item: Item = {
-    id: `I${String(await store.nextSeq('item')).padStart(4, '0')}`,
-    projectId: project.id,
-    ...body,
-    createdBy: me.id,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await store.putItem(item);
-  await emit(c.get('notify'), c.get('now'), { type: 'item_saved', project, item, actor: me.id });
-  return c.json({ item }, 201);
+  return c.json({ item: await createItem(op(c), project.id, body) }, 201);
 });
 
 projects.patch('/:id/items/:itemId', async (c) => {
-  const store = c.get('store');
-  const project = await loadProject(store, c.req.param('id'), c.get('user'));
-  const item = await loadItem(store, project, c.req.param('itemId'));
+  const project = await loadProject(c.get('store'), c.req.param('id'), c.get('user'));
+  const item = await loadItem(c.get('store'), project, c.req.param('itemId'));
   const body = await parseBody(c.req, patchItemSchema);
-  await checkUsers(store, [body.owner]);
-  const updated: Item = { ...item, ...body, updatedAt: c.get('now').toISOString() };
-  await store.putItem(updated);
-  await emit(c.get('notify'), c.get('now'), { type: 'item_saved', project, item: updated, previous: item, actor: c.get('user').id });
-  return c.json({ item: updated });
+  return c.json({ item: await patchItem(op(c), project.id, item.id, body) });
 });
 
 // --- Soft deletes (restored from the trash by PMO / managers) ---

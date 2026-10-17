@@ -13,6 +13,7 @@ import { ai as aiRoutes } from './routes/ai.js';
 import { channels } from './routes/channels.js';
 import { me } from './routes/me.js';
 import { projects } from './routes/projects.js';
+import { telegramWebhook } from './routes/telegram.js';
 import { trash } from './routes/trash.js';
 import type { Store } from './store/store.js';
 import { buildDashboard, buildPublic } from './views.js';
@@ -82,6 +83,9 @@ export function createApp({
     c.header('Cache-Control', `public, max-age=${publicCacheSeconds}`);
     return c.json(publicCache.body);
   });
+
+  // track G: Telegram updates, checked by the webhook's secret token instead of a login.
+  app.route('/telegram', telegramWebhook);
 
   // --- Login required ---
   app.use('*', requireUser(auth));

@@ -21,13 +21,15 @@ export function createSender(store: Store, telegram: TelegramClient = telegramCl
       const bot = await store.getTelegramBot();
       if (!bot) throw new Error(l('Chưa cài bot Telegram (Cài đặt → Telegram)', 'Telegram ボットが未設定です（設定 → Telegram）'));
       const html = renderTelegram(msg);
+      // track G: buttons only in personal chats, where the webhook knows who pressed them.
+      const buttons = ch.id.startsWith('U:') && bot.webhookSecret ? msg.actions : undefined;
       try {
-        await telegram.sendMessage(bot.token, ch.telegramChatId!, html);
+        await telegram.sendMessage(bot.token, ch.telegramChatId!, html, buttons);
       } catch (e) {
         if (!(e instanceof TelegramMigratedError)) throw e;
         // The group became a supergroup: send to the new chat id and keep it on the channel
         // (the caller saves the channel object after delivery).
-        await telegram.sendMessage(bot.token, e.newChatId, html);
+        await telegram.sendMessage(bot.token, e.newChatId, html, buttons);
         ch.telegramChatId = e.newChatId;
       }
     },

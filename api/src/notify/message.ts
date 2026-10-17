@@ -17,4 +17,13 @@ export interface Message {
   tone?: Tone;
   lines: MessageLine[];
   link?: { title: string; url: string };
+  // track G
+  /** Buttons under a personal Telegram message (other channels ignore them). */
+  actions?: MessageAction[];
+}
+
+/** An inline button; `data` (≤ 64 bytes) comes back to the webhook as a callback_query. */
+export interface MessageAction {
+  label: string;
+  data: string;
 }

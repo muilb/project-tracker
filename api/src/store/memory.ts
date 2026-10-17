@@ -43,6 +43,7 @@ export class MemoryStore implements Store {
   inbox: InboxEntry[] = [];
   outbox = new Map<string, OutboxEntry>();
   deliveries: DeliveryLog[] = [];
+  temp = new Map<string, { value: unknown; expires: number }>(); // track G
 
   async getUser(id: string) {
     return clone(this.users.get(id));
@@ -193,6 +194,27 @@ export class MemoryStore implements Store {
 
   async nextSeq(name: 'project' | 'item' | 'channel') {
     return ++this.seqs[name];
+  }
+
+  // track G
+  async getTemp<T>(key: string) {
+    const row = this.temp.get(key);
+    return row && row.expires > Date.now() ? (clone(row.value) as T) : undefined;
+  }
+  async putTemp(key: string, value: unknown, ttlSeconds: number) {
+    this.temp.set(key, { value: clone(value), expires: Date.now() + ttlSeconds * 1000 });
+  }
+  async takeTemp<T>(key: string) {
+    const value = await this.getTemp<T>(key);
+    this.temp.delete(key);
+    return value;
+  }
+  async bumpCounter(key: string, ttlSeconds: number) {
+    const row = this.temp.get(key);
+    const live = row && row.expires > Date.now();
+    const count = (live ? (row.value as number) : 0) + 1;
+    this.temp.set(key, { value: count, expires: live ? row.expires : Date.now() + ttlSeconds * 1000 });
+    return count;
   }
 
   async snapshot(opts?: ListOptions): Promise<Snapshot> {

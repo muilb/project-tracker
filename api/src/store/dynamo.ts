@@ -54,9 +54,10 @@ import {
  *   OUTBOX            <iso due>#<id>    (messages waiting for delivery, expire after OUTBOX_DAYS)
  *   DELIVERY#<chan>   <iso time>#<id>   (delivery attempts, expire after DELIVERY_LOG_DAYS)
  *   CONFIG            SETTINGS | TELEGRAM | SEQ#project | SEQ#item | SEQ#channel
+ *   TEMP#<key>        TEMP              (track G: Telegram bot state and counters, expire via `ttl`)
  * Every row also has `kind` so a full scan can be grouped cheaply.
  */
-type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT' | 'NOTIFY' | 'INBOX' | 'OUTBOX' | 'DELIVERY';
+type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT' | 'NOTIFY' | 'INBOX' | 'OUTBOX' | 'DELIVERY' | 'TEMP';
 
 const ttlAfter = (iso: string, days: number) => Math.floor(Date.parse(iso) / 1000) + days * 86_400;
 
@@ -348,6 +349,41 @@ export class DynamoStore implements Store {
         ReturnValues: 'UPDATED_NEW',
       }),
     );
+    return Number(res.Attributes?.value);
+  }
+
+  // track G
+  async getTemp<T>(key: string) {
+    const row = await this.get<{ value: T; ttl: number }>(`TEMP#${key}`, 'TEMP');
+    // DynamoDB deletes expired rows lazily, so also check the expiry here.
+    return row && row.ttl * 1000 > Date.now() ? row.value : undefined;
+  }
+  putTemp(key: string, value: unknown, ttlSeconds: number) {
+    return this.put(`TEMP#${key}`, 'TEMP', 'TEMP', { value, ttl: Math.floor(Date.now() / 1000) + ttlSeconds });
+  }
+  async takeTemp<T>(key: string) {
+    const res = await this.db.send(
+      new DeleteCommand({ TableName: this.table, Key: { pk: `TEMP#${key}`, sk: 'TEMP' }, ReturnValues: 'ALL_OLD' }),
+    );
+    const row = res.Attributes as { value: T; ttl: number } | undefined;
+    return row && row.ttl * 1000 > Date.now() ? row.value : undefined;
+  }
+  async bumpCounter(key: string, ttlSeconds: number) {
+    const res = await this.db.send(
+      new UpdateCommand({
+        TableName: this.table,
+        Key: { pk: `TEMP#${key}`, sk: 'TEMP' },
+        UpdateExpression: 'ADD #v :one SET kind = :kind, #ttl = if_not_exists(#ttl, :ttl)',
+        ExpressionAttributeNames: { '#v': 'value', '#ttl': 'ttl' },
+        ExpressionAttributeValues: { ':one': 1, ':kind': 'TEMP', ':ttl': Math.floor(Date.now() / 1000) + ttlSeconds },
+        ReturnValues: 'ALL_NEW',
+      }),
+    );
+    // An expired counter DynamoDB has not deleted yet counts from 1 again.
+    if (Number(res.Attributes?.ttl) * 1000 <= Date.now()) {
+      await this.putTemp(key, 1, ttlSeconds);
+      return 1;
+    }
     return Number(res.Attributes?.value);
   }
 

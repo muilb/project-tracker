@@ -111,6 +111,15 @@ export interface Store {
   /** Atomically increments and returns a named counter (project / item ids). */
   nextSeq(name: 'project' | 'item' | 'channel'): Promise<number>;
 
+  // track G: short-lived bot state (connect codes seen by the webhook, pending AI proposals, rate limits).
+  /** A value saved with putTemp that has not expired. */
+  getTemp<T>(key: string): Promise<T | undefined>;
+  putTemp(key: string, value: unknown, ttlSeconds: number): Promise<void>;
+  /** Removes and returns the value; only one caller gets it (confirm buttons pressed twice). */
+  takeTemp<T>(key: string): Promise<T | undefined>;
+  /** Atomically adds 1 and returns the new count; the counter expires `ttlSeconds` after it was created. */
+  bumpCounter(key: string, ttlSeconds: number): Promise<number>;
+
   /** Live data only, unless `includeDeleted` (the trash). */
   snapshot(opts?: ListOptions): Promise<Snapshot>;
 }

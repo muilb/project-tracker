@@ -1046,3 +1046,15 @@ html {
     max-height: none;
   }
 }
+
+/* track G: bot commands under the personal Telegram link */
+.bot-commands {
+  margin-top: 8px;
+}
+.bot-commands ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+.bot-commands li {
+  margin: 2px 0;
+}

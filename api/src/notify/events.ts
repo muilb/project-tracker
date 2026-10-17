@@ -143,6 +143,8 @@ export interface PersonalPending {
   /** De-duplication key (without the `P#<userId>#` prefix). */
   key: string;
   line: () => MessageLine;
+  /** my_item_due: the item (for the "Close" button, track G). */
+  itemId?: string;
 }
 
 /** Personal time-based events: update due soon / late (PL), escalation (GL, PMO), my items due (owner). */
@@ -188,7 +190,14 @@ export function collectPersonal(views: ProjectView[], now: Date, name: (id?: str
       });
     for (const i of v.openItems) {
       if (!i.owner || i.closed || !(i.overdue || i.daysLeft === 1)) continue;
-      out.push({ userId: i.owner, event: 'my_item_due', project: v, key: `my_item_due#${i.id}#${today}`, line: () => itemDueLine(v, i) });
+      out.push({
+        userId: i.owner,
+        event: 'my_item_due',
+        project: v,
+        key: `my_item_due#${i.id}#${today}`,
+        line: () => itemDueLine(v, i),
+        itemId: i.id,
+      });
     }
   }
   return out;

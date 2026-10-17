@@ -4,6 +4,8 @@ import type { Message } from './message.js';
 export interface TelegramChat {
   id: string;
   title: string;
+  /** 'private' | 'group' | 'supergroup' | 'channel' (personal links accept only private chats). */
+  type?: string;
 }
 
 export interface TelegramClient {
@@ -35,7 +37,7 @@ interface TgUpdate {
 }
 interface TgMessage {
   text?: string;
-  chat: { id: number; title?: string; first_name?: string; last_name?: string; username?: string };
+  chat: { id: number; type?: string; title?: string; first_name?: string; last_name?: string; username?: string };
 }
 
 export const telegramClient: TelegramClient = {
@@ -53,7 +55,7 @@ export const telegramClient: TelegramClient = {
       if (!m) continue;
       const c = m.chat;
       const title = c.title ?? ([c.first_name, c.last_name].filter(Boolean).join(' ') || c.username || String(c.id));
-      if (m.text?.toLowerCase().includes(want)) return { chat: { id: String(c.id), title }, seen: [...seen] };
+      if (m.text?.toLowerCase().includes(want)) return { chat: { id: String(c.id), title, type: c.type }, seen: [...seen] };
       seen.add(title);
     }
     return { seen: [...seen] };

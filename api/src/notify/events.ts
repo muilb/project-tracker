@@ -2,8 +2,9 @@
 import type { ProjectView } from '../rules.js';
 import { l } from '../i18n.js';
 import { vnDate } from '../time.js';
-import type { Channel, Item, Project, Update } from '../types.js';
+import type { Channel, Item, PersonalEvent, Project, Update } from '../types.js';
 import type { MessageLine } from './message.js';
+import { dueSoonLine, escalationLine, itemDueLine, lateLine } from './personal.js';
 import { dm, hours, TYPE } from './render.js';
 
 /** Emitted by the routes after a change is saved (see pipeline.emit). */
@@ -79,3 +80,65 @@ export function collectAlerts(ch: Channel, views: ProjectView[], now: Date, name
 }
 
 // track A: personal time-based events (update due soon, my item due, escalation).
+
+/** Hours before the update deadline when the PL gets "update due soon". */
+export const DUE_SOON_HOURS = 4;
+
+/** One personal reminder found by the hourly scan; `line` is built in the recipient's language. */
+export interface PersonalPending {
+  userId: string;
+  event: PersonalEvent;
+  project: ProjectView;
+  /** De-duplication key (without the `P#<userId>#` prefix). */
+  key: string;
+  line: () => MessageLine;
+}
+
+/** Personal time-based events: update due soon / late (PL), escalation (GL, PMO), my items due (owner). */
+export function collectPersonal(views: ProjectView[], now: Date, name: (id?: string) => string): PersonalPending[] {
+  const out: PersonalPending[] = [];
+  const today = vnDate(now);
+  for (const v of views) {
+    const lead = v.pl ?? v.gl;
+    const leftHours = (Date.parse(v.dueAt) - now.getTime()) / 3_600_000;
+    if (lead && v.lateHours === 0 && leftHours > 0 && leftHours <= DUE_SOON_HOURS)
+      out.push({
+        userId: lead,
+        event: 'update_due_soon',
+        project: v,
+        key: `update_due_soon#${v.id}#${v.dueAt}`,
+        line: () => dueSoonLine(v, now),
+      });
+    if (lead && v.lateHours > 0)
+      // Repeated every 24h while it stays late.
+      out.push({
+        userId: lead,
+        event: 'late_update_mine',
+        project: v,
+        key: `late_update_mine#${v.id}#${v.dueAt}#${Math.floor(v.lateHours / 24)}`,
+        line: () => lateLine(v),
+      });
+    const times = v.lateHours >= 4 * v.frequencyHours ? 4 : v.lateHours >= 2 * v.frequencyHours ? 2 : 0;
+    if (times && v.gl)
+      out.push({
+        userId: v.gl,
+        event: 'escalation',
+        project: v,
+        key: `escalation#${v.id}#${v.dueAt}#2`,
+        line: () => escalationLine(v, 2, name),
+      });
+    if (times === 4 && v.pmo)
+      out.push({
+        userId: v.pmo,
+        event: 'escalation',
+        project: v,
+        key: `escalation#${v.id}#${v.dueAt}#4`,
+        line: () => escalationLine(v, 4, name),
+      });
+    for (const i of v.openItems) {
+      if (!i.owner || i.closed || !(i.overdue || i.daysLeft === 1)) continue;
+      out.push({ userId: i.owner, event: 'my_item_due', project: v, key: `my_item_due#${i.id}#${today}`, line: () => itemDueLine(v, i) });
+    }
+  }
+  return out;
+}

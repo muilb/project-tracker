@@ -53,6 +53,9 @@ async function addChannel(over: Partial<Channel> = {}) {
 beforeEach(async () => {
   store = new MemoryStore();
   await loadSample(store, now);
+  // Group channels only: personal messages (counted by runHourly too) are tested in notify-a.test.ts.
+  for (const u of await store.listUsers())
+    await store.putNotifyPrefs({ userId: u.id, events: [], telegram: false, watch: [], updatedAt: now.toISOString() });
   sent = [];
   failing = false;
 });

@@ -58,20 +58,70 @@ import {
  *   CONFIG            SETTINGS | TELEGRAM | AI | PUSH | SEQ#project | SEQ#item | SEQ#channel
  *   PUSH#<email>      <subscription id> (Web Push browsers / phones, track H)
  *   TEMP#<key>        TEMP              (track G: Telegram bot state and counters, expire via `ttl`)
- * Every row also has `kind` so a full scan can be grouped cheaply.
+ * Every row also has `kind`. The `byKind` index (partition `kind`, sort `sk`) lets the snapshot,
+ * users and channels be read by kind, so the inbox / logs / de-dup rows are never scanned.
  */
 type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT' | 'NOTIFY' | 'INBOX' | 'OUTBOX' | 'DELIVERY' | 'PUSH' | 'TEMP';
+
+/** Global secondary index on `kind` (see infra/lib/stack.ts). */
+export const KIND_INDEX = 'byKind';
 
 const ttlAfter = (iso: string, days: number) => Math.floor(Date.parse(iso) / 1000) + days * 86_400;
 
 export class DynamoStore implements Store {
-  private db: DynamoDBDocumentClient;
+  private db: Pick<DynamoDBDocumentClient, 'send'>;
+  /** False while the `byKind` index is missing or still being built (first deploy): fall back to scans. */
+  private indexReady = true;
 
   constructor(
     private table: string,
     client = new DynamoDBClient({}),
+    /** Tests pass a fake document client. */
+    db?: Pick<DynamoDBDocumentClient, 'send'>,
   ) {
-    this.db = DynamoDBDocumentClient.from(client, { marshallOptions: { removeUndefinedValues: true } });
+    this.db = db ?? DynamoDBDocumentClient.from(client, { marshallOptions: { removeUndefinedValues: true } });
+  }
+
+  /** Every row of one kind, from the `byKind` index; undefined when the index cannot be used yet. */
+  private async byKind(kind: Kind | 'CONFIG'): Promise<Record<string, unknown>[] | undefined> {
+    if (!this.indexReady) return undefined;
+    const out: Record<string, unknown>[] = [];
+    let start: Record<string, unknown> | undefined;
+    try {
+      do {
+        const res = await this.db.send(
+          new QueryCommand({
+            TableName: this.table,
+            IndexName: KIND_INDEX,
+            KeyConditionExpression: 'kind = :k',
+            ExpressionAttributeValues: { ':k': kind },
+            ExclusiveStartKey: start,
+          }),
+        );
+        out.push(...(res.Items ?? []));
+        start = res.LastEvaluatedKey;
+      } while (start);
+    } catch (e) {
+      // "The table does not have the specified index" (not deployed / still backfilling).
+      if ((e as Error).name !== 'ValidationException') throw e;
+      console.warn(`index ${KIND_INDEX} not usable yet, scanning instead`);
+      this.indexReady = false;
+      setTimeout(() => (this.indexReady = true), 60_000).unref?.();
+      return undefined;
+    }
+    return out;
+  }
+
+  /** Full-table scan: only the fallback while the index is not ready. */
+  private async scanAll(): Promise<Record<string, unknown>[]> {
+    const out: Record<string, unknown>[] = [];
+    let start: Record<string, unknown> | undefined;
+    do {
+      const res = await this.db.send(new ScanCommand({ TableName: this.table, ExclusiveStartKey: start }));
+      out.push(...(res.Items ?? []));
+      start = res.LastEvaluatedKey;
+    } while (start);
+    return out;
   }
 
   private async get<T>(pk: string, sk: string): Promise<T | undefined> {
@@ -144,7 +194,8 @@ export class DynamoStore implements Store {
     return this.put(`USER#${user.id}`, 'USER', 'USER', user);
   }
   async listUsers() {
-    return (await this.snapshot()).users;
+    const rows = await this.byKind('USER');
+    return rows ? rows.map((r) => strip<User>(r)) : (await this.snapshot()).users;
   }
 
   getProject(id: string) {
@@ -183,21 +234,8 @@ export class DynamoStore implements Store {
   }
 
   async listChannels() {
-    const out: Channel[] = [];
-    let start: Record<string, unknown> | undefined;
-    do {
-      const res = await this.db.send(
-        new ScanCommand({
-          TableName: this.table,
-          FilterExpression: 'kind = :k',
-          ExpressionAttributeValues: { ':k': 'CHANNEL' },
-          ExclusiveStartKey: start,
-        }),
-      );
-      out.push(...(res.Items ?? []).map((i) => channelFromRow(i)));
-      start = res.LastEvaluatedKey;
-    } while (start);
-    return out;
+    const rows = (await this.byKind('CHANNEL')) ?? (await this.scanAll()).filter((r) => r.kind === 'CHANNEL');
+    return rows.map((r) => channelFromRow(r));
   }
   async getChannel(id: string) {
     const row = await this.get<Record<string, unknown>>(`CHANNEL#${id}`, 'CHANNEL');
@@ -392,19 +430,28 @@ export class DynamoStore implements Store {
 
   async snapshot(opts?: ListOptions): Promise<Snapshot> {
     const snap: Snapshot = { users: [], projects: [], updates: [], items: [], settings: DEFAULT_SETTINGS };
-    let start: Record<string, unknown> | undefined;
-    do {
-      const res = await this.db.send(new ScanCommand({ TableName: this.table, ExclusiveStartKey: start }));
-      for (const row of res.Items ?? []) {
+    const kinds = ['USER', 'PROJECT', 'UPDATE', 'ITEM'] as const;
+    const parts = await Promise.all(kinds.map((k) => this.byKind(k)));
+    let settingsRow: Record<string, unknown> | undefined;
+    if (parts.every((p) => p)) {
+      [snap.users, snap.projects, snap.updates, snap.items] = parts.map((rows) => rows!.map((r) => strip(r))) as [
+        Snapshot['users'],
+        Snapshot['projects'],
+        Snapshot['updates'],
+        Snapshot['items'],
+      ];
+      settingsRow = await this.get<Record<string, unknown>>('CONFIG', 'SETTINGS');
+    } else {
+      for (const row of await this.scanAll()) {
         const kind = row.kind as Kind | 'CONFIG';
         if (kind === 'USER') snap.users.push(strip(row));
         else if (kind === 'PROJECT') snap.projects.push(strip(row));
         else if (kind === 'UPDATE') snap.updates.push(strip(row));
         else if (kind === 'ITEM') snap.items.push(strip(row));
-        else if (row.sk === 'SETTINGS') snap.settings = { ...DEFAULT_SETTINGS, ...(row.value as Settings) };
+        else if (row.sk === 'SETTINGS') settingsRow = strip(row);
       }
-      start = res.LastEvaluatedKey;
-    } while (start);
+    }
+    if (settingsRow) snap.settings = { ...DEFAULT_SETTINGS, ...(settingsRow.value as Settings) };
     return opts?.includeDeleted ? snap : liveSnapshot(snap);
   }
 

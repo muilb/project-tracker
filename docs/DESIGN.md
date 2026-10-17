@@ -23,7 +23,7 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
   - Người đăng nhập lần đầu mặc định có vai trò PL.
   - Email nằm trong `ADMIN_EMAILS` nhận vai trò ghi kèm (`email:MNG`), hoặc PMO nếu không ghi vai trò.
   - Mail công ty hay chặn thư xác nhận của Cognito (`no-reply@verificationemail.com`). Vì vậy PMO / MNG có thể **duyệt** tài khoản chờ xác nhận ở trang Người dùng; menu hiện số tài khoản đang chờ. Lambda API được cấp các quyền `ListUsers`, `AdminGetUser`, `AdminConfirmSignUp`, `AdminUpdateUserAttributes`, `AdminDeleteUser`, chỉ trên user pool này.
-- Dữ liệu ít (vài chục dự án), nên dashboard đọc toàn bộ bảng rồi tính trong bộ nhớ.
+- Dữ liệu ít (vài chục dự án), nên dashboard đọc toàn bộ dự án / cập nhật / mục / người dùng rồi tính trong bộ nhớ. Việc đọc này đi qua chỉ mục `byKind` (khoá `kind`, `sk`), mỗi loại một query, nên **không quét** các dòng hộp thư, nhật ký gửi, chống trùng, hàng đợi… (chúng tăng theo lượng thông báo). Danh sách kênh và người dùng cũng đọc qua chỉ mục này. Khi chỉ mục chưa có hoặc đang tạo (lần deploy đầu), store tự quét cả bảng như trước và thử lại chỉ mục sau 1 phút.
 - Một bảng DynamoDB (`pk` / `sk`, chi tiết ở `api/src/store/dynamo.ts`):
 
   | `pk` | `sk` | Nội dung |

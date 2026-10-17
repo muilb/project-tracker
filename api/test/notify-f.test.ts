@@ -6,7 +6,7 @@ import { buildContext, toProposals } from '../src/ai/proposals.js';
 import { createApp } from '../src/app.js';
 import { can } from '../src/auth.js';
 import type { Message } from '../src/notify/message.js';
-import { emit, runHourly } from '../src/notify/pipeline.js';
+import { emit, flushDue, runHourly } from '../src/notify/pipeline.js';
 import { buildProjectView } from '../src/rules.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';
@@ -218,14 +218,18 @@ describe('group channels follow the creator', () => {
   it('immediate alerts only for projects the creator sees', async () => {
     await addChannel();
     const project = (await store.getProject('P02'))!;
+    const later = new Date(now.getTime() + 120_000);
     const high: Item = { ...(await giveItem()), id: 'I9002', projectId: 'P02', status: 'open', priority: 'high', owner: undefined };
     await emit(deps(), now, { type: 'item_saved', project, item: high, actor: 'lan@example.com' });
+    await flushDue(deps(), later); // high-priority issues wait 2 minutes (track D)
     expect(sent).toHaveLength(0);
     await emit(deps(), now, { type: 'item_saved', project: (await store.getProject('P01'))!, item: { ...high, projectId: 'P01' }, actor: 'lan@example.com' });
+    await flushDue(deps(), later); // high-priority issues wait 2 minutes (track D)
     expect(sent).toHaveLength(1);
     // Owning the new item is enough.
     sent = [];
     await emit(deps(), now, { type: 'item_saved', project, item: { ...high, owner: 'phuc@example.com' }, actor: 'lan@example.com' });
+    await flushDue(deps(), later); // high-priority issues wait 2 minutes (track D)
     expect(sent).toHaveLength(1);
   });
 

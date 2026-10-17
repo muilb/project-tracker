@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { langFromHeader } from '../src/i18n.js';
-import { runHourly } from '../src/notify/pipeline.js';
+import { flushDue, runHourly } from '../src/notify/pipeline.js';
 import type { Message } from '../src/notify/message.js';
 import { loadSample, SAMPLE_NOW_VN } from '../src/seed/sample.js';
 import { MemoryStore } from '../src/store/memory.js';
@@ -77,6 +77,7 @@ describe('language', () => {
     await store.putChannel(channel('C2', 'ja'));
     // Request in Japanese; the Vietnamese channel still gets Vietnamese.
     await call('POST', '/projects/P01/items', 'an', { type: 'issue', title: 'Server hỏng', priority: 'high', date: '2026-10-10' }, 'ja');
+    await flushDue({ store, send }, new Date(now.getTime() + 120_000)); // high-priority issues wait 2 minutes
     const title = (id: string) => sent.find((s) => s.channel === id)!.msg.title;
     expect(title('C1')).toContain('Vấn đề ưu tiên cao mới');
     expect(title('C2')).toContain('優先度「高」の新しい課題');

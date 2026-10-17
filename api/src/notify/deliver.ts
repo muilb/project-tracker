@@ -6,6 +6,7 @@ import type { Channel, OutboxEntry, OutboxTarget } from '../types.js';
 import type { NotifyDeps } from './deps.js';
 import { isPermanent, scrubError } from './errors.js';
 import type { Message } from './message.js';
+import { hold } from './policy.js';
 
 /** A message ready to go: built in the recipient's language, not yet delivered. */
 export interface Outgoing {
@@ -133,6 +134,10 @@ async function countLoss(deps: NotifyDeps, channelId: string, error: string, now
  * (with `sentKeys`): the next hourly run rebuilds those, so queueing them would send twice.
  */
 export async function send(deps: NotifyDeps, o: Outgoing, now: Date): Promise<boolean> {
+  // track D: burst grouping and anti-flapping; undefined = held in the outbox or dropped.
+  const next = await hold(deps, o, now);
+  if (!next) return true;
+  o = next;
   let result: Attempt;
   if ('channelId' in o.target) {
     const ch = o.channel ?? (await deps.store.getChannel(o.target.channelId));

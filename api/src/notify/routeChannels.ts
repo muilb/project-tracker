@@ -5,10 +5,10 @@ import type { ProjectView } from '../rules.js';
 import { vnDate } from '../time.js';
 import type { AlertEvent, Channel, Item, Project, User } from '../types.js';
 import type { NotifyDeps } from './deps.js';
-import { collectAlerts, type NotifyEvent, type Pending } from './events.js';
+import { collectAlerts, weeklyChanges, type NotifyEvent, type Pending } from './events.js';
 import type { Outgoing } from './deliver.js';
-import { digestDue, isPaused, isQuiet } from './policy.js';
-import { becameRedMessage, DEDUPE_DAYS, digestMessage, highIssueMessage, hourlyMessage } from './render.js';
+import { digestDue, isPaused, isQuiet, isWeeklyDigest } from './policy.js';
+import { becameRedMessage, DEDUPE_DAYS, digestMessage, highIssueMessage, hourlyMessage, weeklyDigestMessage } from './render.js';
 
 export interface RouteContext {
   users: Map<string, User>;
@@ -65,7 +65,7 @@ export function channelMessages(deps: NotifyDeps, event: NotifyEvent, channels: 
     .map((c) => withLang(c.lang, () => toChannel(c, 'high_issue', highIssueMessage(deps, project, item, ctx.name), project.id)));
 }
 
-/** One channel's hourly alerts (batched into one message) and its daily digest. */
+/** One channel's hourly alerts (batched into one message) and its digest (daily, weekdays or Monday weekly). */
 export async function hourlyChannelMessages(
   deps: NotifyDeps,
   ch: Channel,
@@ -92,8 +92,11 @@ export async function hourlyChannelMessages(
 
   const digestKey = `${ch.id}#digest#${vnDate(now)}`;
   if (wants(ch, 'daily_digest', now) && digestDue(ch, now) && scoped.length && !(await deps.store.hasSent(digestKey))) {
+    const message = isWeeklyDigest(ch)
+      ? weeklyDigestMessage(deps, ch, scoped, weeklyChanges(await deps.store.snapshot(), scoped, now), now, ctx.name)
+      : digestMessage(deps, ch, scoped, now, ctx.name);
     out.push({
-      ...toChannel(ch, 'daily_digest', digestMessage(deps, ch, scoped, now, ctx.name)),
+      ...toChannel(ch, 'daily_digest', message),
       sentKeys: [{ key: digestKey, ttlDays: 2 }],
     });
   }

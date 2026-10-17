@@ -115,6 +115,7 @@ describe('emit from the routes', () => {
     });
     const { item } = await res.json();
     await call('PATCH', `/projects/P01/items/${item.id}`, 'an', { title: 'Server hỏng hẳn' });
+    await flushDue(deps(), new Date(now.getTime() + 120_000)); // high-priority issues wait 2 minutes
     expect(sent).toHaveLength(1);
   });
 

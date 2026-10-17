@@ -67,3 +67,23 @@ describe('pending sign-ups', () => {
     expect((await call('POST', '/users/pending/ghost%40brycen.com.vn/approve', 'lan', {})).status).toBe(404);
   });
 });
+
+describe('login account status', () => {
+  it('tells PMO / MNG which users can sign in', async () => {
+    const users = (await store.listUsers()).map((u) => u.id);
+    accounts.confirmed = new Set(users.filter((u) => u !== 'an@example.com'));
+    await call('POST', '/users', 'lan', { id: 'thao@brycen.com.vn', name: 'Thảo', role: 'GL' });
+    await call('POST', '/users', 'lan', { id: 'moi@brycen.com.vn', name: 'Mới', role: 'PL' });
+    await call('POST', '/users/hung%40example.com/reset-password', 'lan');
+
+    expect((await call('GET', '/users/accounts', 'hung')).status).toBe(403);
+    const { accounts: status } = await (await call('GET', '/users/accounts', 'lan')).json();
+    expect(status).toMatchObject({
+      'an@example.com': 'none',
+      'moi@brycen.com.vn': 'none',
+      'thao@brycen.com.vn': 'pending',
+      'hung@example.com': 'temp',
+      'lan@example.com': 'active',
+    });
+  });
+});

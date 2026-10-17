@@ -1,11 +1,42 @@
 import { useState, type FormEvent } from 'react';
-import { ROLES, type Role } from '../../../api/src/types';
+import { ROLES, type AccountStatus, type Role } from '../../../api/src/types';
 import { api, useApi } from '../api';
 import { ErrorBox, Section } from '../components/ui';
 import { fmtDateTime } from '../format';
 import { ROLE_LABEL } from '../labels';
 import { useSession } from '../session';
 import { l } from '../i18n';
+
+// Status colors always come with a symbol and a text label.
+const ACCOUNT_BADGE: Record<AccountStatus, { tone: string; icon: string; label: string; hint: string }> = {
+  active: {
+    tone: 'green',
+    icon: '●',
+    label: l('Đã có tài khoản', 'アカウントあり'),
+    hint: l('Đăng nhập được bằng mật khẩu của mình', '自分のパスワードでログインできます'),
+  },
+  temp: {
+    tone: 'yellow',
+    icon: '▲',
+    label: l('Mật khẩu tạm', '仮パスワード'),
+    hint: l('Chưa đăng nhập để đổi mật khẩu tạm', '仮パスワードでまだログインしていません'),
+  },
+  pending: {
+    tone: 'yellow',
+    icon: '▲',
+    label: l('Chờ duyệt', '承認待ち'),
+    hint: l('Đã đăng ký, chưa xác nhận email — duyệt ở mục "Chờ duyệt"', '登録済み・メール未確認。「承認待ち」で承認してください'),
+  },
+  none: {
+    tone: 'red',
+    icon: '■',
+    label: l('Chưa có tài khoản', 'アカウントなし'),
+    hint: l(
+      'Chưa đăng ký tài khoản đăng nhập — người này cần tự "Đăng ký tài khoản" bằng đúng email này',
+      'ログインアカウント未登録。本人がこのメールで新規登録する必要があります',
+    ),
+  },
+};
 
 export function UsersPage() {
   const { users, reloadUsers, canManageUsers, me } = useSession();
@@ -18,6 +49,7 @@ export function UsersPage() {
   const [approveRole, setApproveRole] = useState<Record<string, Role | ''>>({});
   const [info, setInfo] = useState<string>();
   const [temp, setTemp] = useState<{ email: string; password: string }>();
+  const accounts = useApi<{ accounts: Record<string, AccountStatus> }>(canManageUsers ? '/users/accounts' : null);
 
   if (!canManageUsers) return <ErrorBox error={l('Chỉ PMO / MNG mới quản lý người dùng', 'ユーザー管理は PMO / MNG のみ行えます')} />;
 
@@ -36,6 +68,7 @@ export function UsersPage() {
           : l(`Đã từ chối ${email}.`, `${email} を却下しました。`),
       );
       pending.reload();
+      accounts.reload();
       reloadUsers();
       window.dispatchEvent(new Event('pending-changed'));
     } catch (e) {
@@ -58,6 +91,7 @@ export function UsersPage() {
     try {
       const r = await api.post<{ password: string }>(`/users/${encodeURIComponent(email)}/reset-password`, {});
       setTemp({ email, password: r.password });
+      accounts.reload();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       setError((e as Error).message);
@@ -82,6 +116,7 @@ export function UsersPage() {
       setId('');
       setName('');
       reloadUsers();
+      accounts.reload();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -90,7 +125,7 @@ export function UsersPage() {
   return (
     <div className="stack narrow">
       <h1>{l('Người dùng', 'ユーザー')}</h1>
-      <ErrorBox error={error ?? pending.error} />
+      <ErrorBox error={error ?? pending.error ?? accounts.error} />
       {info && <div className="info-box">{info}</div>}
       {temp && (
         <div className="info-box temp-password">
@@ -202,8 +237,8 @@ export function UsersPage() {
         </form>
         <p className="muted">
           {l(
-            'Người đăng nhập lần đầu được tạo tự động với vai trò PL. Khi họ đăng ký bằng đúng email này, vai trò ở đây được giữ nguyên.',
-            '初回ログインしたユーザーはロール PL で自動作成されます。同じメールで登録した場合は、ここで設定したロールが維持されます。',
+            'Thêm ở đây chỉ tạo hồ sơ (tên, vai trò) để gán vào dự án — chưa tạo tài khoản đăng nhập hay mật khẩu. Người đó cần tự bấm "Đăng ký tài khoản" ở trang đăng nhập bằng đúng email này và tự đặt mật khẩu; khi đó vai trò ở đây được giữ nguyên. Người không được thêm trước thì lần đăng nhập đầu được tạo với vai trò PL.',
+            'ここでの追加はプロフィール（氏名・ロール）を作るだけで、ログインアカウントやパスワードはまだ作られません。本人がログイン画面の「新規登録」から同じメールで登録し、自分でパスワードを設定する必要があります。その際、ここで設定したロールが維持されます。事前に追加されていない人は、初回ログイン時にロール PL で作成されます。',
           )}
         </p>
       </Section>
@@ -215,38 +250,50 @@ export function UsersPage() {
                 <th>{l('Họ tên', '氏名')}</th>
                 <th>Email</th>
                 <th>{l('Vai trò', 'ロール')}</th>
+                <th>{l('Tài khoản đăng nhập', 'ログインアカウント')}</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.name}</td>
-                  <td>{u.id}</td>
-                  <td>
-                    <select
-                      value={u.role}
-                      disabled={u.id === me.id}
-                      title={u.id === me.id ? l('Không tự đổi vai trò của chính mình', '自分自身のロールは変更できません') : undefined}
-                      onChange={(e) => changeRole(u.id, e.target.value as Role)}
-                      aria-label={l(`Vai trò của ${u.name}`, `${u.name} のロール`)}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {ROLE_LABEL[r]}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="nowrap">
-                    {u.id !== me.id && (
-                      <button type="button" className="btn-link" onClick={() => resetPassword(u.id)}>
-                        {l('Đặt lại mật khẩu', 'パスワード再設定')}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {users.map((u) => {
+                const status = accounts.data?.accounts[u.id];
+                const badge = status && ACCOUNT_BADGE[status];
+                return (
+                  <tr key={u.id}>
+                    <td>{u.name}</td>
+                    <td>{u.id}</td>
+                    <td>
+                      <select
+                        value={u.role}
+                        disabled={u.id === me.id}
+                        title={u.id === me.id ? l('Không tự đổi vai trò của chính mình', '自分自身のロールは変更できません') : undefined}
+                        onChange={(e) => changeRole(u.id, e.target.value as Role)}
+                        aria-label={l(`Vai trò của ${u.name}`, `${u.name} のロール`)}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {ROLE_LABEL[r]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      {badge && (
+                        <span className={`badge tone-${badge.tone}`} title={badge.hint}>
+                          <span aria-hidden>{badge.icon}</span> {badge.label}
+                        </span>
+                      )}
+                    </td>
+                    <td className="nowrap">
+                      {u.id !== me.id && (status === 'active' || status === 'temp') && (
+                        <button type="button" className="btn-link" onClick={() => resetPassword(u.id)}>
+                          {l('Đặt lại mật khẩu', 'パスワード再設定')}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -1,0 +1,150 @@
+import { useState } from 'react';
+import { Link } from 'react-router';
+import type { ItemType } from '../../../api/src/types';
+import { api, useApi } from '../api';
+import { Empty, ErrorBox, Section, TypeIcon } from '../components/ui';
+import { fmtDateTime, fmtDay } from '../format';
+import { l } from '../i18n';
+import { TYPE_LABEL } from '../labels';
+import { useSession } from '../session';
+
+interface Deleted {
+  deletedAt: string;
+  deletedBy: string;
+}
+interface TrashData {
+  projects: (Deleted & { id: string; name: string; customer?: string })[];
+  items: (Deleted & { id: string; projectId: string; projectName?: string; type: ItemType; title: string; date: string })[];
+  updates: (Deleted & { id: string; projectId: string; projectName?: string; at: string; author: string; summary: string })[];
+}
+
+/** Soft-deleted projects, items and updates (PMO / managers): look and restore. */
+export function TrashPage() {
+  const { isAdmin, name } = useSession();
+  const { data, error, reload } = useApi<TrashData>(isAdmin ? '/trash' : null);
+  const [notice, setNotice] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
+
+  if (!isAdmin) return <ErrorBox error={l('Chỉ PMO / quản lý mới xem được thùng rác', 'ごみ箱は PMO / 管理者のみ利用できます')} />;
+
+  async function restore(kind: 'project' | 'item' | 'update', projectId: string, id = '') {
+    setNotice(undefined);
+    setActionError(undefined);
+    try {
+      await api.post('/trash/restore', { kind, projectId, id });
+      setNotice(l('Đã khôi phục.', '復元しました。'));
+      reload();
+    } catch (e) {
+      setActionError((e as Error).message);
+    }
+  }
+
+  const by = (d: Deleted) => (
+    <small className="muted">
+      {l('Xoá bởi', '削除者')} {name(d.deletedBy)} · {fmtDateTime(d.deletedAt)}
+    </small>
+  );
+  const restoreButton = (onClick: () => void) => (
+    <button type="button" className="btn" onClick={onClick}>
+      {l('Khôi phục', '復元')}
+    </button>
+  );
+
+  return (
+    <div className="stack narrow">
+      <div className="page-head">
+        <div>
+          <Link to="/settings" className="muted">
+            ← {l('Cài đặt', '設定')}
+          </Link>
+          <h1>🗑 {l('Thùng rác', 'ごみ箱')}</h1>
+        </div>
+      </div>
+      <p className="muted">
+        {l(
+          'Những gì đã xoá được giữ lại ở đây và có thể khôi phục. Khôi phục dự án sẽ mang lại cả cập nhật, vấn đề / sự kiện / mốc của nó.',
+          '削除したものはここに残り、復元できます。プロジェクトを復元すると、その報告・課題 / イベント / マイルストーンも戻ります。',
+        )}
+      </p>
+      {notice && <div className="info-box">{notice}</div>}
+      <ErrorBox error={error ?? actionError} />
+      {!data ? (
+        <p className="loading">{l('Đang tải…', '読み込み中…')}</p>
+      ) : (
+        <>
+          <Section title={`${l('Dự án', 'プロジェクト')} (${data.projects.length})`}>
+            {data.projects.length === 0 ? (
+              <Empty>{l('Không có dự án nào bị xoá', '削除されたプロジェクトはありません')}</Empty>
+            ) : (
+              <ul className="rows">
+                {data.projects.map((p) => (
+                  <li key={p.id} className="row">
+                    <div className="row-main">
+                      <b>
+                        {p.id} · {p.name}
+                      </b>
+                      {p.customer && <span className="muted"> · {p.customer}</span>}
+                      <div>{by(p)}</div>
+                    </div>
+                    <div className="row-side">{restoreButton(() => restore('project', p.id))}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
+          <Section title={`${l('Vấn đề · Sự kiện · Mốc', '課題・イベント・マイルストーン')} (${data.items.length})`}>
+            {data.items.length === 0 ? (
+              <Empty>{l('Không có mục nào bị xoá', '削除された項目はありません')}</Empty>
+            ) : (
+              <ul className="rows">
+                {data.items.map((i) => (
+                  <li key={i.id} className="row">
+                    <div className="row-main">
+                      <div className="row-title">
+                        <TypeIcon type={i.type} /> {TYPE_LABEL[i.type]} · {fmtDay(i.date)}
+                        <Link to={`/projects/${i.projectId}`}>
+                          {i.projectId}
+                          {i.projectName ? ` · ${i.projectName}` : ''}
+                        </Link>
+                      </div>
+                      <p className="row-text">{i.title}</p>
+                      {by(i)}
+                    </div>
+                    <div className="row-side">{restoreButton(() => restore('item', i.projectId, i.id))}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
+          <Section title={`${l('Cập nhật tình hình', '状況報告')} (${data.updates.length})`}>
+            {data.updates.length === 0 ? (
+              <Empty>{l('Không có cập nhật nào bị xoá', '削除された報告はありません')}</Empty>
+            ) : (
+              <ul className="rows">
+                {data.updates.map((u) => (
+                  <li key={u.id} className="row">
+                    <div className="row-main">
+                      <div className="row-title">
+                        <span className="nowrap">{fmtDateTime(u.at)}</span>
+                        <b>{name(u.author)}</b>
+                        <Link to={`/projects/${u.projectId}`}>
+                          {u.projectId}
+                          {u.projectName ? ` · ${u.projectName}` : ''}
+                        </Link>
+                      </div>
+                      <p className="row-text">{u.summary}</p>
+                      {by(u)}
+                    </div>
+                    <div className="row-side">{restoreButton(() => restore('update', u.projectId, u.id))}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        </>
+      )}
+    </div>
+  );
+}

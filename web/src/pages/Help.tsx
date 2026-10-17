@@ -102,7 +102,8 @@ export function HelpPage() {
         <ul className="howto">
           <li>Đăng nhập bằng email + mật khẩu. Hệ thống nhớ đăng nhập trên máy đó, không phải đăng nhập lại mỗi ngày.</li>
           <li>
-            <B>Quên mật khẩu</B> gửi mã đặt lại qua email. Nếu email không tới, nhờ người quản trị hệ thống đặt lại mật khẩu giúp.
+            <B>Quên mật khẩu</B> gửi mã đặt lại qua email. Nếu email không tới, nhờ PMO / MNG bấm <B>Đặt lại mật khẩu</B> ở trang Người
+            dùng: họ đưa bạn mật khẩu tạm, bạn đăng nhập bằng mật khẩu đó rồi hệ thống yêu cầu <B>Đặt mật khẩu mới</B>.
           </li>
           <li>Dùng được trên điện thoại: mở cùng địa chỉ web bằng trình duyệt.</li>
           <li>
@@ -278,6 +279,10 @@ export function HelpPage() {
           <li>Chuyển sang Đỏ sẽ gửi thông báo Telegram ngay cho các kênh theo dõi dự án đó.</li>
           <li>PMO / quản lý cũng cập nhật được: đó là đánh giá hoặc chỉ đạo, hiện riêng trên trang dự án.</li>
         </ul>
+        <p className="muted">
+          Lỡ ghi nhầm (sai dự án, gõ nhầm)? Bấm <B>Xoá</B> cạnh cập nhật trong <B>Lịch sử cập nhật</B> — người viết xoá được trong 24 giờ,
+          sau đó nhờ PMO / quản lý. Cập nhật đã xoá vào Thùng rác, PMO khôi phục được.
+        </p>
       </H>
 
       <H id="muc">
@@ -321,6 +326,10 @@ export function HelpPage() {
           <li>Thêm vấn đề ưu tiên Cao sẽ báo Telegram ngay.</li>
           <li>Mốc / sự kiện ngày mai sẽ được nhắc trong tin nhắc mỗi giờ và bản tóm tắt 8h sáng.</li>
         </ul>
+        <p className="muted">
+          Mục nhập nhầm: bấm <B>Xoá</B> ở cuối dòng (người tạo mục, PL / GL của dự án, PMO / quản lý). Mục đã làm xong thì nên chuyển trạng
+          thái <B>Xong</B> thay vì xoá, để còn lịch sử.
+        </p>
       </H>
 
       <H id="ai">
@@ -468,6 +477,18 @@ export function HelpPage() {
           Ở mỗi kênh, chọn mẫu tin (kết nối, chuyển Đỏ, vấn đề Cao, nhắc mỗi giờ, tóm tắt 8h) rồi bấm <B>Gửi thử</B> để xem trước tin thật
           trông thế nào. Tin mẫu có chữ <b>[Mẫu]</b> và không ảnh hưởng thông báo thật. Kênh có thể <B>Sửa</B>, <B>Tắt</B> hoặc <B>Xoá</B>.
         </p>
+        <h3>Đổi nhóm / đổi URL</h3>
+        <ul className="howto">
+          <li>
+            Kênh Telegram: <B>Sửa</B> → <B>Đổi sang nhóm khác</B> → gửi dòng /connect mới vào nhóm mới → <B>Lưu &amp; gửi tin thử</B>. Các
+            thiết lập khác giữ nguyên.
+          </li>
+          <li>
+            Kênh Teams: <B>Sửa</B> → dán URL webhook mới (để trống = giữ URL cũ) → <B>Lưu</B> → <B>Gửi thử</B>. Nhớ xoá Workflow cũ trong
+            Teams.
+          </li>
+          <li>Loại kênh (Telegram ↔ Teams) không đổi được: đăng ký kênh mới rồi xoá kênh cũ.</li>
+        </ul>
         <p className="muted">Teams cũng được hỗ trợ (dán URL webhook của Workflows) khi công ty cho phép dùng Power Automate.</p>
       </H>
 
@@ -490,6 +511,21 @@ export function HelpPage() {
             dùng có số đỏ khi có người chờ.
           </li>
           <li>Đổi vai trò, sửa tên; thêm trước người chưa đăng nhập để gán vào dự án.</li>
+          <li>
+            <B>Đặt lại mật khẩu</B> (cuối mỗi dòng): tạo mật khẩu tạm, hiện một lần. Gửi riêng cho người đó; lần đăng nhập đầu họ phải đặt
+            mật khẩu mới. Tài khoản đang chờ duyệt thì duyệt trước.
+          </li>
+        </ul>
+        <h3>Xoá và Thùng rác</h3>
+        <ul className="howto">
+          <li>
+            Xoá là <b>xoá mềm</b>: dữ liệu bị ẩn khỏi mọi trang, AI và thông báo, nhưng vẫn được giữ lại. <B>Cài đặt → Thùng rác</B> liệt kê
+            dự án, cập nhật, mục đã xoá (ai xoá, lúc nào) và cho <B>Khôi phục</B>.
+          </li>
+          <li>
+            Xoá dự án (PMO / quản lý): <B>Sửa dự án</B> → cuối trang <B>Xoá dự án</B>. Khôi phục dự án mang lại cả cập nhật và mục của nó.
+            Dự án đã xong thì đặt tình trạng <B>Đã đóng</B> thay vì xoá.
+          </li>
         </ul>
         <h3>Cài đặt (PMO / quản lý)</h3>
         <ul className="howto">
@@ -499,7 +535,11 @@ export function HelpPage() {
           </li>
           <li>
             <b>Bot Telegram</b>: tạo bot với @BotFather (<code>/newbot</code>) rồi dán token. Token lộ ra ngoài thì <code>/revoke</code> ở
-            BotFather và dán token mới — các nhóm đã kết nối vẫn giữ nguyên.
+            BotFather rồi bấm <B>Đổi token</B> và dán token mới — các nhóm đã kết nối vẫn giữ nguyên. Đổi sang bot khác thì phải thêm bot
+            mới vào từng nhóm.
+          </li>
+          <li>
+            <b>Microsoft Teams</b>: không có gì để cài chung — mỗi kênh Teams đăng ký ở trang Kênh thông báo với URL webhook riêng.
           </li>
           <li>Tần suất cập nhật theo trạng thái, ngưỡng "sắp tới", số ngày hiện trên danh sách sắp tới.</li>
         </ul>
@@ -510,7 +550,8 @@ export function HelpPage() {
         <dl className="faq">
           <dt>Tôi không nhận được email xác nhận / đặt lại mật khẩu.</dt>
           <dd>
-            Kiểm tra thư rác. Mail công ty có thể chặn thư tự động — báo PMO duyệt tài khoản, hoặc nhờ quản trị hệ thống đặt lại mật khẩu.
+            Kiểm tra thư rác. Mail công ty có thể chặn thư tự động — báo PMO duyệt tài khoản (chưa xác nhận), hoặc nhờ PMO / MNG bấm Đặt lại
+            mật khẩu để lấy mật khẩu tạm.
           </dd>
           <dt>Dự án của tôi bị báo "trễ cập nhật" dù PMO vừa cập nhật.</dt>
           <dd>Chỉ cập nhật của PL / GL / người hỗ trợ mới tính. Hãy tự cập nhật tình hình.</dd>
@@ -520,6 +561,8 @@ export function HelpPage() {
           <dd>Chỉ PMO, quản lý, GL và PL của dự án mới sửa được. Nhờ PMO thêm bạn vào dự án hoặc đổi vai trò.</dd>
           <dt>Kết nối Telegram báo "Bot chưa nhận được mã".</dt>
           <dd>Bot phải ở trong nhóm trước khi gửi dòng /connect. Thêm bot, gửi lại dòng đó, rồi bấm Kết nối.</dd>
+          <dt>Tôi lỡ xoá nhầm.</dt>
+          <dd>Không mất: báo PMO / quản lý khôi phục ở Cài đặt → Thùng rác.</dd>
           <dt>AI không đưa ra đề xuất nào.</dt>
           <dd>Ghi chú cần có nội dung về tình hình / việc cụ thể. Nêu dự án hoặc chọn Dự án mặc định. Đọc phần "AI cần làm rõ" nếu có.</dd>
         </dl>

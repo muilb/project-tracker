@@ -166,10 +166,25 @@ export const aiAskSchema = z.object({
     }),
 });
 
+export const restoreSchema = z.object({
+  kind: z.enum(['project', 'item', 'update']),
+  projectId: z.string().trim().toUpperCase().min(1),
+  /** Item or update id; ignored for a project. */
+  id: z.string().trim().default(''),
+});
+
 export const testSampleSchema = z.object({ sample: z.enum(TEST_SAMPLES).default('connect') });
 
 export const telegramBotSchema = z.object({ token: z.string().trim().min(10).max(200) });
-export const patchChannelSchema = z.object({ ...channelFields, quietHours: z.boolean(), enabled: z.boolean() }).partial();
+export const patchChannelSchema = z
+  .object({
+    ...channelFields,
+    quietHours: z.boolean(),
+    enabled: z.boolean(),
+    /** Telegram: move the channel to the chat that sent this code. */
+    connectCode: z.string().trim().max(40),
+  })
+  .partial();
 
 export async function parseBody<T extends z.ZodType>(req: { json(): Promise<unknown> }, schema: T): Promise<z.infer<T>> {
   let body: unknown;

@@ -12,6 +12,7 @@ import { admin } from './routes/admin.js';
 import { ai as aiRoutes } from './routes/ai.js';
 import { channels } from './routes/channels.js';
 import { projects } from './routes/projects.js';
+import { trash } from './routes/trash.js';
 import type { Store } from './store/store.js';
 import { buildDashboard, buildPublic } from './views.js';
 
@@ -93,6 +94,7 @@ export function createApp({
   app.route('/', aiRoutes);
   app.route('/projects', projects);
   app.route('/channels', channels);
+  app.route('/trash', trash);
 
   return app;
 }

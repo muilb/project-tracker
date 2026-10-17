@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { AuthError, auth } from '../auth';
+import { AuthError, NewPasswordRequired, auth } from '../auth';
 import { ErrorBox, LangSwitch } from '../components/ui';
 import { l, lang } from '../i18n';
 import { getConfig } from '../config';
 
-type Mode = 'signIn' | 'signUp' | 'confirm' | 'forgot' | 'reset';
+type Mode = 'signIn' | 'signUp' | 'confirm' | 'forgot' | 'reset' | 'newPassword';
 
 const SAMPLE_USERS = [
   ['lan@example.com', 'Lan · PMO'],
@@ -23,6 +23,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [challenge, setChallenge] = useState<string>(); // Cognito session for a new password
   const [error, setError] = useState<string>();
   const [info, setInfo] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -34,7 +35,17 @@ export function Login() {
     try {
       await fn();
     } catch (e) {
-      if (e instanceof AuthError && e.code === 'UserNotConfirmedException') {
+      if (e instanceof NewPasswordRequired) {
+        setChallenge(e.session);
+        setPassword('');
+        setMode('newPassword');
+        setInfo(
+          l(
+            'Bạn đang dùng mật khẩu tạm do PMO cấp. Hãy đặt mật khẩu mới để tiếp tục.',
+            'PMO が発行した仮パスワードでログインしました。続けるには新しいパスワードを設定してください。',
+          ),
+        );
+      } else if (e instanceof AuthError && e.code === 'UserNotConfirmedException') {
         await auth.resendCode(email).catch(() => {});
         setMode('confirm');
         setInfo(
@@ -77,6 +88,11 @@ export function Login() {
         setMode('reset');
         setInfo(l('Đã gửi mã đặt lại mật khẩu tới email của bạn.', 'パスワード再設定コードをメールで送信しました。'));
       });
+    if (mode === 'newPassword')
+      return run(async () => {
+        await auth.completeNewPassword(email, challenge!, password);
+        navigate(from, { replace: true });
+      });
     return run(async () => {
       await auth.confirmForgotPassword(email, code, password);
       await signIn();
@@ -89,6 +105,7 @@ export function Login() {
     confirm: l('Xác nhận email', 'メール確認'),
     forgot: l('Quên mật khẩu', 'パスワードを忘れた場合'),
     reset: l('Đặt lại mật khẩu', 'パスワード再設定'),
+    newPassword: l('Đặt mật khẩu mới', '新しいパスワードを設定'),
   };
 
   return (
@@ -135,7 +152,14 @@ export function Login() {
 
         <label>
           Email
-          <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            readOnly={mode === 'newPassword'}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </label>
         {mode === 'signUp' && (
           <label>
@@ -149,9 +173,9 @@ export function Login() {
             <input required inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
           </label>
         )}
-        {!dev && (mode === 'signIn' || mode === 'signUp' || mode === 'reset') && (
+        {!dev && (mode === 'signIn' || mode === 'signUp' || mode === 'reset' || mode === 'newPassword') && (
           <label>
-            {mode === 'reset' ? l('Mật khẩu mới', '新しいパスワード') : l('Mật khẩu', 'パスワード')}
+            {mode === 'reset' || mode === 'newPassword' ? l('Mật khẩu mới', '新しいパスワード') : l('Mật khẩu', 'パスワード')}
             <input
               type="password"
               required

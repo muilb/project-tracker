@@ -196,3 +196,30 @@ describe('dynamo channel rows', () => {
     expect(channelFromRow({ ...old, telegramChatId: undefined, webhookUrl: 'https://x', kind: 'CHANNEL' }).kind).toBe('teams');
   });
 });
+
+describe('moving a Telegram channel to another chat', () => {
+  beforeEach(() => store.putTelegramBot({ token: TOKEN, username: 'du_an_bot' }));
+
+  it('finds the new chat by code, sends a test message and keeps the settings', async () => {
+    chats = [{ text: '/connect@du_an_bot PT-OLD01', id: '-100111', title: 'Nhóm cũ' }];
+    const created = await (await call('POST', '/channels', 'lan', channelBody('PT-OLD01'))).json();
+    chats.push({ text: '/connect@du_an_bot PT-NEW02', id: '-100222', title: 'Nhóm mới' });
+    tgSent = [];
+    const res = await call('PATCH', `/channels/${created.channel.id}`, 'lan', { connectCode: 'PT-NEW02' });
+    expect(res.status).toBe(200);
+    const { channel } = await res.json();
+    expect(channel).toMatchObject({ telegramChatId: '-100222', telegramChatTitle: 'Nhóm mới', name: 'Nhóm dự án', events: ['became_red'] });
+    expect(tgSent.map((m) => m.chatId)).toEqual(['-100222']);
+  });
+
+  it('explains a code the bot did not receive, and refuses Teams channels', async () => {
+    chats = [{ text: '/connect@du_an_bot PT-OLD01', id: '-100111', title: 'Nhóm cũ' }];
+    const created = await (await call('POST', '/channels', 'lan', channelBody('PT-OLD01'))).json();
+    const miss = await call('PATCH', `/channels/${created.channel.id}`, 'lan', { connectCode: 'PT-NONE9' });
+    expect(miss.status).toBe(400);
+    expect((await miss.json()).error).toContain('PT-NONE9');
+
+    await store.putChannel({ ...created.channel, id: 'C900', kind: 'teams', webhookUrl: 'https://x.logic.azure.com/w?sig=s' });
+    expect((await call('PATCH', '/channels/C900', 'lan', { connectCode: 'PT-OLD01' })).status).toBe(400);
+  });
+});

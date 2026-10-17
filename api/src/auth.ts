@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from './env.js';
 import { l } from './i18n.js';
-import { ROLES, type Project, type Role, type User } from './types.js';
+import { ROLES, type Item, type Project, type Role, type Update, type User } from './types.js';
 
 export interface AuthConfig {
   /** `jwt`: identity from the API Gateway Cognito authorizer. `dev`: `x-dev-user: <email>` header. */
@@ -72,7 +72,15 @@ export const can = {
   /** PL and above. */
   createProject: (u: User) => u.role !== 'OTHER',
   editProject: (u: User, p: Project) => can.admin(u) || p.gl === u.id || p.pl === u.id,
+  /** Soft deletes; PMO / managers restore them from the trash. */
+  deleteProject: (u: User) => can.admin(u),
+  deleteItem: (u: User, p: Project, item: Item) => can.editProject(u, p) || item.createdBy === u.id,
+  /** The author within DELETE_UPDATE_HOURS (a typo, the wrong project), or PMO / managers. */
+  deleteUpdate: (u: User, update: Update, now: Date) =>
+    can.admin(u) || (update.author === u.id && now.getTime() - Date.parse(update.at) < DELETE_UPDATE_HOURS * 3600_000),
 };
+
+export const DELETE_UPDATE_HOURS = 24;
 
 export function ensure(allowed: boolean, message = l('Không có quyền thực hiện thao tác này', 'この操作を行う権限がありません')) {
   if (!allowed) throw new HTTPException(403, { message });

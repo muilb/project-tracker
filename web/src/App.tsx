@@ -15,6 +15,7 @@ import { ProjectForm } from './pages/ProjectForm';
 import { Projects } from './pages/Projects';
 import { PublicPage } from './pages/Public';
 import { SettingsPage } from './pages/Settings';
+import { TrashPage } from './pages/Trash';
 import { UsersPage } from './pages/Users';
 import { SessionProvider, useSession } from './session';
 import type { User } from './types';
@@ -72,6 +73,7 @@ function Authenticated() {
           <Route path="/channels" element={<ChannelsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/trash" element={<TrashPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

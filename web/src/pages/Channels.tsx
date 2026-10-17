@@ -244,6 +244,8 @@ function ChannelForm({
   const [chName, setName] = useState(channel?.name ?? '');
   const [url, setUrl] = useState('');
   const code = useMemo(connectCode, []);
+  /** Editing a Telegram channel: move it to another group with a new connect line. */
+  const [regroup, setRegroup] = useState(false);
   const [scopeType, setScopeType] = useState<ChannelScope['type']>(channel?.scope.type ?? (me.role === 'GL' ? 'gl' : 'all'));
   const [gl, setGl] = useState(channel?.scope.gl ?? (me.role === 'GL' ? me.id : ''));
   const [picked, setPicked] = useState<string[]>(channel?.scope.projects ?? []);
@@ -269,8 +271,17 @@ function ChannelForm({
           quietHours,
           lang: msgLang,
           ...(url ? { webhookUrl: url } : {}),
+          ...(regroup ? { connectCode: code } : {}),
         });
-        onSaved(l(`Đã lưu kênh "${chName}"`, `チャネル「${chName}」を保存しました`));
+        if (regroup) forgetConnectCode();
+        onSaved(
+          regroup
+            ? l(
+                `Đã chuyển "${chName}" sang nhóm mới — kiểm tra tin thử trong Telegram`,
+                `「${chName}」を新しいグループに移しました — Telegram でテストメッセージを確認してください`,
+              )
+            : l(`Đã lưu kênh "${chName}"`, `チャネル「${chName}」を保存しました`),
+        );
       } else {
         const target = kind === 'telegram' ? { connectCode: code } : { webhookUrl: url };
         await api.post('/channels', { kind, name: chName, scope, events, quietHours, lang: msgLang, ...target });
@@ -318,9 +329,31 @@ function ChannelForm({
         />
       </label>
 
-      {!channel && kind === 'telegram' && (
+      {channel && (
+        <p className="muted">
+          {l(
+            'Loại kênh (Telegram / Teams) không đổi được. Muốn chuyển loại, đăng ký kênh mới rồi xoá kênh này.',
+            'チャネルの種類（Telegram / Teams）は変更できません。種類を変える場合は新しいチャネルを登録し、このチャネルを削除してください。',
+          )}
+        </p>
+      )}
+
+      {channel && kind === 'telegram' && !regroup && (
+        <div className="row-title">
+          <span>
+            {l('Nhóm Telegram', 'Telegram グループ')}: <b>{channel.telegramChatTitle ?? channel.telegramChatId}</b>
+          </span>
+          <button type="button" className="btn" onClick={() => setRegroup(true)}>
+            {l('Đổi sang nhóm khác', '別のグループに変更')}
+          </button>
+        </div>
+      )}
+
+      {(!channel || regroup) && kind === 'telegram' && (
         <fieldset>
-          <legend>{l('Kết nối nhóm Telegram', 'Telegram グループに接続')}</legend>
+          <legend>
+            {regroup ? l('Đổi nhóm Telegram', 'Telegram グループの変更') : l('Kết nối nhóm Telegram', 'Telegram グループに接続')}
+          </legend>
           {telegramBlocked ? (
             <div className="error-box">
               {l('Chưa cài bot Telegram.', 'Telegram ボットが未設定です。')}{' '}
@@ -365,11 +398,11 @@ function ChannelForm({
               <li>
                 {lang === 'ja' ? (
                   <>
-                    この画面に戻り、<b>接続してテスト送信</b>を押します。
+                    この画面に戻り、<b>{regroup ? '保存してテスト送信' : '接続してテスト送信'}</b>を押します。
                   </>
                 ) : (
                   <>
-                    Quay lại đây, bấm <b>Kết nối &amp; gửi tin thử</b>.
+                    Quay lại đây, bấm <b>{regroup ? 'Lưu & gửi tin thử' : 'Kết nối & gửi tin thử'}</b>.
                   </>
                 )}
               </li>
@@ -482,7 +515,13 @@ function ChannelForm({
           {l('Huỷ', 'キャンセル')}
         </button>
         <button className="btn btn-primary" disabled={busy || !!telegramBlocked}>
-          {busy ? l('Đang gửi tin thử…', 'テスト送信中…') : channel ? l('Lưu', '保存') : l('Kết nối & gửi tin thử', '接続してテスト送信')}
+          {busy
+            ? l('Đang gửi tin thử…', 'テスト送信中…')
+            : regroup
+              ? l('Lưu & gửi tin thử', '保存してテスト送信')
+              : channel
+                ? l('Lưu', '保存')
+                : l('Kết nối & gửi tin thử', '接続してテスト送信')}
         </button>
       </div>
     </form>

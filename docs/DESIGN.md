@@ -93,11 +93,17 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET / PUT | `/settings` | Tần suất cập nhật và các ngưỡng |
 | GET / POST | `/channels` | Kênh thông báo `kind: teams` (`webhookUrl`) hoặc `kind: telegram` (`connectCode`). Mỗi người thấy kênh mình tạo, PMO / quản lý thấy tất cả. Khi tạo, hệ thống gửi tin thử, chỉ lưu nếu gửi được. `lang` (`vi` / `ja`) là ngôn ngữ tin gửi vào kênh, mặc định theo ngôn ngữ người tạo |
 | GET / PUT / DELETE | `/settings/telegram` | Trạng thái bot (`configured`, `username`; ai đăng nhập cũng xem được). Cài token (`PUT { token }`) hoặc gỡ bot: PMO / quản lý |
-| PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, ngôn ngữ tin `lang`, bật / tắt, URL) hoặc xoá: người tạo, PMO / quản lý |
+| PATCH / DELETE | `/channels/:id` | Sửa (tên, phạm vi, loại thông báo, giờ yên lặng, ngôn ngữ tin `lang`, bật / tắt, URL Teams; Telegram: `connectCode` để chuyển sang nhóm khác — tìm nhóm như khi tạo và gửi tin thử) hoặc xoá: người tạo, PMO / quản lý |
 | POST | `/channels/:id/test` | Gửi tin thử. Body `{ sample }`: `connect` (mặc định), hoặc mẫu tin thật lấy từ dữ liệu hiện tại trong phạm vi kênh: `became_red`, `high_issue`, `hourly`, `daily_digest`. Tiêu đề có `[Mẫu]`, không đánh dấu đã gửi nên không ảnh hưởng cảnh báo thật |
 | GET / PUT / DELETE | `/settings/ai` | Trạng thái API key Claude (`configured`, `model`). Cài (`PUT { apiKey }`, được kiểm tra với Claude trước khi lưu) hoặc gỡ: PMO / quản lý. Key không bao giờ được trả về |
 | POST | `/ai/parse` | PL trở lên. Body `{ text, projectId? }` (≤ 4000 ký tự; `projectId` = dự án mặc định khi ghi chú không nêu dự án). Không xác định được dự án thì đề xuất vẫn được trả về với `needsProject: true` để người dùng chọn. Trả về `proposals` (đề xuất `update` / `item` / `item_status` / `item_update` / `project_create` / `project_update`, đã kiểm tra hợp lệ, có `error` nếu không ghi được) và `questions`. **Không ghi gì** — web hiển thị để người dùng sửa / bỏ chọn, rồi tự gọi các endpoint ở trên |
 | POST | `/ai/ask` | Mọi người đã đăng nhập. Body `{ messages }`: hội thoại xen kẽ `user` / `assistant`, kết thúc bằng câu hỏi, tối đa 20 tin. Trả về `{ answer, truncated }`. Chỉ đọc |
+| DELETE | `/projects/:id` | Xoá mềm dự án: PMO / quản lý |
+| DELETE | `/projects/:id/items/:itemId` | Xoá mềm mục: người tạo, PL / GL của dự án, PMO / quản lý |
+| DELETE | `/projects/:id/updates/:updateId` | Xoá mềm cập nhật: người viết trong 24 giờ, hoặc PMO / quản lý |
+| GET | `/trash` | PMO / quản lý: dự án, mục, cập nhật đã xoá (ai xoá, lúc nào) |
+| POST | `/trash/restore` | PMO / quản lý. Body `{ kind: project \| item \| update, projectId, id? }`. Khôi phục mục của dự án đang bị xoá thì phải khôi phục dự án trước |
+| POST | `/users/:email/reset-password` | PMO / MNG (không cho chính mình). Đặt mật khẩu tạm trong Cognito (`Permanent: false`), trả về `{ password }` một lần; lần đăng nhập sau Cognito yêu cầu `NEW_PASSWORD_REQUIRED`, web hiện bước đặt mật khẩu mới |
 
 Ví dụ tạo dự án:
 
@@ -189,3 +195,9 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 - Khối dữ liệu đặt sau prompt hệ thống, có `cache_control`, nên các câu hỏi tiếp trong vài phút đọc từ cache.
 - Một lần gọi, không thử lại, chờ tối đa 24 giây (giới hạn 30 giây của API Gateway). Trả lời tối đa 4000 token; bị cắt thì `truncated: true`.
 - Hội thoại chỉ nằm trong trang web (không lưu); web gửi tối đa 19 tin gần nhất.
+
+## Xoá mềm
+
+- Dự án, cập nhật, mục có `deletedAt` / `deletedBy`. `Store.snapshot()`, `listUpdates()`, `listItems()` bỏ các dòng đã xoá và mọi dòng của dự án đã xoá; `snapshot({ includeDeleted: true })` dùng cho Thùng rác. `getProject` / `getItem` trả cả dòng đã xoá — route kiểm tra `deletedAt` và trả 404.
+- Vì vậy dashboard, trang public, cảnh báo, AI đều không thấy dữ liệu đã xoá. Mã dự án đã xoá vẫn bị giữ (tạo trùng mã báo 409 kèm gợi ý khôi phục).
+- Không có xoá cứng; khôi phục ở `/trash` (web: Cài đặt → Thùng rác).

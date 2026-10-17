@@ -111,7 +111,7 @@ export async function loadSample(store: Store, now: Date) {
 
   let n = 0;
   for (const [projectId, at, author, health, summary, needHelp] of UPDATES) {
-    await store.addUpdate({
+    await store.putUpdate({
       id: `seed${++n}`,
       projectId,
       at: time(at),

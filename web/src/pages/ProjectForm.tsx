@@ -28,7 +28,7 @@ export function ProjectForm() {
   const { id } = useParams();
   const editing = !!id;
   const navigate = useNavigate();
-  const { me, users } = useSession();
+  const { me, users, isAdmin } = useSession();
   const [f, setF] = useState<FormState>({
     id: '',
     name: '',
@@ -99,6 +99,18 @@ export function ProjectForm() {
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeProject() {
+    if (!confirm(l(`Xoá dự án ${id}?`, `プロジェクト ${id} を削除しますか？`))) return;
+    setBusy(true);
+    try {
+      await api.del(`/projects/${id}`);
+      navigate('/projects');
+    } catch (err) {
+      setError((err as Error).message);
       setBusy(false);
     }
   }
@@ -242,6 +254,22 @@ export function ProjectForm() {
           </button>
         </div>
       </form>
+      {editing && isAdmin && (
+        <section className="card danger-zone">
+          <h2>{l('Xoá dự án', 'プロジェクトの削除')}</h2>
+          <p className="muted">
+            {l(
+              'Dự án và toàn bộ cập nhật, vấn đề / sự kiện / mốc của nó sẽ bị ẩn khỏi mọi trang và không còn nhắc. PMO / quản lý khôi phục được ở Cài đặt → Thùng rác. Dự án đã kết thúc thì nên chọn tình trạng "Đã đóng" thay vì xoá.',
+              'プロジェクトとその報告・課題 / イベント / マイルストーンはすべての画面から非表示になり、通知も止まります。PMO / 管理者は「設定 → ごみ箱」から復元できます。完了したプロジェクトは削除せず、状況を「終了」にしてください。',
+            )}
+          </p>
+          <div className="actions">
+            <button type="button" className="btn btn-danger" disabled={busy} onClick={removeProject}>
+              {l('Xoá dự án', 'プロジェクトを削除')}
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

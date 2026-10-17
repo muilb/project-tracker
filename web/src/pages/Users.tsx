@@ -17,6 +17,7 @@ export function UsersPage() {
   const pending = useApi<{ pending: { email: string; name?: string; createdAt: string }[] }>(canManageUsers ? '/users/pending' : null);
   const [approveRole, setApproveRole] = useState<Record<string, Role | ''>>({});
   const [info, setInfo] = useState<string>();
+  const [temp, setTemp] = useState<{ email: string; password: string }>();
 
   if (!canManageUsers) return <ErrorBox error={l('Chỉ PMO / MNG mới quản lý người dùng', 'ユーザー管理は PMO / MNG のみ行えます')} />;
 
@@ -37,6 +38,27 @@ export function UsersPage() {
       pending.reload();
       reloadUsers();
       window.dispatchEvent(new Event('pending-changed'));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function resetPassword(email: string) {
+    if (
+      !confirm(
+        l(
+          `Đặt mật khẩu tạm cho ${email}? Mật khẩu cũ sẽ không dùng được nữa.`,
+          `${email} に仮パスワードを設定しますか？ 現在のパスワードは使えなくなります。`,
+        ),
+      )
+    )
+      return;
+    setError(undefined);
+    setTemp(undefined);
+    try {
+      const r = await api.post<{ password: string }>(`/users/${encodeURIComponent(email)}/reset-password`, {});
+      setTemp({ email, password: r.password });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -70,6 +92,30 @@ export function UsersPage() {
       <h1>{l('Người dùng', 'ユーザー')}</h1>
       <ErrorBox error={error ?? pending.error} />
       {info && <div className="info-box">{info}</div>}
+      {temp && (
+        <div className="info-box temp-password">
+          <p>
+            {l('Mật khẩu tạm của', '仮パスワード:')} <b>{temp.email}</b>
+          </p>
+          <div className="copy-line">
+            <code>{temp.password}</code>
+            <button type="button" className="btn" onClick={() => navigator.clipboard?.writeText(temp.password)}>
+              {l('Copy', 'コピー')}
+            </button>
+          </div>
+          <small className="muted">
+            {l(
+              'Gửi mật khẩu này cho người dùng qua kênh riêng (chat, gọi điện). Lần đăng nhập đầu, hệ thống bắt họ đặt mật khẩu mới. Mật khẩu chỉ hiện một lần.',
+              'このパスワードを個別の手段（チャット・電話）で本人に伝えてください。初回ログイン時に新しいパスワードの設定を求められます。表示は一度だけです。',
+            )}
+          </small>
+          <div className="actions">
+            <button type="button" className="btn-link" onClick={() => setTemp(undefined)}>
+              {l('Đóng', '閉じる')}
+            </button>
+          </div>
+        </div>
+      )}
       {!!pending.data?.pending.length && (
         <Section title={`${l('Chờ duyệt', '承認待ち')} (${pending.data.pending.length})`}>
           <p className="muted">
@@ -169,6 +215,7 @@ export function UsersPage() {
                 <th>{l('Họ tên', '氏名')}</th>
                 <th>Email</th>
                 <th>{l('Vai trò', 'ロール')}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -190,6 +237,13 @@ export function UsersPage() {
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="nowrap">
+                    {u.id !== me.id && (
+                      <button type="button" className="btn-link" onClick={() => resetPassword(u.id)}>
+                        {l('Đặt lại mật khẩu', 'パスワード再設定')}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -469,6 +469,27 @@ export function HelpPage() {
             Quay lại web, bấm <B>Kết nối & gửi tin thử</B>. Nhóm nhận tin ✅ là xong.
           </li>
         </ol>
+        <h3>Kết nối Slack</h3>
+        <ol className="howto">
+          <li>
+            Trên api.slack.com/apps: <b>Create New App</b> → <b>From scratch</b> → chọn workspace.
+          </li>
+          <li>
+            Bật <b>Incoming Webhooks</b> → <b>Add New Webhook to Workspace</b> → chọn kênh Slack muốn nhận → <b>Allow</b>.
+          </li>
+          <li>
+            Copy URL <code>https://hooks.slack.com/services/…</code>. URL này như mật khẩu: hệ thống chỉ hiện lại dạng che.
+          </li>
+          <li>
+            Trên web: <B>Kênh thông báo</B> → <B>＋ Đăng ký kênh</B> → Slack, dán URL, chọn phạm vi và loại thông báo → <B>Kết nối & gửi tin thử</B>.
+            Đổi URL sau này (<B>Sửa</B>) cũng gửi tin thử trước khi lưu.
+          </li>
+        </ol>
+        <p>
+          <B>Mức chi tiết của tin</B> (mọi loại kênh): <b>Rút gọn</b> không gửi nội dung người dùng nhập (tóm tắt, cần hỗ trợ, ghi chú, tên
+          mục), chỉ gửi mã và tên dự án, trạng thái, hạn, số lượng và link — hợp với kênh có người ngoài. PMO có thể chọn{' '}
+          <B>Luôn rút gọn</B> ở <B>Cài đặt</B> để áp cho mọi kênh.
+        </p>
         <h3>Nhận được những gì</h3>
         <ul className="howto">
           <li>

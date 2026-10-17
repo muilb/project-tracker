@@ -220,7 +220,14 @@ _Nhánh C._
 
 ### Slack
 
-_Nhánh E._
+- `kind: 'slack'`, `webhookUrl` là Slack Incoming Webhook. Chỉ chấp nhận `https://hooks.slack.com/services/T…/B…/…` (https, không port, không user). API chỉ trả `webhookUrlMasked` = `https://hooks.slack.com/services/T…/…` (không bao giờ có phần kênh / khoá bí mật).
+- Tạo kênh, hoặc đổi URL của kênh Slack, đều gửi tin thử trước khi lưu (như Teams khi tạo).
+- `notify/slack.ts` dựng Block Kit từ `Message`: `header` (plain text, ≤ 150 ký tự); các dòng liền nhau cùng loại gộp vào một khối `section` (mrkdwn) hoặc `context` (dòng phụ), mỗi khối ≤ 3000 ký tự; nút link (`actions`). Escape `& < >` (chặn `<!channel>` và link giả), `**x**` → `*x*`. Có `text` thuần làm dự phòng cho thông báo điện thoại. Tối đa 50 khối; thừa thì khối cuối là "…".
+
+**Mức chi tiết** (mọi loại kênh nhóm):
+- `Channel.detail`: `full` (mặc định) hoặc `compact`. `Settings.maxChannelDetail = 'compact'` (PMO, Cài đặt) bắt mọi kênh nhóm rút gọn.
+- `render.compact(msg)` bỏ nội dung người dùng nhập (tóm tắt, cần hỗ trợ, ghi chú, tên mục) và tên người; giữ tiêu đề (mã + tên dự án, số lượng), trạng thái, hạn, số lượng và link. Mỗi `MessageLine` có thể mang `compact` (chuỗi thay thế, hoặc `true` nếu dòng không có nội dung người dùng); dòng không có `compact` bị bỏ — dòng mới mặc định an toàn.
+- Áp ở `createSender` (một chỗ cho mọi loại kênh, kể cả tin thử / tin mẫu). Thông báo cá nhân (`U:<email>`) không bị rút gọn.
 
 ### Quyền xem
 

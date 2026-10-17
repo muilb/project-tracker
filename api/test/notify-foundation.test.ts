@@ -126,11 +126,11 @@ describe('emit from the routes', () => {
 });
 
 describe('channels: new fields', () => {
-  it('does not accept Slack yet, and a null pause clears it', async () => {
+  it('accepts only Slack webhook URLs, and a null pause clears it', async () => {
     const slack = await call('POST', '/channels', 'lan', {
       kind: 'slack',
       name: 'S',
-      webhookUrl: 'https://hooks.slack.com/services/T/B/X',
+      webhookUrl: 'https://example.com/services/T/B/X',
       scope: { type: 'all' },
       events: ['became_red'],
     });

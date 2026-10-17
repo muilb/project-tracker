@@ -1,26 +1,74 @@
 import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { z } from 'zod';
+import { audit } from '../audit.js';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l, lang, withLang } from '../i18n.js';
 import { deliver } from '../notify/deliver.js';
+import { scrubError } from '../notify/errors.js';
 import { testMessage } from '../notify/render.js';
 import { sampleMessage } from '../notify/samples.js';
 import { isSlackWebhookUrl, maskSlackUrl } from '../notify/slack.js';
-import { isTeamsWebhookUrl, maskUrl } from '../notify/teams.js';
+import { isLegacyTeamsUrl, isTeamsWebhookUrl, maskUrl } from '../notify/teams.js';
 import { createChannelSchema, parseBody, patchChannelSchema, testSampleSchema } from '../schemas.js';
-import type { Channel, User } from '../types.js';
+import type { Snapshot } from '../store/store.js';
+import type { AccountStatus, Channel, User } from '../types.js';
 
 export const channels = new Hono<AppEnv>();
 
-/** The Teams / Slack webhook URL works as a password for posting into the channel: never send it back. */
-function publicChannel({ webhookUrl, ...rest }: Channel) {
-  return { ...rest, ...(webhookUrl ? { webhookUrlMasked: rest.kind === 'slack' ? maskSlackUrl(webhookUrl) : maskUrl(webhookUrl) } : {}) };
+/**
+ * The Teams / Slack webhook URL works as a password for posting into the channel: never send it back.
+ * `legacyWebhook`: an Office 365 connector URL, retired by Microsoft. `orphan` (PMO list only):
+ * the owner has no login account any more, or cannot see the projects in the channel's scope.
+ */
+function publicChannel({ webhookUrl, ...rest }: Channel, orphan?: boolean) {
+  return {
+    ...rest,
+    ...(webhookUrl ? { webhookUrlMasked: rest.kind === 'slack' ? maskSlackUrl(webhookUrl) : maskUrl(webhookUrl) } : {}),
+    ...(webhookUrl && rest.kind === 'teams' && isLegacyTeamsUrl(webhookUrl) ? { legacyWebhook: true } : {}),
+    ...(orphan ? { orphan: true } : {}),
+  };
 }
+
+/** Whether the owner of `ch` is gone or cannot see the projects the channel covers. */
+function isOrphan(ch: Channel, snap: Snapshot, statuses: Record<string, AccountStatus>) {
+  const owner = snap.users.find((u) => u.id === ch.createdBy);
+  if (!owner || statuses[owner.id] === 'none') return true;
+  if (owner.role !== 'OTHER') return false;
+  const inScope = snap.projects.filter((p) =>
+    ch.scope.type === 'projects' ? ch.scope.projects?.includes(p.id) : ch.scope.type === 'gl' ? p.gl === ch.scope.gl : true,
+  );
+  return inScope.some((p) => !can.viewProject(owner, p));
+}
+
+/** Audit detail of a channel edit: which settings changed (never the webhook URL itself). */
+function changedFields(before: Channel, after: Channel) {
+  const keys: (keyof Channel)[] = ['name', 'scope', 'events', 'enabled', 'lang', 'quietHours', 'detail', 'schedule', 'pausedUntil'];
+  const out: string[] = keys.filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+  if (before.webhookUrl !== after.webhookUrl) out.push('webhookUrl');
+  if (before.telegramChatId !== after.telegramChatId) out.push(`telegram: ${before.telegramChatTitle ?? '—'} → ${after.telegramChatTitle ?? '—'}`);
+  return out;
+}
+
+const transferSchema = z.object({
+  to: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.email({ error: () => l('Email không hợp lệ', 'メールアドレスが正しくありません') })),
+});
 
 const canEdit = (u: User, ch: Channel) => can.admin(u) || ch.createdBy === u.id;
 
 function checkUrl(url: string) {
+  if (isLegacyTeamsUrl(url))
+    throw new HTTPException(400, {
+      message: l(
+        'URL …webhook.office.com là webhook kiểu cũ (Office 365 connector) mà Microsoft đã ngừng. Hãy tạo Workflow mới trong Teams và dán URL của Workflow.',
+        '…webhook.office.com の URL は Microsoft が廃止した旧形式の Webhook（Office 365 コネクタ）です。Teams で新しい Workflow を作成し、その URL を貼り付けてください。',
+      ),
+    });
   if (!isTeamsWebhookUrl(url))
     throw new HTTPException(400, {
       message: l(
@@ -86,7 +134,18 @@ channels.get('/', async (c) => {
   const all = await c.get('store').listChannels();
   // Admins see every channel; others see the ones they registered.
   const list = all.filter((ch) => can.admin(me) || ch.createdBy === me.id).sort((a, b) => a.name.localeCompare(b.name));
-  return c.json({ channels: list.map(publicChannel) });
+  if (!can.admin(me) || list.length === 0) return c.json({ channels: list.map((ch) => publicChannel(ch)) });
+  // PMO / managers: flag channels whose owner left or cannot see the scope any more.
+  const snap = await c.get('store').snapshot();
+  const owners = [...new Set(list.map((ch) => ch.createdBy))];
+  const statuses = await c
+    .get('accounts')
+    .statuses(owners)
+    .catch((e) => {
+      console.error('account statuses failed', e);
+      return {} as Record<string, AccountStatus>;
+    });
+  return c.json({ channels: list.map((ch) => publicChannel(ch, isOrphan(ch, snap, statuses))) });
 });
 
 channels.post('/', async (c) => {
@@ -130,10 +189,13 @@ channels.post('/', async (c) => {
       withLang(channel.lang, () => testMessage(channel, notify.webUrl)),
     );
   } catch (e) {
-    throw new HTTPException(400, { message: l('Không gửi được tin thử: ', 'テストメッセージを送信できません: ') + (e as Error).message });
+    throw new HTTPException(400, {
+      message: l('Không gửi được tin thử: ', 'テストメッセージを送信できません: ') + scrubError((e as Error).message),
+    });
   }
   channel.lastSentAt = now.toISOString();
   await store.putChannel(channel);
+  await audit(store, now, c.get('user').id, 'channel_create', channel.id, `${channel.name} (${channel.kind})`);
   return c.json({ channel: publicChannel(channel) }, 201);
 });
 
@@ -168,6 +230,8 @@ channels.patch('/:id', async (c) => {
     pausedUntil: body.pausedUntil === undefined ? ch.pausedUntil : (body.pausedUntil ?? undefined),
     updatedAt: c.get('now').toISOString(),
   };
+  // Switched back on by hand: start counting failures again.
+  if (updated.enabled && !ch.enabled) Object.assign(updated, { failCount: 0, autoPausedAt: undefined });
   if (connectCode || (ch.kind === 'slack' && body.webhookUrl && body.webhookUrl !== ch.webhookUrl)) {
     const notify = c.get('notify');
     try {
@@ -176,12 +240,16 @@ channels.patch('/:id', async (c) => {
         withLang(updated.lang, () => testMessage(updated, notify.webUrl)),
       );
     } catch (e) {
-      throw new HTTPException(400, { message: l('Không gửi được tin thử: ', 'テストメッセージを送信できません: ') + (e as Error).message });
+      throw new HTTPException(400, {
+        message: l('Không gửi được tin thử: ', 'テストメッセージを送信できません: ') + scrubError((e as Error).message),
+      });
     }
     updated.lastSentAt = c.get('now').toISOString();
     updated.lastError = undefined;
   }
   await c.get('store').putChannel(updated);
+  const changed = changedFields(ch, updated);
+  if (changed.length) await audit(c.get('store'), c.get('now'), c.get('user').id, 'channel_update', ch.id, `${ch.name}: ${changed.join(', ')}`);
   return c.json({ channel: publicChannel(updated) });
 });
 
@@ -192,7 +260,43 @@ channels.delete('/:id', async (c) => {
     l('Chỉ người tạo kênh hoặc PMO / quản lý mới được xoá', 'チャネルの作成者または PMO / 管理者のみ削除できます'),
   );
   await c.get('store').deleteChannel(ch.id);
+  await audit(c.get('store'), c.get('now'), c.get('user').id, 'channel_delete', ch.id, `${ch.name} (${ch.kind})`);
   return c.json({ ok: true });
+});
+
+channels.get('/:id/deliveries', async (c) => {
+  const ch = await load(c, c.req.param('id'));
+  ensure(
+    canEdit(c.get('user'), ch),
+    l('Chỉ người tạo kênh hoặc PMO / quản lý mới xem được nhật ký gửi', 'チャネルの作成者または PMO / 管理者のみ送信履歴を閲覧できます'),
+  );
+  return c.json({ deliveries: await c.get('store').listDeliveryLog(ch.id, 20) });
+});
+
+/** Hands the channel to another person (the owner leaves, changes team…). */
+channels.post('/:id/transfer', async (c) => {
+  const ch = await load(c, c.req.param('id'));
+  ensure(
+    canEdit(c.get('user'), ch),
+    l('Chỉ người tạo kênh hoặc PMO / quản lý mới được chuyển kênh', 'チャネルの作成者または PMO / 管理者のみ担当者を変更できます'),
+  );
+  const { to } = await parseBody(c.req, transferSchema);
+  const store = c.get('store');
+  const target = await store.getUser(to);
+  const status = target && (await c.get('accounts').statuses([to]))[to];
+  if (!target || status === 'none' || status === 'pending')
+    throw new HTTPException(400, {
+      message: l(
+        `${to} chưa có tài khoản đăng nhập — chỉ chuyển được cho người đã đăng nhập được`,
+        `${to} にはログインアカウントがありません。ログインできる人にのみ変更できます`,
+      ),
+    });
+  if (to === ch.createdBy) return c.json({ channel: publicChannel(ch) });
+  const now = c.get('now');
+  const updated: Channel = { ...ch, createdBy: to, updatedAt: now.toISOString() };
+  await store.putChannel(updated);
+  await audit(store, now, c.get('user').id, 'channel_transfer', ch.id, `${ch.name}: ${ch.createdBy} → ${to}`);
+  return c.json({ channel: publicChannel(updated) });
 });
 
 channels.post('/:id/test', async (c) => {

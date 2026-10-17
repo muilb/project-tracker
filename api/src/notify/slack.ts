@@ -1,5 +1,6 @@
 // Slack delivery through an Incoming Webhook (Slack App → Incoming Webhooks → pick a channel).
 import { l } from '../i18n.js';
+import { PermanentDeliveryError } from './errors.js';
 import type { Message } from './message.js';
 
 /** Slack Block Kit limits. */
@@ -91,6 +92,16 @@ export async function postSlack(url: string, payload: unknown): Promise<void> {
   if (!res.ok) {
     // Slack answers with a short code such as "invalid_payload" or "no_service".
     const text = (await res.text().catch(() => '')).slice(0, 200);
-    throw new Error(`${l('Slack trả về', 'Slack の応答:')} HTTP ${res.status}${text ? `: ${text}` : ''}`);
+    const message = `${l('Slack trả về', 'Slack の応答:')} HTTP ${res.status}${text ? `: ${text}` : ''}`;
+    // track C: 404 no_service / 410 channel_is_archived / 403 … do not get better by retrying; 408, 429 and 5xx do.
+    if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+      const gone = res.status === 404 || res.status === 410;
+      throw new PermanentDeliveryError(
+        gone
+          ? `${message} — ${l('Webhook Slack không còn (app bị gỡ hoặc kênh đã lưu trữ). Tạo webhook mới rồi Sửa → dán URL mới.', 'Slack の Webhook は無効です（アプリの削除またはチャネルのアーカイブ）。新しい Webhook を作成し、編集 → URL を貼り付けてください。')}`
+          : message,
+      );
+    }
+    throw new Error(message);
   }
 }

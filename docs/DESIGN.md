@@ -161,7 +161,7 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 
 **Kết nối Teams:**
 - Mỗi kênh Teams tạo một Workflow từ mẫu *"Send webhook alerts to a channel"* (tên cũ: *"Post to a channel when a webhook request is received"*), rồi dán URL vào trang **Kênh thông báo**. Việc tạo Workflow cần quyền Power Automate (có môi trường Default).
-- Hệ thống chỉ chấp nhận URL `https` thuộc `*.logic.azure.com`, `*.powerplatform.com` hoặc `*.webhook.office.com`.
+- Hệ thống chỉ chấp nhận URL `https` thuộc `*.logic.azure.com` hoặc `*.powerplatform.com`. URL `*.webhook.office.com` (Office 365 connector, Microsoft đã ngừng) không nhận nữa; kênh cũ dùng host này vẫn gửi nhưng hiện cảnh báo (xem Độ tin cậy).
 - URL này có tác dụng như mật khẩu: API không bao giờ trả về đầy đủ, chỉ trả về tên máy chủ và đầu đường dẫn.
 
 **Telegram** (dùng khi tài khoản không có quyền Power Automate để tạo Workflows trong Teams):
@@ -240,7 +240,34 @@ _Nhánh D (`docs/plans/notifications.md`)._
 
 ### Độ tin cậy
 
-_Nhánh C._
+**Thử lại** (`deliver.ts`):
+- `send()` lỗi thì đưa tin vào hàng đợi (`enqueue`, `attempts` + 1, `lastError`), `flushDue` gửi lại sau 1 → 5 → 15 → 60 → 60 phút: tối đa 6 lần gửi cho một tin, kể cả lần đầu.
+- Lỗi vĩnh viễn (`PermanentDeliveryError`, `notify/errors.ts`) không thử lại: Teams và Slack HTTP 4xx trừ 408 / 429 (Teams 404 / 410 = Workflow đã bị xoá; Slack 404 `no_service` / 410 `channel_is_archived`); Telegram 4xx trừ 429 ("bot was kicked", "chat not found", "bot was blocked", token sai).
+- Tin của job mỗi giờ (có `sentKeys`) **không** vào hàng đợi khi lỗi: giờ sau job tự dựng lại, xếp hàng sẽ gửi trùng.
+- Tin cá nhân (hộp thư, Telegram riêng) thử lại theo cùng quy tắc.
+- Khi tới lượt gửi lại mà kênh đã bị xoá hoặc tắt thì bỏ tin.
+
+**Tự tắt kênh:**
+- `failCount` đếm số **tin bị mất** liên tiếp của kênh (lỗi vĩnh viễn, hết lượt thử lại, hoặc tin mỗi giờ lỗi); các lần thử lại giữa chừng không tính, nên Teams chập chờn vài phút không làm tắt kênh. Gửi thành công thì `failCount = 0`.
+- Mất 5 tin liên tiếp: `enabled = false`, `autoPausedAt`, ghi audit `channel_auto_pause` (người thực hiện `system`), báo vào hộp thư của người phụ trách kênh (ngôn ngữ theo `NotifyPrefs.lang`, không có thì theo kênh).
+- Bật lại kênh bằng tay thì xoá `autoPausedAt`, `failCount = 0`. "Gửi thử" lỗi không tính vào `failCount`.
+
+**Telegram:** lỗi `migrate_to_chat_id` (nhóm lên supergroup) thì gửi lại vào chat mới và lưu `telegramChatId` mới vào kênh. "bot was kicked" / "chat not found" có thông báo rõ bằng hai ngôn ngữ, kèm cách sửa (Sửa → Đổi sang nhóm khác).
+
+**Teams kiểu cũ:** kênh có URL `*.webhook.office.com` vẫn gửi, API trả `legacyWebhook: true` và web hiện cảnh báo "kiểu cũ, Microsoft đã ngừng — tạo Workflow mới".
+
+**Không lộ bí mật:** lỗi được làm sạch (`scrubError`: bỏ token bot, bỏ phần query của mọi URL, bỏ đường dẫn của URL webhook Slack) trước khi ghi vào kênh, nhật ký gửi, hàng đợi, log Lambda hay trả về.
+
+**Nhật ký, audit, người phụ trách:**
+
+| Method | Path | Ghi chú |
+|---|---|---|
+| GET | `/channels/:id/deliveries` | 20 lần gửi gần nhất (`DeliveryLog`); người phụ trách hoặc PMO / quản lý |
+| POST | `/channels/:id/transfer` | `{ to }`: người phụ trách hoặc PMO / quản lý. Người nhận phải là người dùng có tài khoản đăng nhập (`Accounts.statuses` khác `none` / `pending`) |
+
+- Audit: `channel_create`, `channel_update` (ghi các trường đổi: phạm vi, loại tin, bật / tắt, đổi nhóm Telegram, đổi URL — không ghi URL), `channel_delete`, `channel_transfer` (`cũ → mới`).
+- "Người phụ trách" của kênh là `createdBy`.
+- **Kênh mồ côi** (`orphan: true`, chỉ trong danh sách của PMO / quản lý): người phụ trách không còn trong danh sách người dùng, không có tài khoản đăng nhập, hoặc là OTHER không xem được dự án nào đó trong phạm vi. Web hiện nhãn ▲ **Mồ côi**.
 
 ### Slack
 

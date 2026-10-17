@@ -1,9 +1,20 @@
 // Microsoft Teams delivery through a Workflows "post to a channel when a webhook request is received" URL.
 import { l } from '../i18n.js';
+import { PermanentDeliveryError } from './errors.js';
 import type { Message } from './message.js';
 
-/** Hosts used by Teams Workflows (Power Automate) and the legacy incoming webhooks. */
-const ALLOWED_HOST_SUFFIXES = ['.logic.azure.com', '.powerplatform.com', '.webhook.office.com'];
+/** Hosts used by Teams Workflows (Power Automate). */
+const ALLOWED_HOST_SUFFIXES = ['.logic.azure.com', '.powerplatform.com'];
+/** Office 365 connectors (incoming webhooks), retired by Microsoft: no new URLs, existing channels get a warning. */
+const LEGACY_HOST_SUFFIX = '.webhook.office.com';
+
+export function isLegacyTeamsUrl(raw: string): boolean {
+  try {
+    return new URL(raw).hostname.endsWith(LEGACY_HOST_SUFFIX);
+  } catch {
+    return false;
+  }
+}
 
 export function isTeamsWebhookUrl(raw: string): boolean {
   try {
@@ -36,7 +47,14 @@ export async function postTeams(url: string, payload: unknown): Promise<void> {
   });
   if (!res.ok) {
     const text = (await res.text().catch(() => '')).slice(0, 200);
-    throw new Error(`${l('Teams trả về', 'Teams の応答:')} HTTP ${res.status}${text ? `: ${text}` : ''}`);
+    const message = `${l('Teams trả về', 'Teams の応答:')} HTTP ${res.status}${text ? `: ${text}` : ''}`;
+    if (res.status === 404 || res.status === 410)
+      throw new PermanentDeliveryError(
+        `${message} — ${l('URL webhook không còn (Workflow đã bị xoá hoặc tắt). Tạo Workflow mới rồi dán URL mới.', 'Webhook URL は無効です（Workflow が削除または無効化されました）。新しい Workflow を作成し、URL を貼り付けてください。')}`,
+      );
+    // Other 4xx (bad request, forbidden) do not get better by retrying; 408, 429 and 5xx do.
+    if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) throw new PermanentDeliveryError(message);
+    throw new Error(message);
   }
 }
 

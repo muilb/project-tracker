@@ -46,6 +46,7 @@ export function collectAlerts(ch: Channel, views: ProjectView[], now: Date, name
             `⏰ ${v.id} · ${v.name}: trễ cập nhật ${hours(v.lateHours)} — nhắc PL ${name(v.pl)}, GL ${name(v.gl)}`,
             `⏰ ${v.id} · ${v.name}: 報告が ${hours(v.lateHours)} 遅れています — PL ${name(v.pl)}、GL ${name(v.gl)} へ`,
           ),
+          compact: l(`⏰ ${v.id} · ${v.name}: trễ cập nhật ${hours(v.lateHours)}`, `⏰ ${v.id} · ${v.name}: 報告が ${hours(v.lateHours)} 遅れています`),
         },
       });
     }
@@ -58,6 +59,7 @@ export function collectAlerts(ch: Channel, views: ProjectView[], now: Date, name
               `⚠ ${v.id}: ${TYPE(i.type)} "${i.title}" quá hạn ${-i.daysLeft} ngày — ${name(i.owner)}`,
               `⚠ ${v.id}: ${TYPE(i.type)}「${i.title}」期限を ${-i.daysLeft} 日超過 — ${name(i.owner)}`,
             ),
+            compact: l(`⚠ ${v.id}: ${TYPE(i.type)} quá hạn ${-i.daysLeft} ngày`, `⚠ ${v.id}: ${TYPE(i.type)} 期限を ${-i.daysLeft} 日超過`),
             tone: 'attention',
           },
         });
@@ -70,6 +72,7 @@ export function collectAlerts(ch: Channel, views: ProjectView[], now: Date, name
               `📅 Ngày mai ${dm(i.date)} – ${v.id}: ${TYPE(i.type)} "${i.title}"`,
               `📅 明日 ${dm(i.date)} – ${v.id}: ${TYPE(i.type)}「${i.title}」`,
             ),
+            compact: l(`📅 Ngày mai ${dm(i.date)} – ${v.id}: ${TYPE(i.type)}`, `📅 明日 ${dm(i.date)} – ${v.id}: ${TYPE(i.type)}`),
           },
         });
       }

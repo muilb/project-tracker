@@ -476,6 +476,27 @@ export function HelpPageJa() {
             Web に戻り、<B>接続してテスト送信</B>を押します。グループに ✅ のメッセージが届けば完了です。
           </li>
         </ol>
+        <h3>Slack の接続</h3>
+        <ol className="howto">
+          <li>
+            api.slack.com/apps で <b>Create New App</b> → <b>From scratch</b> → ワークスペースを選択します。
+          </li>
+          <li>
+            <b>Incoming Webhooks</b> をオン → <b>Add New Webhook to Workspace</b> → 通知を受け取る Slack チャネルを選択 → <b>Allow</b>。
+          </li>
+          <li>
+            URL <code>https://hooks.slack.com/services/…</code> をコピーします。この URL はパスワードと同じで、システムでは伏せ字でのみ表示されます。
+          </li>
+          <li>
+            Web で：<B>通知チャネル</B> → <B>＋ チャネル登録</B> → Slack。URL を貼り付け、対象範囲と通知の種類を選んで
+            <B>接続してテスト送信</B>を押します。後で URL を変更する場合（<B>編集</B>）も、保存前にテストメッセージを送信します。
+          </li>
+        </ol>
+        <p>
+          <B>メッセージの詳細度</B>（すべての種類のチャネル）：<b>簡易</b>にすると、ユーザーが入力した内容（報告内容、支援依頼、メモ、項目名）を送らず、
+          プロジェクトのコードと名前、状態、期限、件数、リンクのみ送ります。外部の人がいるチャネル向けです。PMO は<B>設定</B>で
+          <B>常に簡易</B>を選ぶと、すべてのチャネルに適用できます。
+        </p>
         <h3>届く通知</h3>
         <ul className="howto">
           <li>

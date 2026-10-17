@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { ALERT_EVENTS, type AlertEvent, type ChannelKind, type ChannelScope } from '../../../../api/src/types';
+import { ALERT_EVENTS, type AlertEvent, type ChannelDetail, type ChannelKind, type ChannelScope } from '../../../../api/src/types';
 import { api, useApi } from '../../api';
 import { ErrorBox } from '../../components/ui';
 import { l, lang, type Lang } from '../../i18n';
@@ -34,6 +34,7 @@ export function ChannelForm({
   const [events, setEvents] = useState<AlertEvent[]>(channel?.events ?? [...ALERT_EVENTS]);
   const [timing, setTiming] = useState<Timing>({ quietHours: channel?.quietHours ?? true, schedule: channel?.schedule });
   const [msgLang, setMsgLang] = useState<Lang>(channel?.lang ?? lang);
+  const [detail, setDetail] = useState<ChannelDetail>(channel?.detail ?? 'full');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -51,6 +52,7 @@ export function ChannelForm({
           events,
           ...timing,
           lang: msgLang,
+          detail,
           ...(url ? { webhookUrl: url } : {}),
           ...(regroup ? { connectCode: code } : {}),
         });
@@ -65,7 +67,7 @@ export function ChannelForm({
         );
       } else {
         const target = kind === 'telegram' ? { connectCode: code } : { webhookUrl: url };
-        await api.post('/channels', { kind, name: chName, scope, events, ...timing, lang: msgLang, ...target });
+        await api.post('/channels', { kind, name: chName, scope, events, ...timing, lang: msgLang, detail, ...target });
         if (kind === 'telegram') forgetConnectCode();
         onSaved(
           l(
@@ -92,7 +94,7 @@ export function ChannelForm({
 
       {!channel && (
         <div className="segmented" role="group" aria-label={l('Loại kênh', 'チャネルの種類')}>
-          {(['telegram', 'teams'] as ChannelKind[]).map((k) => (
+          {(['telegram', 'teams', 'slack'] as ChannelKind[]).map((k) => (
             <button type="button" key={k} className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
               {KIND_LABEL[k]}
             </button>
@@ -113,13 +115,24 @@ export function ChannelForm({
       {channel && (
         <p className="muted">
           {l(
-            'Loại kênh (Telegram / Teams) không đổi được. Muốn chuyển loại, đăng ký kênh mới rồi xoá kênh này.',
-            'チャネルの種類（Telegram / Teams）は変更できません。種類を変える場合は新しいチャネルを登録し、このチャネルを削除してください。',
+            'Loại kênh (Telegram / Teams / Slack) không đổi được. Muốn chuyển loại, đăng ký kênh mới rồi xoá kênh này.',
+            'チャネルの種類（Telegram / Teams / Slack）は変更できません。種類を変える場合は新しいチャネルを登録し、このチャネルを削除してください。',
           )}
         </p>
       )}
 
-      <KindFields kind={kind} channel={channel} bot={bot} code={code} url={url} setUrl={setUrl} regroup={regroup} setRegroup={setRegroup} />
+      <KindFields
+        kind={kind}
+        channel={channel}
+        bot={bot}
+        code={code}
+        url={url}
+        setUrl={setUrl}
+        regroup={regroup}
+        setRegroup={setRegroup}
+        detail={detail}
+        setDetail={setDetail}
+      />
 
       <fieldset>
         <legend>{l('Phạm vi dự án', '対象範囲')}</legend>

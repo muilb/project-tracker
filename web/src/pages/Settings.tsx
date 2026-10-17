@@ -207,6 +207,22 @@ export function SettingsPage() {
             />
           </label>
         </div>
+        <label>
+          {l('Mức chi tiết tối đa của kênh nhóm', 'グループチャネルの最大詳細度')}
+          <select
+            value={s.maxChannelDetail ?? 'full'}
+            onChange={(e) => setS({ ...s, maxChannelDetail: e.target.value === 'compact' ? 'compact' : undefined })}
+          >
+            <option value="full">{l('Theo từng kênh', 'チャネルごとの設定')}</option>
+            <option value="compact">{l('Luôn rút gọn', '常に簡易')}</option>
+          </select>
+          <small className="muted">
+            {l(
+              'Luôn rút gọn: mọi kênh Teams / Telegram / Slack chỉ nhận mã và tên dự án, trạng thái, hạn, số lượng và link — không có nội dung người dùng nhập. Thông báo cá nhân không đổi.',
+              '常に簡易: Teams / Telegram / Slack のすべてのチャネルには、プロジェクトのコードと名前、状態、期限、件数、リンクのみ送り、ユーザーが入力した内容は送りません。個人通知は変わりません。',
+            )}
+          </small>
+        </label>
         <ErrorBox error={error} />
         {saved && <div className="info-box">{l('Đã lưu.', '保存しました。')}</div>}
         <div className="actions">

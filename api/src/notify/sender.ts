@@ -2,6 +2,8 @@ import { l } from '../i18n.js';
 import type { Store } from '../store/store.js';
 import type { Channel, ChannelKind } from '../types.js';
 import type { Message } from './message.js';
+import { compact, effectiveDetail } from './render.js';
+import { postSlack, slackPayload } from './slack.js';
 import { adaptiveCard, postTeams } from './teams.js';
 import { renderTelegram, telegramClient, type TelegramClient } from './telegram.js';
 
@@ -20,9 +22,12 @@ export function createSender(store: Store, telegram: TelegramClient = telegramCl
       await telegram.sendMessage(bot.token, ch.telegramChatId!, renderTelegram(msg));
     },
     // track E: Slack Incoming Webhook with Block Kit.
-    slack: async () => {
-      throw new Error(l('Chưa hỗ trợ kênh Slack', 'Slack チャネルはまだ利用できません'));
-    },
+    slack: (ch, msg) => postSlack(ch.webhookUrl!, slackPayload(msg)),
   };
-  return (ch, msg) => drivers[ch.kind](ch, msg);
+  return async (ch, msg) => {
+    // Group channels may be compact (own setting or PMO's maximum); personal chats ("U:<user>", see deliver.ts) never are.
+    const group = !ch.id.startsWith('U:');
+    const detail = group ? effectiveDetail(ch, await store.getSettings()) : 'full';
+    return drivers[ch.kind](ch, detail === 'compact' ? compact(msg) : msg);
+  };
 }

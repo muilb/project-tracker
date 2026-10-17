@@ -6,15 +6,16 @@ import { l, lang, withLang } from '../i18n.js';
 import { deliver } from '../notify/deliver.js';
 import { testMessage } from '../notify/render.js';
 import { sampleMessage } from '../notify/samples.js';
+import { isSlackWebhookUrl, maskSlackUrl } from '../notify/slack.js';
 import { isTeamsWebhookUrl, maskUrl } from '../notify/teams.js';
 import { createChannelSchema, parseBody, patchChannelSchema, testSampleSchema } from '../schemas.js';
 import type { Channel, User } from '../types.js';
 
 export const channels = new Hono<AppEnv>();
 
-/** The Teams webhook URL works as a password for posting into the channel: never send it back. */
+/** The Teams / Slack webhook URL works as a password for posting into the channel: never send it back. */
 function publicChannel({ webhookUrl, ...rest }: Channel) {
-  return { ...rest, ...(webhookUrl ? { webhookUrlMasked: maskUrl(webhookUrl) } : {}) };
+  return { ...rest, ...(webhookUrl ? { webhookUrlMasked: rest.kind === 'slack' ? maskSlackUrl(webhookUrl) : maskUrl(webhookUrl) } : {}) };
 }
 
 const canEdit = (u: User, ch: Channel) => can.admin(u) || ch.createdBy === u.id;
@@ -25,6 +26,16 @@ function checkUrl(url: string) {
       message: l(
         'URL phải là webhook của Teams Workflows (https://…logic.azure.com/… hoặc …powerplatform.com/…)',
         'URL は Teams Workflows の Webhook である必要があります（https://…logic.azure.com/… または …powerplatform.com/…）',
+      ),
+    });
+}
+
+function checkSlackUrl(url: string | undefined) {
+  if (!url || !isSlackWebhookUrl(url))
+    throw new HTTPException(400, {
+      message: l(
+        'URL phải là Incoming Webhook của Slack (https://hooks.slack.com/services/…)',
+        'URL は Slack の Incoming Webhook である必要があります（https://hooks.slack.com/services/…）',
       ),
     });
 }
@@ -99,10 +110,11 @@ channels.post('/', async (c) => {
   };
 
   let target: Pick<Channel, 'kind' | 'webhookUrl' | 'telegramChatId' | 'telegramChatTitle'>;
-  // track E: Slack channels (kind exists, delivery not implemented yet).
-  if (body.kind === 'slack')
-    throw new HTTPException(400, { message: l('Chưa hỗ trợ kênh Slack', 'Slack チャネルはまだ利用できません') });
-  if (body.kind === 'telegram') {
+  // track E: Slack channels (Incoming Webhook), checked by the test message below like Teams.
+  if (body.kind === 'slack') {
+    checkSlackUrl(body.webhookUrl);
+    target = { kind: 'slack', webhookUrl: body.webhookUrl };
+  } else if (body.kind === 'telegram') {
     const chat = await findTelegramChat(c, connectCode!);
     target = { kind: 'telegram', telegramChatId: chat.id, telegramChatTitle: chat.title };
   } else {
@@ -143,9 +155,11 @@ channels.patch('/:id', async (c) => {
     target = { telegramChatId: chat.id, telegramChatTitle: chat.title };
   }
   if (body.webhookUrl) {
-    if (ch.kind !== 'teams')
+    if (ch.kind === 'telegram')
       throw new HTTPException(400, { message: l('Kênh Telegram không có URL webhook', 'Telegram チャネルには Webhook URL がありません') });
-    checkUrl(body.webhookUrl);
+    // track E: a new Slack URL is checked and verified with a test message, like creating the channel.
+    if (ch.kind === 'slack') checkSlackUrl(body.webhookUrl);
+    else checkUrl(body.webhookUrl);
   }
   const updated: Channel = {
     ...ch,
@@ -154,7 +168,7 @@ channels.patch('/:id', async (c) => {
     pausedUntil: body.pausedUntil === undefined ? ch.pausedUntil : (body.pausedUntil ?? undefined),
     updatedAt: c.get('now').toISOString(),
   };
-  if (connectCode) {
+  if (connectCode || (ch.kind === 'slack' && body.webhookUrl && body.webhookUrl !== ch.webhookUrl)) {
     const notify = c.get('notify');
     try {
       await notify.send(

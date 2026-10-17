@@ -1,15 +1,18 @@
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
-import { TEST_SAMPLES } from './notify/alerts.js';
+import { TEST_SAMPLES } from './notify/samples.js';
 import { l, LANGS } from './i18n.js';
 import { isDate } from './time.js';
 import {
   ALERT_EVENTS,
+  CHANNEL_DETAILS,
   CHANNEL_KINDS,
+  DIGEST_DAYS,
   HEALTHS,
   ITEM_STATUSES,
   ITEM_TYPES,
   PRIORITIES,
+  PERSONAL_EVENTS,
   PROJECT_STATES,
   ROLES,
   SCOPE_TYPES,
@@ -109,7 +112,21 @@ export const settingsSchema = z.object({
   soonDays: z.number().int().min(0).max(60),
   nearEventFrequencyHours: z.number().int().min(1),
   upcomingDays: z.number().int().min(1).max(60),
+  maxChannelDetail: z.enum(CHANNEL_DETAILS).optional(),
 });
+
+const hour = z.number().int().min(0).max(23);
+/** When a channel / person receives messages (see notify/policy.ts). */
+export const scheduleSchema = z.object({
+  quietFrom: hour.optional(),
+  quietTo: hour.optional(),
+  skipWeekends: z.boolean().optional(),
+  digestHour: hour.optional(),
+  digestDays: z.enum(DIGEST_DAYS).optional(),
+  milestoneLeadDays: z.array(z.number().int().min(1).max(30)).max(5).optional(),
+});
+/** null clears a pause. */
+const pausedUntil = z.string().datetime(msg('Thời điểm không hợp lệ', '日時が正しくありません')).nullable().optional();
 
 const channelFields = {
   name: text(100).min(1, msg('Tên kênh không được trống', 'チャネル名を入力してください')),
@@ -126,6 +143,9 @@ const channelFields = {
   quietHours: z.boolean().default(true),
   /** Language of the messages sent to this channel. */
   lang: z.enum(LANGS).optional(),
+  detail: z.enum(CHANNEL_DETAILS).optional(),
+  schedule: scheduleSchema.optional(),
+  pausedUntil,
 };
 
 export const createChannelSchema = z
@@ -185,6 +205,20 @@ export const patchChannelSchema = z
     connectCode: z.string().trim().max(40),
   })
   .partial();
+
+/** PUT /me/notify: the telegram chat itself is set only by the link flow. */
+export const notifyPrefsSchema = z.object({
+  events: z.array(z.enum(PERSONAL_EVENTS)),
+  telegram: z.boolean().default(false),
+  watch: z.array(z.string().trim().toUpperCase().max(20)).max(100).default([]),
+  schedule: scheduleSchema.optional(),
+  pausedUntil,
+  lang: z.enum(LANGS).optional(),
+});
+
+export const inboxReadSchema = z
+  .object({ ids: z.array(z.string().max(40)).max(200).optional(), all: z.boolean().optional() })
+  .refine((b) => b.all || !!b.ids?.length, msg('Chọn tin cần đánh dấu', '既読にするメッセージを選択してください'));
 
 export async function parseBody<T extends z.ZodType>(req: { json(): Promise<unknown> }, schema: T): Promise<z.infer<T>> {
   let body: unknown;

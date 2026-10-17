@@ -1,4 +1,5 @@
 import type { Lang } from './i18n.js';
+import type { Message, MessageLine } from './notify/message.js';
 
 // Domain types. Codes are English; the web UI maps them to Vietnamese labels.
 
@@ -93,6 +94,8 @@ export interface Settings {
   soonDays: number; // "upcoming" threshold
   nearEventFrequencyHours: number; // frequency when an event/milestone is within soonDays
   upcomingDays: number; // window for "this week" lists on dashboards
+  /** compact = every group channel gets compact messages, whatever its own setting. */
+  maxChannelDetail?: ChannelDetail;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -102,7 +105,7 @@ export const DEFAULT_SETTINGS: Settings = {
   upcomingDays: 7,
 };
 
-// --- Notifications (Teams) ---
+// --- Notifications (group channels and personal) ---
 
 export const ALERT_EVENTS = ['became_red', 'high_issue', 'overdue', 'late_update', 'milestone_soon', 'daily_digest'] as const;
 export type AlertEvent = (typeof ALERT_EVENTS)[number];
@@ -114,7 +117,7 @@ export interface ChannelScope {
   projects?: string[]; // project ids when type = projects
 }
 
-export const CHANNEL_KINDS = ['teams', 'telegram'] as const;
+export const CHANNEL_KINDS = ['teams', 'telegram', 'slack'] as const;
 export type ChannelKind = (typeof CHANNEL_KINDS)[number];
 
 /**
@@ -138,6 +141,106 @@ export interface Channel {
   updatedAt: string;
   lastSentAt?: string;
   lastError?: string;
+  /** compact = no user-entered text (summaries, needHelp, item titles), only codes, states, dates and links. */
+  detail?: ChannelDetail;
+  /** Replaces quietHours when set. */
+  schedule?: ChannelSchedule;
+  /** No messages until this time (ISO). */
+  pausedUntil?: string;
+  /** Consecutive failed deliveries (reset on success). */
+  failCount?: number;
+  /** Set when the channel was disabled after too many failures. */
+  autoPausedAt?: string;
+}
+
+export const CHANNEL_DETAILS = ['full', 'compact'] as const;
+export type ChannelDetail = (typeof CHANNEL_DETAILS)[number];
+
+export const DIGEST_DAYS = ['daily', 'weekdays', 'monday'] as const;
+
+/** When a channel (or a person) receives messages; every field falls back to today's behaviour. */
+export interface ChannelSchedule {
+  /** Quiet hours in Vietnam time, may wrap midnight (22 → 7). Equal values = no quiet hours. */
+  quietFrom?: number;
+  quietTo?: number;
+  /** No hourly alerts or digest on Saturday / Sunday. */
+  skipWeekends?: boolean;
+  /** Vietnam hour of the digest (default 8). */
+  digestHour?: number;
+  digestDays?: (typeof DIGEST_DAYS)[number];
+  /** Days before an event / milestone to remind (default [1]). */
+  milestoneLeadDays?: number[];
+}
+
+/** Messages addressed to one person (inbox, personal Telegram), chosen in "My notifications". */
+export const PERSONAL_EVENTS = [
+  'update_due_soon', // my project's update is due within a few hours
+  'late_update_mine', // my project's update is late
+  'escalation', // a project in my group / PMO scope has been late for long
+  'assigned_to_me', // I became the owner of an item
+  'my_item_due', // an item I own is due tomorrow or overdue
+  'need_help', // an update asks for help on a project I lead / manage
+  'health_changed', // the aggregated health of my / a watched project changed
+  'watched_red', // a watched project turned red
+  'watched_high_issue', // a new high-priority issue on a watched project
+] as const;
+export type PersonalEvent = (typeof PERSONAL_EVENTS)[number];
+
+export interface NotifyPrefs {
+  userId: string;
+  events: PersonalEvent[];
+  /** Also send to the linked personal Telegram chat (the inbox always receives). */
+  telegram: boolean;
+  telegramChatId?: string;
+  telegramChatTitle?: string;
+  /** Extra projects to follow (⭐ on the project page). */
+  watch: string[];
+  schedule?: ChannelSchedule;
+  pausedUntil?: string;
+  lang?: Lang;
+  updatedAt: string;
+}
+
+/** One message in a person's web inbox (🔔). */
+export interface InboxEntry {
+  userId: string;
+  id: string;
+  at: string; // ISO
+  event: string; // PersonalEvent or a system notice
+  title: string;
+  lines: MessageLine[];
+  link?: Message['link'];
+  projectId?: string;
+  readAt?: string;
+}
+
+/** Where an outbox message goes: a group channel, or one person's inbox / Telegram. */
+export type OutboxTarget = { channelId: string } | { userId: string; via: 'inbox' | 'telegram' };
+
+/** A message waiting to be delivered (delayed, grouped or retried). */
+export interface OutboxEntry {
+  id: string;
+  dueAt: string; // ISO
+  createdAt: string;
+  target: OutboxTarget;
+  event: string;
+  message: Message;
+  projectId?: string;
+  /** De-duplication keys recorded (markSent) once the message is delivered. */
+  sentKeys?: { key: string; ttlDays: number }[];
+  attempts: number;
+  lastError?: string;
+}
+
+/** One delivery attempt to a group channel (shown on the channels page). */
+export interface DeliveryLog {
+  channelId: string;
+  id: string;
+  at: string; // ISO
+  ok: boolean;
+  event: string;
+  title: string;
+  error?: string;
 }
 
 /** The single Telegram bot used for all Telegram channels (token is a secret). */
@@ -159,6 +262,11 @@ export const AUDIT_ACTIONS = [
   'telegram_remove',
   'project_delete',
   'restore',
+  'channel_create',
+  'channel_update',
+  'channel_delete',
+  'channel_transfer',
+  'channel_auto_pause',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

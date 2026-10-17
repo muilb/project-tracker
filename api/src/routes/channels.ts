@@ -3,7 +3,9 @@ import { HTTPException } from 'hono/http-exception';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l, lang, withLang } from '../i18n.js';
-import { deliver, sampleMessage, testMessage } from '../notify/alerts.js';
+import { deliver } from '../notify/deliver.js';
+import { testMessage } from '../notify/render.js';
+import { sampleMessage } from '../notify/samples.js';
 import { isTeamsWebhookUrl, maskUrl } from '../notify/teams.js';
 import { createChannelSchema, parseBody, patchChannelSchema, testSampleSchema } from '../schemas.js';
 import type { Channel, User } from '../types.js';
@@ -87,6 +89,9 @@ channels.post('/', async (c) => {
     events: body.events,
     quietHours: body.quietHours,
     lang: body.lang ?? lang(),
+    detail: body.detail,
+    schedule: body.schedule,
+    pausedUntil: body.pausedUntil ?? undefined,
     enabled: true,
     createdBy: c.get('user').id,
     createdAt: now.toISOString(),
@@ -94,6 +99,9 @@ channels.post('/', async (c) => {
   };
 
   let target: Pick<Channel, 'kind' | 'webhookUrl' | 'telegramChatId' | 'telegramChatTitle'>;
+  // track E: Slack channels (kind exists, delivery not implemented yet).
+  if (body.kind === 'slack')
+    throw new HTTPException(400, { message: l('Chưa hỗ trợ kênh Slack', 'Slack チャネルはまだ利用できません') });
   if (body.kind === 'telegram') {
     const chat = await findTelegramChat(c, connectCode!);
     target = { kind: 'telegram', telegramChatId: chat.id, telegramChatTitle: chat.title };
@@ -139,7 +147,13 @@ channels.patch('/:id', async (c) => {
       throw new HTTPException(400, { message: l('Kênh Telegram không có URL webhook', 'Telegram チャネルには Webhook URL がありません') });
     checkUrl(body.webhookUrl);
   }
-  const updated: Channel = { ...ch, ...body, ...target, updatedAt: c.get('now').toISOString() };
+  const updated: Channel = {
+    ...ch,
+    ...body,
+    ...target,
+    pausedUntil: body.pausedUntil === undefined ? ch.pausedUntil : (body.pausedUntil ?? undefined),
+    updatedAt: c.get('now').toISOString(),
+  };
   if (connectCode) {
     const notify = c.get('notify');
     try {

@@ -5,7 +5,7 @@ import { audit } from '../audit.js';
 import { can, DELETE_UPDATE_HOURS, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
-import { notifyBecameRed, notifyHighIssue } from '../notify/alerts.js';
+import { emit } from '../notify/pipeline.js';
 import { buildProjectView, compareItems, toItemView } from '../rules.js';
 import { createItemSchema, createProjectSchema, createUpdateSchema, parseBody, patchItemSchema, patchProjectSchema } from '../schemas.js';
 import { ConflictError, type Store } from '../store/store.js';
@@ -41,14 +41,6 @@ function updatesPage(all: Update[], before: string | undefined, size: number) {
 }
 
 /** Alerts must never make the user's change fail. */
-async function alert(fn: () => Promise<void>) {
-  try {
-    await fn();
-  } catch (e) {
-    console.error('alert failed', e);
-  }
-}
-
 /** Referenced people must exist (PMO can pre-create them via POST /users). */
 async function checkUsers(store: Store, ids: (string | undefined)[]) {
   const known = new Set((await store.listUsers()).map((u) => u.id));
@@ -173,9 +165,7 @@ projects.post('/:id/updates', async (c) => {
   };
   await store.putUpdate(update);
   const after = buildProjectView(project, [...updates, update], items, settings, now);
-  if (project.state === 'active' && after.health === 'red' && before.health !== 'red') {
-    await alert(() => notifyBecameRed(c.get('notify'), now, after, update));
-  }
+  await emit(c.get('notify'), now, { type: 'update_posted', project, update, before, after, actor: me.id });
   return c.json({ update }, 201);
 });
 
@@ -202,9 +192,7 @@ projects.post('/:id/items', async (c) => {
     updatedAt: now,
   };
   await store.putItem(item);
-  if (item.type === 'issue' && item.priority === 'high' && item.status !== 'done' && project.state === 'active') {
-    await alert(() => notifyHighIssue(c.get('notify'), c.get('now'), project, item));
-  }
+  await emit(c.get('notify'), c.get('now'), { type: 'item_saved', project, item, actor: me.id });
   return c.json({ item }, 201);
 });
 
@@ -216,6 +204,7 @@ projects.patch('/:id/items/:itemId', async (c) => {
   await checkUsers(store, [body.owner]);
   const updated: Item = { ...item, ...body, updatedAt: c.get('now').toISOString() };
   await store.putItem(updated);
+  await emit(c.get('notify'), c.get('now'), { type: 'item_saved', project, item: updated, previous: item, actor: c.get('user').id });
   return c.json({ item: updated });
 });
 

@@ -1,4 +1,18 @@
-import type { AiConfig, AuditEntry, Channel, Item, Project, Settings, TelegramBot, Update, User } from '../types.js';
+import type {
+  AiConfig,
+  AuditEntry,
+  Channel,
+  DeliveryLog,
+  InboxEntry,
+  Item,
+  NotifyPrefs,
+  OutboxEntry,
+  Project,
+  Settings,
+  TelegramBot,
+  Update,
+  User,
+} from '../types.js';
 
 export interface Snapshot {
   users: User[];
@@ -11,9 +25,16 @@ export interface Snapshot {
 export class ConflictError extends Error {}
 
 export const AUDIT_DAYS = 400;
+export const INBOX_DAYS = 60;
+export const OUTBOX_DAYS = 7;
+export const DELIVERY_LOG_DAYS = 30;
 
 /** Sort key of an audit entry, used as the paging cursor. */
 export const auditCursor = (e: Pick<AuditEntry, 'at' | 'id'>) => `${e.at}#${e.id}`;
+/** Sort key of an inbox entry, used as the paging cursor. */
+export const inboxCursor = (e: Pick<InboxEntry, 'at' | 'id'>) => `${e.at}#${e.id}`;
+/** Sort key of an outbox entry (due time first). */
+export const outboxKey = (e: Pick<OutboxEntry, 'dueAt' | 'id'>) => `${e.dueAt}#${e.id}`;
 
 /**
  * Persistence boundary. Data volume is small (tens of projects, thousands of rows),
@@ -63,6 +84,29 @@ export interface Store {
   /** Administrative log (kept AUDIT_DAYS); newest first, older than the `before` cursor (`auditCursor`). */
   addAudit(entry: AuditEntry): Promise<void>;
   listAudit(limit: number, before?: string): Promise<AuditEntry[]>;
+
+  /** Personal notification settings; listNotifyPrefs returns everyone who saved them. */
+  getNotifyPrefs(userId: string): Promise<NotifyPrefs | undefined>;
+  putNotifyPrefs(prefs: NotifyPrefs): Promise<void>;
+  listNotifyPrefs(): Promise<NotifyPrefs[]>;
+
+  /** Web inbox (kept INBOX_DAYS); newest first, older than the `before` cursor (`inboxCursor`). */
+  addInbox(entry: InboxEntry): Promise<void>;
+  listInbox(userId: string, limit: number, before?: string): Promise<InboxEntry[]>;
+  /** Marks the given entries (or all) read at `at`. */
+  markInboxRead(userId: string, ids: string[] | 'all', at: string): Promise<void>;
+  countUnread(userId: string): Promise<number>;
+
+  /** Messages waiting for delivery (kept OUTBOX_DAYS). */
+  enqueue(entry: OutboxEntry): Promise<void>;
+  /** Entries with dueAt <= now, oldest first. */
+  listDue(now: Date, limit: number): Promise<OutboxEntry[]>;
+  /** Removes the entry; false when another run already took it (so it is sent once). */
+  claimOutbox(entry: OutboxEntry): Promise<boolean>;
+
+  /** Delivery attempts per group channel (kept DELIVERY_LOG_DAYS); newest first. */
+  addDeliveryLog(entry: DeliveryLog): Promise<void>;
+  listDeliveryLog(channelId: string, limit: number): Promise<DeliveryLog[]>;
 
   /** Atomically increments and returns a named counter (project / item ids). */
   nextSeq(name: 'project' | 'item' | 'channel'): Promise<number>;

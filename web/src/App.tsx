@@ -6,10 +6,11 @@ import { ErrorBox, LangSwitch } from './components/ui';
 import { l } from './i18n';
 import { ROLE_LABEL } from './labels';
 import { AiEntryPage } from './pages/AiEntry';
-import { ChannelsPage } from './pages/Channels';
+import { ChannelsPage } from './pages/channels/ChannelsPage';
 import { Dashboard } from './pages/Dashboard';
 import { HelpPage } from './pages/Help';
 import { Login } from './pages/Login';
+import { MyNotifyPage } from './pages/MyNotify';
 import { ProjectDetailPage } from './pages/ProjectDetail';
 import { ProjectForm } from './pages/ProjectForm';
 import { Projects } from './pages/Projects';
@@ -71,6 +72,7 @@ function Authenticated() {
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
           <Route path="/ai" element={<AiEntryPage />} />
           <Route path="/channels" element={<ChannelsPage />} />
+          <Route path="/me/notify" element={<MyNotifyPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/trash" element={<TrashPage />} />

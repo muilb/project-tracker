@@ -39,7 +39,9 @@ Kế hoạch này chia việc để **nhiều phiên làm song song**. Đợt 0 
 
 ## Đợt 0 — F0: Nền chung
 
-Mục tiêu: đặt hợp đồng (kiểu dữ liệu, kho lưu, đường đi của sự kiện, khung giao diện) để các nhánh sau chỉ việc điền vào. **Hành vi người dùng thấy không đổi**, trừ: cảnh báo gửi ngay sẽ đi qua hàng đợi (trễ tối đa ~1 phút).
+Mục tiêu: đặt hợp đồng (kiểu dữ liệu, kho lưu, đường đi của sự kiện, khung giao diện) để các nhánh sau chỉ việc điền vào. **Hành vi người dùng thấy không đổi.** Tin gửi ngay vẫn gửi trực tiếp trong request; hàng đợi chỉ dùng cho tin gửi trễ, gộp tin, gửi lại.
+
+**Trạng thái: đã làm** (PR muilb/project-tracker#21). Các mục dưới đây mô tả đúng code đã có.
 
 ### F0.1 Kiểu dữ liệu (`api/src/types.ts`)
 
@@ -99,11 +101,13 @@ Tách `alerts.ts` hiện tại thành các file nhỏ, mỗi file một nhánh s
 |---|---|---|
 | `events.ts` | Kiểu `NotifyEvent` và hàm tạo sự kiện. Gửi ngay: `update_posted`, `item_saved` (kèm bản trước). Theo giờ: thu thập trễ, quá hạn, mốc như hiện nay | D (thu thập theo giờ), A (sự kiện cá nhân) |
 | `render.ts` | Dựng `Message` (chuyển nguyên các hàm message hiện có) | E (rút gọn), D (tóm tắt tuần) |
+| `samples.ts` | Tin mẫu cho "Gửi thử" | D / E nếu thêm loại tin |
+| `personal.ts` | Mặc định theo vai trò (`defaultEvents`, `prefsOf`) | A |
 | `routeChannels.ts` | Chọn kênh nhóm cho mỗi sự kiện: phạm vi, loại tin, bật/tắt, **`canViewProject(người tạo, dự án)`** | F (quyền), D (lịch) |
 | `routePersonal.ts` | Chọn người nhận cá nhân. F0 để `return []` | A |
 | `policy.ts` | `isQuiet(schedule, now)`, `digestDue(schedule, now)`, `isPaused(x, now)`. F0 giữ đúng hành vi hiện tại | D |
-| `deliver.ts` | `flushOutbox(deps, now)`: lấy tin đến hạn, gửi qua driver, ghi `DeliveryLog`, cập nhật `lastSentAt/lastError`. F0 không thử lại (giữ như hiện nay) | C |
-| `drivers.ts` | Bảng `kind → { send(target, msg) }`: teams, telegram, slack (F0 để báo "chưa hỗ trợ"), inbox | E (slack), C (lỗi Telegram) |
+| `deliver.ts` | `send(deps, outgoing, now)` gửi ngay; `enqueue()` đưa vào hàng đợi; `flushDue()` gửi tin đến hạn (mỗi tin một lượt nhờ `claimOutbox`). Ghi `DeliveryLog`, `lastSentAt/lastError`, `markSent` khi thành công. F0 không thử lại | C |
+| `sender.ts` | Bảng `kind → driver`: teams, telegram, slack (F0 báo "chưa hỗ trợ"). Tin cá nhân (hộp thư, Telegram riêng) gửi trong `deliver.ts` | E (slack), C (lỗi Teams / Telegram) |
 | `pipeline.ts` | `emit(deps, event)` → route → `enqueue`. `runHourly` → tạo sự kiện → route → enqueue → flush | hạn chế sửa |
 
 - `routes/projects.ts` chỉ gọi `emit()`:
@@ -111,8 +115,8 @@ Tách `alerts.ts` hiện tại thành các file nhỏ, mỗi file một nhánh s
   - sau khi tạo hoặc sửa mục: `item_saved`, có bản trước.
 
   Không nhánh nào phải sửa `projects.ts` vì thông báo.
-- `cron.ts` thêm handler `flush` để gửi tin trong hàng đợi. Infra thêm rule EventBridge `rate(1 minute)` gọi handler này. Rule hằng giờ vẫn giữ.
-- Đường dẫn `POST /channels` (gửi tin thử khi tạo) vẫn gửi **trực tiếp**, không qua hàng đợi.
+- `cron.ts` thêm handler `flush` để gửi tin trong hàng đợi. Infra thêm Lambda `FlushFn` và rule EventBridge `rate(1 minute)`. Rule hằng giờ vẫn giữ.
+- Tin gửi ngay (`emit`) và `POST /channels` (tin thử khi tạo) gửi **trực tiếp**, không qua hàng đợi.
 - `auth.ts` thêm `can.viewProject(u, p)`. F0 trả `true` cho mọi người; F làm quy tắc thật.
 
 ### F0.4 API hợp đồng cho thông báo cá nhân
@@ -138,9 +142,11 @@ F0 làm đầy đủ phần lưu và đọc; A làm phần logic gửi.
   - `KindFields.tsx` (Teams / Telegram; E thêm Slack)
   - `ScheduleFields.tsx` (hiện chỉ có ô giờ yên lặng; D mở rộng)
   - `ChannelExtras.tsx` (chỗ để C gắn nhật ký gửi và chuyển người phụ trách)
-- Thêm route `/me/notify` trỏ tới `web/src/pages/MyNotify.tsx`. F0 tạo trang trống có tiêu đề; B làm nội dung.
-- Thêm chỗ đặt chuông `<InboxBell />` (`web/src/components/InboxBell.tsx`) trên thanh trên. F0 chỉ hiện số chưa đọc; B làm danh sách.
-- Tài liệu: chia mục Thông báo trong `DESIGN.md`, `Help.tsx`, `HelpJa.tsx` thành các tiểu mục: Kênh nhóm · Thông báo cá nhân · Lịch gửi · Độ tin cậy · Slack · Quyền xem.
+  - `TestSender.tsx` (nút gửi thử), `shared.ts` (nhãn, kiểu dùng chung)
+- Thêm route `/me/notify` trỏ tới `web/src/pages/MyNotify.tsx`. F0 tạo trang chỉ có tiêu đề, **chưa có link trong menu** (vì `main` được deploy). B làm nội dung, thêm link menu.
+- `web/src/components/InboxBell.tsx` (chuông 🔔, `useUnreadCount()`) đã có nhưng **chưa gắn** lên thanh trên; B gắn trong `App.tsx`.
+- `docs/DESIGN.md`: mục Thông báo đã chia thành tiểu mục Kênh nhóm · Luồng xử lý · Thông báo cá nhân · Lịch gửi · Độ tin cậy · Slack · Quyền xem.
+- Hướng dẫn (`Help.tsx` / `HelpJa.tsx`) **không** thêm tiêu đề trống (người dùng đọc trang này). Mỗi nhánh chèn vào chỗ riêng, xem "Chỗ sửa hướng dẫn" ở dưới.
 
 **Xong khi:** mọi test cũ vẫn qua và không đổi hành vi. Có test mới cho kho lưu, hàng đợi (emit → enqueue → flush gửi đúng kênh) và các endpoint `/me/*`. `npm run synth` qua.
 
@@ -153,18 +159,26 @@ F0 làm đầy đủ phần lưu và đọc; A làm phần logic gửi.
 | Nhánh | Được sửa (API) | Được sửa (web) |
 |---|---|---|
 | A Cá nhân — API | `notify/routePersonal.ts`, `notify/personal.ts` (mới), `routes/me.ts` (phần telegram, test), phần cá nhân trong `notify/events.ts` | — |
-| B Cá nhân — Web | — | `pages/MyNotify.tsx`, `components/InboxBell.tsx`, `components/notify/*` (mới), nút ⭐ theo dõi ở `pages/ProjectDetail.tsx` (chỉ phần tiêu đề) |
-| C Độ tin cậy | `notify/deliver.ts`, `notify/drivers.ts` (phần teams/telegram), `notify/telegram.ts`, `notify/teams.ts`, `routes/channels.ts` | `pages/channels/ChannelExtras.tsx`, `ChannelList.tsx` |
+| B Cá nhân — Web | — | `pages/MyNotify.tsx`, `components/InboxBell.tsx`, `components/notify/*` (mới), `App.tsx` (gắn chuông + link menu), nút ⭐ theo dõi ở `pages/ProjectDetail.tsx` (chỉ phần tiêu đề) |
+| C Độ tin cậy | `notify/deliver.ts`, `notify/sender.ts` (phần teams/telegram), `notify/telegram.ts`, `notify/teams.ts`, `routes/channels.ts` | `pages/channels/ChannelExtras.tsx`, `ChannelList.tsx` |
 | D Lịch gửi | `notify/policy.ts`, phần theo giờ trong `notify/events.ts`, phần tóm tắt trong `notify/render.ts` | `pages/channels/ScheduleFields.tsx` |
-| E Slack + chi tiết | `notify/slack.ts` (mới), dòng slack trong `notify/drivers.ts`, hàm `compact()` trong `notify/render.ts`, hàm kiểm tra URL Slack | `pages/channels/KindFields.tsx` |
+| E Slack + chi tiết | `notify/slack.ts` (mới), dòng slack trong `notify/sender.ts`, hàm `compact()` trong `notify/render.ts`, bỏ chặn `kind: 'slack'` trong `routes/channels.ts` (khối `// track E`) | `pages/channels/KindFields.tsx`, danh sách loại kênh trong `ChannelForm.tsx` (một dòng), chọn mức chi tiết |
 | F Quyền OTHER | `auth.ts` (`viewProject`), `views.ts`, `routes/projects.ts` (các đường đọc), `routes/ai.ts`, `ai/ask.ts`, `ai/proposals.ts`, `notify/routeChannels.ts` (chỉ chỗ gọi quyền) | màn hình liên quan nếu cần (ẩn nút, thông báo trống) |
 
 Chỗ chồng nhau duy nhất:
 - `notify/render.ts`: D sửa tóm tắt, E thêm `compact()` ở cuối file.
-- `notify/drivers.ts`: C sửa teams/telegram, E thêm slack.
+- `notify/sender.ts`: C sửa teams/telegram, E thêm slack.
+- `routes/channels.ts`: C sửa nhiều (audit, chuyển người phụ trách, nhật ký); E chỉ sửa khối `// track E`.
 - `notify/events.ts`: A thêm sự kiện cá nhân, D sửa phần theo giờ.
 
-F0 đặt sẵn các khối `// track A`, `// track C`, `// track D`, `// track E` để mỗi nhánh viết vào khối của mình.
+F0 đặt sẵn các khối `// track A`, `// track C`, `// track E` để mỗi nhánh viết vào khối của mình.
+
+**Chỗ sửa hướng dẫn** (`Help.tsx` và `HelpJa.tsx`, mục `thong-bao` trừ khi ghi khác):
+- A + B: thêm mục mới `thong-bao-ca-nhan` ngay sau mục `thong-bao` (kể cả dòng trong `SECTIONS`). Chỉ B sửa hướng dẫn; A ghi nội dung cần có vào mô tả PR.
+- C: tiểu mục mới "Lỗi gửi & nhật ký" ngay sau "Gửi thử".
+- D: tiểu mục mới "Lịch gửi" ngay sau "Nhận được những gì".
+- E: tiểu mục mới "Kết nối Slack" ngay trước "Nhận được những gì".
+- F: mục `vai-tro` (bảng vai trò, dòng OTHER).
 
 ---
 
@@ -217,9 +231,10 @@ F0 đặt sẵn các khối `// track A`, `// track C`, `// track D`, `// track 
 
 ### C — Độ tin cậy gửi tin
 
-- **Thử lại trong `flushOutbox`:**
+- **Thử lại** (`send` khi lỗi thì `enqueue`, `flushDue` gửi lại):
   - Lỗi thì `dueAt` lùi dần 1 → 5 → 15 → 60 phút, tối đa 6 lần.
   - Lỗi 4xx vĩnh viễn (URL không còn, bot bị xoá khỏi nhóm) thì không thử lại.
+  - Tin của job mỗi giờ (có `sentKeys`) **không** đưa vào hàng đợi khi lỗi: giờ sau job tự tạo lại, nếu xếp hàng sẽ gửi trùng.
 - **Tự tạm dừng kênh:**
   - `failCount` ≥ 5 lần liên tiếp thì đặt `enabled = false`, `autoPausedAt`.
   - Báo người tạo kênh vào hộp thư cá nhân. Ghi audit `channel_auto_pause`.
@@ -246,7 +261,7 @@ F0 đặt sẵn các khối `// track A`, `// track C`, `// track D`, `// track 
   - `pausedUntil`.
 - **Tóm tắt tuần** (`monday`): so với tuần trước: dự án đổi màu, mục đã đóng, mốc trong 7 ngày tới.
 - **Báo trước mốc:** `milestoneLeadDays` (ví dụ `[1, 3, 7]`), chống trùng theo từng mốc × số ngày.
-- **Gộp tin dồn dập:** khi enqueue, nếu kênh đã có tin cùng loại đang chờ trong 2 phút thì gộp vào một tin. Ví dụ "3 vấn đề Cao mới ở P03" thay cho 3 tin.
+- **Gộp tin dồn dập:** vấn đề Cao không gửi ngay mà `enqueue` với `dueAt` = +2 phút; `flushDue` gộp các tin cùng kênh cùng loại đến hạn thành một tin. Ví dụ "3 vấn đề Cao mới ở P03" thay cho 3 tin. Phần gộp nằm trong `policy.ts` / `render.ts`; chỉ thêm một lời gọi trong `deliver.ts` (thống nhất với C).
 - **Chống nhấp nháy:** dự án đổi Đỏ → không Đỏ → Đỏ trong 6 giờ chỉ báo lần đầu.
 - **Giao diện:** `ScheduleFields.tsx` có ô giờ yên lặng từ / đến, bỏ cuối tuần, giờ tóm tắt, kiểu tóm tắt, báo trước mốc, tạm dừng đến ngày. Kênh cũ hiện đúng giá trị mặc định.
 

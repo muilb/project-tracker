@@ -128,7 +128,13 @@ export class TrackerStack extends Stack {
       schedule: events.Schedule.cron({ minute: '5' }),
       targets: [new targets.LambdaFunction(cronFn, { retryAttempts: 0 })],
     });
-
+    // Every minute: messages waiting in the outbox (delayed, grouped or retried alerts).
+    const flushFn = new NodejsFunction(this, 'FlushFn', { ...lambdaProps('Flush', 'api/src/cron.ts', 50), handler: 'flush' });
+    table.grantReadWriteData(flushFn);
+    new events.Rule(this, 'EveryMinute', {
+      schedule: events.Schedule.rate(Duration.minutes(1)),
+      targets: [new targets.LambdaFunction(flushFn, { retryAttempts: 0 })],
+    });
 
     const api = new apigw.HttpApi(this, 'Api', {
       corsPreflight: {

@@ -1,6 +1,7 @@
 import {
   DEFAULT_SETTINGS,
   type AiConfig,
+  type AuditEntry,
   type Channel,
   type Item,
   type Project,
@@ -23,6 +24,7 @@ export class MemoryStore implements Store {
   telegramBot?: TelegramBot;
   aiConfig?: AiConfig;
   seqs = { project: 0, item: 0, channel: 0 };
+  audit: AuditEntry[] = [];
 
   async getUser(id: string) {
     return clone(this.users.get(id));
@@ -103,6 +105,17 @@ export class MemoryStore implements Store {
   }
   async markSent(key: string, ttlDays: number) {
     this.sent.set(key, Date.now() + ttlDays * 86_400_000);
+  }
+
+  async addAudit(entry: AuditEntry) {
+    this.audit.push(clone(entry));
+  }
+  async listAudit(limit: number) {
+    return [...this.audit]
+      .reverse() // same timestamp: newest written first
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, limit)
+      .map(clone);
   }
 
   async nextSeq(name: 'project' | 'item' | 'channel') {

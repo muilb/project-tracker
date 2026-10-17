@@ -10,6 +10,7 @@ type Mode = 'signIn' | 'signUp' | 'confirm' | 'forgot' | 'reset' | 'newPassword'
 const SAMPLE_USERS = [
   ['lan@example.com', 'Lan · PMO'],
   ['mng@example.com', 'MNG · Manager'],
+  ['admin@example.com', 'Admin · ADMIN'],
   ['hung@example.com', 'Hùng · GL'],
   ['an@example.com', 'An · PL'],
 ];

@@ -14,6 +14,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   SUBMNG: 'Sub MNG',
   MNG: 'MNG',
   OTHER: l('Hỗ trợ / Khác', 'サポート / その他'),
+  ADMIN: l('Quản trị hệ thống', 'システム管理者'),
 };
 export const TYPE_LABEL: Record<ItemType, string> = {
   issue: l('Vấn đề', '課題'),

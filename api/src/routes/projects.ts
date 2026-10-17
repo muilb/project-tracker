@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { audit } from '../audit.js';
 import { can, DELETE_UPDATE_HOURS, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
@@ -213,6 +214,7 @@ projects.delete('/:id', async (c) => {
   ensure(can.deleteProject(me), l('Chỉ PMO / quản lý mới được xoá dự án', 'プロジェクトの削除は PMO / 管理者のみ行えます'));
   const now = c.get('now').toISOString();
   await store.putProject({ ...project, deletedAt: now, deletedBy: me.id });
+  await audit(store, c.get('now'), me.id, 'project_delete', project.id, project.name);
   return c.json({ ok: true });
 });
 

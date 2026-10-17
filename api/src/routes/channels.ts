@@ -32,7 +32,7 @@ async function findTelegramChat(c: Context<AppEnv>, connectCode: string) {
   const bot = await c.get('store').getTelegramBot();
   if (!bot)
     throw new HTTPException(400, {
-      message: l('PMO chưa cài bot Telegram (Cài đặt → Telegram)', 'PMO が Telegram ボットを未設定です（設定 → Telegram）'),
+      message: l('Quản trị hệ thống chưa cài bot Telegram (Cài đặt → Telegram)', 'システム管理者が Telegram ボットを未設定です（設定 → Telegram）'),
     });
   let chat, seen: string[];
   try {

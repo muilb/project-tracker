@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { AI_MODEL, AiError } from '../ai/assistant.js';
 import { buildAskContext } from '../ai/ask.js';
 import { buildContext, toProposals } from '../ai/proposals.js';
+import { audit } from '../audit.js';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
@@ -16,7 +17,7 @@ ai.get('/settings/ai', async (c) => {
 });
 
 ai.put('/settings/ai', async (c) => {
-  ensure(can.admin(c.get('user')), l('Chỉ PMO / quản lý mới cài API key AI', 'AI の API キーは PMO / 管理者のみ設定できます'));
+  ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới cài API key AI', 'AI の API キーはシステム管理者のみ設定できます'));
   const { apiKey } = await parseBody(c.req, aiKeySchema);
   if (!apiKey.startsWith('sk-ant-'))
     throw new HTTPException(400, {
@@ -32,12 +33,14 @@ ai.put('/settings/ai', async (c) => {
     throw e;
   }
   await c.get('store').putAiConfig({ apiKey });
+  await audit(c.get('store'), c.get('now'), c.get('user').id, 'ai_key_set');
   return c.json({ configured: true, model: AI_MODEL });
 });
 
 ai.delete('/settings/ai', async (c) => {
-  ensure(can.admin(c.get('user')), l('Chỉ PMO / quản lý mới gỡ API key AI', 'AI の API キーは PMO / 管理者のみ削除できます'));
+  ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới gỡ API key AI', 'AI の API キーはシステム管理者のみ削除できます'));
   await c.get('store').putAiConfig(undefined);
+  await audit(c.get('store'), c.get('now'), c.get('user').id, 'ai_key_remove');
   return c.json({ configured: false, model: AI_MODEL });
 });
 
@@ -49,7 +52,7 @@ ai.post('/ai/parse', async (c) => {
   const config = await store.getAiConfig();
   if (!config)
     throw new HTTPException(400, {
-      message: l('PMO chưa cài API key AI (Cài đặt → AI)', 'PMO が AI の API キーを未設定です（設定 → AI）'),
+      message: l('Quản trị hệ thống chưa cài API key AI (Cài đặt → AI)', 'システム管理者が AI の API キーを未設定です（設定 → AI）'),
     });
   const snap = await store.snapshot();
   try {
@@ -68,7 +71,7 @@ ai.post('/ai/ask', async (c) => {
   const config = await store.getAiConfig();
   if (!config)
     throw new HTTPException(400, {
-      message: l('PMO chưa cài API key AI (Cài đặt → AI)', 'PMO が AI の API キーを未設定です（設定 → AI）'),
+      message: l('Quản trị hệ thống chưa cài API key AI (Cài đặt → AI)', 'システム管理者が AI の API キーを未設定です（設定 → AI）'),
     });
   const context = buildAskContext(await store.snapshot(), c.get('now'));
   try {

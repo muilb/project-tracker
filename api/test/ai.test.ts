@@ -56,15 +56,17 @@ beforeEach(async () => {
 });
 
 describe('AI key setting', () => {
-  it('only admins set it; it is verified and never returned', async () => {
+  it('only the system admin sets it; it is verified and never returned', async () => {
     expect((await call('PUT', '/settings/ai', 'an', { apiKey: KEY })).status).toBe(403);
-    expect((await call('PUT', '/settings/ai', 'lan', { apiKey: 'not-a-claude-key-xxxxxxxxxx' })).status).toBe(400);
-    expect((await call('PUT', '/settings/ai', 'lan', { apiKey: 'sk-ant-wrong-key-0123456789' })).status).toBe(400);
-    expect((await call('PUT', '/settings/ai', 'lan', { apiKey: KEY })).status).toBe(200);
+    expect((await call('PUT', '/settings/ai', 'lan', { apiKey: KEY })).status).toBe(403); // PMO
+    expect((await call('PUT', '/settings/ai', 'admin', { apiKey: 'not-a-claude-key-xxxxxxxxxx' })).status).toBe(400);
+    expect((await call('PUT', '/settings/ai', 'admin', { apiKey: 'sk-ant-wrong-key-0123456789' })).status).toBe(400);
+    expect((await call('PUT', '/settings/ai', 'admin', { apiKey: KEY })).status).toBe(200);
     const text = await (await call('GET', '/settings/ai', 'an')).text();
     expect(JSON.parse(text)).toEqual({ configured: true, model: 'claude-haiku-5-5' });
     expect(text).not.toContain(KEY);
-    await call('DELETE', '/settings/ai', 'lan');
+    expect((await call('DELETE', '/settings/ai', 'lan')).status).toBe(403);
+    await call('DELETE', '/settings/ai', 'admin');
     expect(await store.getAiConfig()).toBeUndefined();
   });
 });

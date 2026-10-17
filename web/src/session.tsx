@@ -8,8 +8,10 @@ interface SessionValue {
   /** Display name for a user id (email); falls back to the part before @. */
   name: (id?: string) => string;
   reloadUsers: () => void;
-  isAdmin: boolean; // PMO / SUBMNG / MNG
-  canManageUsers: boolean; // PMO / MNG
+  isAdmin: boolean; // PMO / SUBMNG / MNG / ADMIN
+  canManageUsers: boolean; // PMO / MNG / ADMIN
+  /** System administrator: AI key, Telegram bot, granting ADMIN, audit log. */
+  isSystemAdmin: boolean;
 }
 
 const Ctx = createContext<SessionValue | undefined>(undefined);
@@ -17,7 +19,10 @@ const Ctx = createContext<SessionValue | undefined>(undefined);
 export function SessionProvider({ me, children }: { me: User; children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const reloadUsers = useCallback(() => {
-    api.get<{ users: User[] }>('/users').then((r) => setUsers(r.users)).catch(() => {});
+    api
+      .get<{ users: User[] }>('/users')
+      .then((r) => setUsers(r.users))
+      .catch(() => {});
   }, []);
   useEffect(reloadUsers, [reloadUsers]);
 
@@ -28,8 +33,9 @@ export function SessionProvider({ me, children }: { me: User; children: ReactNod
       users,
       name: (id) => (id ? (byId.get(id) ?? id.split('@')[0]) : '—'),
       reloadUsers,
-      isAdmin: ['PMO', 'SUBMNG', 'MNG'].includes(me.role),
-      canManageUsers: me.role === 'PMO' || me.role === 'MNG',
+      isAdmin: ['PMO', 'SUBMNG', 'MNG', 'ADMIN'].includes(me.role),
+      canManageUsers: ['PMO', 'MNG', 'ADMIN'].includes(me.role),
+      isSystemAdmin: me.role === 'ADMIN',
     };
   }, [me, users, reloadUsers]);
 

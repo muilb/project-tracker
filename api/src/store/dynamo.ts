@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_SETTINGS,
   type AiConfig,
+  type AuditEntry,
   type Channel,
   type ChannelKind,
   type Item,
@@ -20,7 +21,7 @@ import {
   type Update,
   type User,
 } from '../types.js';
-import { ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot, type Store } from './store.js';
+import { AUDIT_DAYS, ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot, type Store } from './store.js';
 
 /*
  * Single-table layout (pk / sk):
@@ -30,10 +31,11 @@ import { ConflictError, liveRows, liveSnapshot, type ListOptions, type Snapshot,
  *   PROJECT#<id>      ITEM#<id>
  *   CHANNEL#<id>      CHANNEL
  *   SENT#<key>        SENT              (alert de-duplication, expires via the `ttl` attribute)
+ *   AUDIT             <iso time>#<id>   (administrative log, expires via `ttl` after AUDIT_DAYS)
  *   CONFIG            SETTINGS | TELEGRAM | SEQ#project | SEQ#item | SEQ#channel
  * Every row also has `kind` so a full scan can be grouped cheaply.
  */
-type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT';
+type Kind = 'USER' | 'PROJECT' | 'UPDATE' | 'ITEM' | 'CHANNEL' | 'SENT' | 'AUDIT';
 
 export class DynamoStore implements Store {
   private db: DynamoDBDocumentClient;
@@ -179,6 +181,28 @@ export class DynamoStore implements Store {
   }
   markSent(key: string, ttlDays: number) {
     return this.put(`SENT#${key}`, 'SENT', 'SENT', { ttl: Math.floor(Date.now() / 1000) + ttlDays * 86_400 });
+  }
+
+  addAudit(entry: AuditEntry) {
+    return this.put('AUDIT', `${entry.at}#${entry.id}`, 'AUDIT', {
+      ...entry,
+      ttl: Math.floor(Date.parse(entry.at) / 1000) + AUDIT_DAYS * 86_400,
+    });
+  }
+  async listAudit(limit: number) {
+    const res = await this.db.send(
+      new QueryCommand({
+        TableName: this.table,
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': 'AUDIT' },
+        ScanIndexForward: false,
+        Limit: limit,
+      }),
+    );
+    return (res.Items ?? []).map((row) => {
+      const { ttl: _ttl, ...entry } = strip<AuditEntry & { ttl?: number }>(row);
+      return entry as AuditEntry;
+    });
   }
 
   async nextSeq(name: 'project' | 'item' | 'channel') {

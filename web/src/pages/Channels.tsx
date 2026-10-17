@@ -238,7 +238,7 @@ function ChannelForm({
   onCancel: () => void;
   onSaved: (msg: string) => void;
 }) {
-  const { users, me, isAdmin } = useSession();
+  const { users, me, isSystemAdmin } = useSession();
   const { data: projects } = useApi<{ projects: ProjectView[] }>('/projects');
   const [kind, setKind] = useState<ChannelKind>(channel?.kind ?? 'telegram');
   const [chName, setName] = useState(channel?.name ?? '');
@@ -357,7 +357,7 @@ function ChannelForm({
           {telegramBlocked ? (
             <div className="error-box">
               {l('Chưa cài bot Telegram.', 'Telegram ボットが未設定です。')}{' '}
-              {isAdmin ? (
+              {isSystemAdmin ? (
                 lang === 'ja' ? (
                   <>
                     <a href="/settings">設定 → Telegram ボット</a>で設定してください。
@@ -368,7 +368,7 @@ function ChannelForm({
                   </>
                 )
               ) : (
-                l('Nhờ PMO cài bot ở trang Cài đặt.', 'PMO に「設定」画面でボットを設定してもらってください。')
+                l('Nhờ Quản trị hệ thống cài bot ở trang Cài đặt.', 'システム管理者に「設定」画面でボットを設定してもらってください。')
               )}
             </div>
           ) : (

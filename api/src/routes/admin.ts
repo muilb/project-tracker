@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { audit } from '../audit.js';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
@@ -10,6 +11,8 @@ import { approveAccountSchema, createUserSchema, parseBody, patchUserSchema, set
 import type { User } from '../types.js';
 
 export const admin = new Hono<AppEnv>();
+
+const ONLY_ADMIN_ROLE = () => l('Chỉ Quản trị hệ thống mới cấp được vai trò ADMIN', 'ADMIN ロールを付与できるのはシステム管理者のみです');
 
 admin.get('/me', (c) => c.json({ user: c.get('user') }));
 
@@ -36,6 +39,7 @@ admin.post('/users/pending/:email/approve', async (c) => {
   ensure(can.manageUsers(c.get('user')), l('Chỉ PMO / MNG mới duyệt tài khoản', 'アカウントの承認は PMO / MNG のみ行えます'));
   const email = decodeURIComponent(c.req.param('email')).trim().toLowerCase();
   const body = await parseBody(c.req, approveAccountSchema);
+  ensure(body.role !== 'ADMIN' || can.system(c.get('user')), ONLY_ADMIN_ROLE());
   let account;
   try {
     account = await c.get('accounts').approve(email);
@@ -57,6 +61,7 @@ admin.post('/users/pending/:email/approve', async (c) => {
         createdAt: c.get('now').toISOString(),
       };
   await store.putUser(user);
+  await audit(store, c.get('now'), c.get('user').id, 'account_approve', email, user.role);
   return c.json({ user });
 });
 
@@ -70,6 +75,7 @@ admin.post('/users/pending/:email/reject', async (c) => {
       throw new HTTPException(404, { message: l(`${email} không có trong danh sách chờ duyệt`, `${email} は承認待ちリストにありません`) });
     throw e;
   }
+  await audit(c.get('store'), c.get('now'), c.get('user').id, 'account_reject', email);
   return c.json({ ok: true });
 });
 
@@ -78,19 +84,34 @@ admin.post('/users', async (c) => {
   const store = c.get('store');
   ensure(can.manageUsers(c.get('user')), l('Chỉ PMO / MNG mới được thêm người dùng', 'ユーザーの追加は PMO / MNG のみ行えます'));
   const body = await parseBody(c.req, createUserSchema);
+  ensure(body.role !== 'ADMIN' || can.system(c.get('user')), ONLY_ADMIN_ROLE());
   if (await store.getUser(body.id)) throw new HTTPException(409, { message: l(`${body.id} đã tồn tại`, `${body.id} は既に存在します`) });
   const user: User = { ...body, createdAt: c.get('now').toISOString() };
   await store.putUser(user);
+  await audit(store, c.get('now'), c.get('user').id, 'user_create', user.id, user.role);
   return c.json({ user }, 201);
 });
 
 admin.patch('/users/:id', async (c) => {
   const store = c.get('store');
   ensure(can.manageUsers(c.get('user')), l('Chỉ PMO / MNG mới được sửa người dùng', 'ユーザーの編集は PMO / MNG のみ行えます'));
+  const me = c.get('user');
   const user = await store.getUser(c.req.param('id').toLowerCase());
   if (!user) throw new HTTPException(404, { message: l('Không tìm thấy người dùng', 'ユーザーが見つかりません') });
-  const updated = { ...user, ...(await parseBody(c.req, patchUserSchema)) };
+  const body = await parseBody(c.req, patchUserSchema);
+  const roleChange = body.role && body.role !== user.role;
+  if (roleChange) {
+    ensure(
+      can.manageAccount(me, user),
+      l('Chỉ Quản trị hệ thống mới đổi được vai trò của tài khoản ADMIN', 'ADMIN アカウントのロールを変更できるのはシステム管理者のみです'),
+    );
+    ensure(body.role !== 'ADMIN' || can.system(me), ONLY_ADMIN_ROLE());
+    if (user.id === me.id)
+      throw new HTTPException(400, { message: l('Không tự đổi vai trò của chính mình', '自分自身のロールは変更できません') });
+  }
+  const updated = { ...user, ...body };
   await store.putUser(updated);
+  if (roleChange) await audit(store, c.get('now'), me.id, 'role_change', user.id, `${user.role} → ${updated.role}`);
   return c.json({ user: updated });
 });
 
@@ -120,6 +141,13 @@ admin.post('/users/:id/reset-password', async (c) => {
         '自分のパスワードはここでは再設定できません。ログイン画面の「パスワードを忘れた場合」を使ってください',
       ),
     });
+  ensure(
+    can.manageAccount(me, await c.get('store').getUser(email)),
+    l(
+      'Chỉ Quản trị hệ thống mới đặt lại mật khẩu của tài khoản ADMIN',
+      'ADMIN アカウントのパスワードを再設定できるのはシステム管理者のみです',
+    ),
+  );
   const password = temporaryPassword();
   try {
     await c.get('accounts').setTemporaryPassword(email, password);
@@ -137,6 +165,7 @@ admin.post('/users/:id/reset-password', async (c) => {
       });
     throw e;
   }
+  await audit(c.get('store'), c.get('now'), me.id, 'password_reset', email);
   return c.json({ password });
 });
 
@@ -157,7 +186,7 @@ admin.get('/settings/telegram', async (c) => {
 });
 
 admin.put('/settings/telegram', async (c) => {
-  ensure(can.admin(c.get('user')), l('Chỉ PMO / quản lý mới cài bot Telegram', 'Telegram ボットの設定は PMO / 管理者のみ行えます'));
+  ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới cài bot Telegram', 'Telegram ボットの設定はシステム管理者のみ行えます'));
   const { token } = await parseBody(c.req, telegramBotSchema);
   if (!looksLikeBotToken(token))
     throw new HTTPException(400, {
@@ -174,12 +203,28 @@ admin.put('/settings/telegram', async (c) => {
       message: l('Telegram không chấp nhận token: ', 'Telegram がトークンを受け付けません: ') + (e as Error).message,
     });
   }
+  const before = await c.get('store').getTelegramBot();
   await c.get('store').putTelegramBot({ token, username });
+  await audit(
+    c.get('store'),
+    c.get('now'),
+    c.get('user').id,
+    'telegram_set',
+    `@${username}`,
+    before ? `@${before.username} → @${username}` : undefined,
+  );
   return c.json({ configured: true, username });
 });
 
 admin.delete('/settings/telegram', async (c) => {
-  ensure(can.admin(c.get('user')), l('Chỉ PMO / quản lý mới gỡ bot Telegram', 'Telegram ボットの削除は PMO / 管理者のみ行えます'));
+  ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới gỡ bot Telegram', 'Telegram ボットの削除はシステム管理者のみ行えます'));
   await c.get('store').putTelegramBot(undefined);
+  await audit(c.get('store'), c.get('now'), c.get('user').id, 'telegram_remove');
   return c.json({ configured: false });
+});
+
+/** Administrative log (ADMIN): accounts, roles, passwords, secrets, deletes and restores. */
+admin.get('/audit', async (c) => {
+  ensure(can.system(c.get('user')), l('Chỉ Quản trị hệ thống mới xem được nhật ký', '操作ログはシステム管理者のみ閲覧できます'));
+  return c.json({ entries: await c.get('store').listAudit(200) });
 });

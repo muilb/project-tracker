@@ -157,6 +157,14 @@ export function HelpPage() {
                   không nhập
                 </td>
               </tr>
+              <tr>
+                <td>Quản trị hệ thống (ADMIN)</td>
+                <td>Người phụ trách hệ thống</td>
+                <td>
+                  Làm được mọi việc của PMO / quản lý. Riêng ADMIN mới: cài / đổi API key AI và bot Telegram, cấp hoặc gỡ vai trò ADMIN, đổi
+                  vai trò / đặt lại mật khẩu của tài khoản ADMIN, xem nhật ký quản trị
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -534,15 +542,18 @@ export function HelpPage() {
           </li>
         </ul>
         <h3>Cài đặt (PMO / quản lý)</h3>
+        <p className="muted">
+          Mục AI và Bot Telegram chỉ <b>Quản trị hệ thống (ADMIN)</b> cài / đổi được; PMO / quản lý chỉ thấy trạng thái.
+        </p>
         <ul className="howto">
           <li>
-            <b>AI (Claude)</b>: dán API key (lấy ở console.anthropic.com). Key lưu trên máy chủ, không hiển thị lại. Nên đặt giới hạn chi
-            tiêu trên console.
+            <b>AI (Claude)</b> (ADMIN): dán API key (lấy ở console.anthropic.com). Key lưu trên máy chủ, không hiển thị lại. Nên đặt giới
+            hạn chi tiêu trên console.
           </li>
           <li>
-            <b>Bot Telegram</b>: tạo bot với @BotFather (<code>/newbot</code>) rồi dán token. Token lộ ra ngoài thì <code>/revoke</code> ở
-            BotFather rồi bấm <B>Đổi token</B> và dán token mới — các nhóm đã kết nối vẫn giữ nguyên. Đổi sang bot khác thì phải thêm bot
-            mới vào từng nhóm.
+            <b>Bot Telegram</b> (ADMIN): tạo bot với @BotFather (<code>/newbot</code>) rồi dán token. Token lộ ra ngoài thì{' '}
+            <code>/revoke</code> ở BotFather rồi bấm <B>Đổi token</B> và dán token mới — các nhóm đã kết nối vẫn giữ nguyên. Đổi sang bot
+            khác thì phải thêm bot mới vào từng nhóm.
           </li>
           <li>
             <b>Microsoft Teams</b>: không có gì để cài chung — mỗi kênh Teams đăng ký ở trang Kênh thông báo với URL webhook riêng.
@@ -550,6 +561,19 @@ export function HelpPage() {
           <li>Tần suất cập nhật theo trạng thái, ngưỡng "sắp tới", số ngày hiện trên danh sách sắp tới.</li>
         </ul>
         <p className="muted">Không bao giờ gửi API key hay token qua chat / email — chỉ dán vào trang Cài đặt.</p>
+        <h3>Quản trị hệ thống (ADMIN)</h3>
+        <ul className="howto">
+          <li>
+            ADMIN đầu tiên: người giữ repo GitHub sửa biến <code>ADMIN_EMAILS</code> (Settings → Variables) thành dạng{' '}
+            <code>email@cty.vn:ADMIN</code> rồi deploy lại; lần đăng nhập sau tài khoản đó thành ADMIN. Từ đó ADMIN cấp quyền cho người khác
+            ở trang Người dùng.
+          </li>
+          <li>Chỉ ADMIN cấp được vai trò ADMIN. Không ai tự đổi vai trò của mình, nên hệ thống luôn còn ít nhất một ADMIN.</li>
+          <li>
+            <B>Cài đặt → Nhật ký quản trị</B>: ai đổi vai trò, duyệt / từ chối tài khoản, đặt lại mật khẩu, cài key / bot, xoá dự án, khôi
+            phục — lúc nào.
+          </li>
+        </ul>
       </H>
 
       <H id="hoi-dap">

@@ -27,6 +27,7 @@ const USERS: [string, string, Role][] = [
   ['mai', 'Mai', 'PMO'],
   ['minh', 'Minh', 'SUBMNG'],
   ['mng', 'MNG', 'MNG'],
+  ['admin', 'Quản trị', 'ADMIN'],
 ];
 
 // id, name, customer, gl, pl, supporters, pmo, start, end, custom frequency (hours)

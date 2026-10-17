@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { audit } from '../audit.js';
 import { can, ensure } from '../auth.js';
 import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
@@ -64,6 +65,7 @@ trash.post('/restore', async (c) => {
   if (kind === 'project') {
     if (!project.deletedAt) throw notFound();
     await store.putProject(restore(project));
+    await audit(store, c.get('now'), c.get('user').id, 'restore', projectId, 'project');
     return c.json({ ok: true });
   }
   if (project.deletedAt)
@@ -82,5 +84,6 @@ trash.post('/restore', async (c) => {
     if (!update?.deletedAt) throw notFound();
     await store.putUpdate(restore(update));
   }
+  await audit(store, c.get('now'), c.get('user').id, 'restore', `${projectId}/${id}`, kind);
   return c.json({ ok: true });
 });

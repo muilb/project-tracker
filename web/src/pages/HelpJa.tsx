@@ -157,6 +157,14 @@ export function HelpPageJa() {
                   は質問のみ利用可（入力は不可）
                 </td>
               </tr>
+              <tr>
+                <td>システム管理者（ADMIN）</td>
+                <td>システム担当者</td>
+                <td>
+                  PMO / マネージャーのすべての操作が可能。ADMIN のみ：AI の API キーと Telegram ボットの設定 / 変更、ADMIN ロールの付与 /
+                  解除、ADMIN アカウントのロール変更 / パスワード再設定、操作ログの閲覧
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -548,13 +556,16 @@ export function HelpPageJa() {
           </li>
         </ul>
         <h3>設定（PMO / マネージャー）</h3>
+        <p className="muted">
+          AI と Telegram ボットの設定・変更は<b>システム管理者（ADMIN）</b>のみです。PMO / マネージャーには状態だけが表示されます。
+        </p>
         <ul className="howto">
           <li>
-            <b>AI (Claude)</b>：API キーを貼り付けます（console.anthropic.com で取得）。キーはサーバーに保存され、再表示されません。console
-            で利用上限を設定しておくことをおすすめします。
+            <b>AI (Claude)</b>（ADMIN）：API キーを貼り付けます（console.anthropic.com
+            で取得）。キーはサーバーに保存され、再表示されません。console で利用上限を設定しておくことをおすすめします。
           </li>
           <li>
-            <b>Telegram ボット</b>：@BotFather でボットを作成し（<code>/newbot</code>
+            <b>Telegram ボット</b>（ADMIN）：@BotFather でボットを作成し（<code>/newbot</code>
             ）、トークンを貼り付けます。トークンが外部に漏れた場合は、BotFather で<code>/revoke</code> し、<B>トークンを変更</B>
             から新しいトークンを貼り付けてください。接続済みのグループはそのまま使えます。別のボットに切り替える場合は、新しいボットを各グループに追加する必要があります。
           </li>
@@ -566,6 +577,19 @@ export function HelpPageJa() {
         <p className="muted">
           API キーやトークンは、絶対にチャットやメールで送らないでください。設定ページに貼り付けるだけにしてください。
         </p>
+        <h3>システム管理者（ADMIN）</h3>
+        <ul className="howto">
+          <li>
+            最初の ADMIN：GitHub リポジトリの管理者が変数 <code>ADMIN_EMAILS</code>（Settings → Variables）を{' '}
+            <code>email@example.com:ADMIN</code> の形式に変更して再デプロイすると、次回ログイン時にそのアカウントが ADMIN になります。以降は
+            ADMIN が「ユーザー」画面で他の人に権限を付与します。
+          </li>
+          <li>ADMIN ロールを付与できるのは ADMIN のみです。自分のロールは変更できないため、ADMIN が 0 人になることはありません。</li>
+          <li>
+            <B>設定 → 操作ログ</B>：ロール変更、アカウントの承認 / 却下、パスワード再設定、キー /
+            ボットの設定、プロジェクト削除、復元を、誰がいつ行ったかを確認できます。
+          </li>
+        </ul>
       </H>
 
       <H id="hoi-dap">

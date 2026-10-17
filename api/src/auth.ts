@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from './env.js';
+import { audit } from './audit.js';
 import { l } from './i18n.js';
 import { ROLES, type Item, type Project, type Role, type Update, type User } from './types.js';
 
@@ -50,25 +51,38 @@ export function requireUser(config: AuthConfig): MiddlewareHandler<AppEnv> {
     const store = c.get('store');
     const email = id.email.trim().toLowerCase();
     let user = await store.getUser(email);
+    const initial = c.get('initialRoles').get(email);
     if (!user) {
       user = {
         id: email,
         name: id.name || email.split('@')[0],
-        role: c.get('initialRoles').get(email) ?? 'PL',
+        role: initial ?? 'PL',
         createdAt: c.get('now').toISOString(),
       };
       await store.putUser(user);
+    } else if (initial === 'ADMIN' && user.role !== 'ADMIN') {
+      // ADMIN_EMAILS is how the first ADMIN is made (only repo owners can change it);
+      // other roles from it apply on the first sign-in only.
+      const from = user.role;
+      user = { ...user, role: 'ADMIN' };
+      await store.putUser(user);
+      await audit(store, c.get('now'), user.id, 'admin_granted', user.id, `${from} → ADMIN (ADMIN_EMAILS)`);
     }
     c.set('user', user);
     await next();
   };
 }
 
-const ADMIN_ROLES: Role[] = ['PMO', 'SUBMNG', 'MNG'];
+const ADMIN_ROLES: Role[] = ['PMO', 'SUBMNG', 'MNG', 'ADMIN'];
 
 export const can = {
   admin: (u: User) => ADMIN_ROLES.includes(u.role),
-  manageUsers: (u: User) => u.role === 'PMO' || u.role === 'MNG',
+  /** System administrator: secrets (AI key, Telegram bot), granting ADMIN, the audit log. */
+  system: (u: User) => u.role === 'ADMIN',
+  manageUsers: (u: User) => u.role === 'PMO' || u.role === 'MNG' || u.role === 'ADMIN',
+  /** Managing one account (role, password): ADMIN accounts are only touched by ADMIN. */
+  manageAccount: (u: User, target: Pick<User, 'role'> | undefined) =>
+    can.manageUsers(u) && (target?.role !== 'ADMIN' || u.role === 'ADMIN'),
   /** PL and above. */
   createProject: (u: User) => u.role !== 'OTHER',
   editProject: (u: User, p: Project) => can.admin(u) || p.gl === u.id || p.pl === u.id,

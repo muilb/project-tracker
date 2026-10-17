@@ -5,8 +5,9 @@ import type { Lang } from './i18n.js';
 export const HEALTHS = ['green', 'yellow', 'red'] as const;
 export type Health = (typeof HEALTHS)[number];
 
-// PL: project leader, GL: group leader, PMO, SUBMNG/MNG: managers, OTHER: supporter/other staff.
-export const ROLES = ['PL', 'GL', 'PMO', 'SUBMNG', 'MNG', 'OTHER'] as const;
+// PL: project leader, GL: group leader, PMO, SUBMNG/MNG: managers, OTHER: supporter/other staff,
+// ADMIN: system administrator (accounts, secrets, everything managers can do).
+export const ROLES = ['PL', 'GL', 'PMO', 'SUBMNG', 'MNG', 'OTHER', 'ADMIN'] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Login account state in Cognito: none = never signed up, pending = sign-up not confirmed,
@@ -143,6 +144,32 @@ export interface Channel {
 export interface TelegramBot {
   token: string;
   username: string;
+}
+
+export const AUDIT_ACTIONS = [
+  'role_change',
+  'admin_granted', // ADMIN_EMAILS raised someone to ADMIN at sign-in
+  'user_create',
+  'account_approve',
+  'account_reject',
+  'password_reset',
+  'ai_key_set',
+  'ai_key_remove',
+  'telegram_set',
+  'telegram_remove',
+  'project_delete',
+  'restore',
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/** Who did which administrative change, shown to ADMIN in Settings. */
+export interface AuditEntry {
+  id: string;
+  at: string; // ISO
+  actor: string; // user id
+  action: AuditAction;
+  target?: string; // user email, project id, …
+  detail?: string; // e.g. "PL → GL"
 }
 
 /** Claude API key for the natural-language entry page (a secret, never returned by the API). */

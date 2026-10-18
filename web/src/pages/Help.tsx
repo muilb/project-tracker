@@ -247,6 +247,11 @@ export function HelpPage() {
             <B>Tình hình theo GL</B>: số dự án Đỏ / Vàng / Xanh và trễ của từng nhóm.
           </li>
         </ul>
+        <p>
+          <B>⬇ Xuất Excel</B>: tải file Excel gồm 3 sheet — <b>Dự án</b> (mọi trạng thái: màu, mức khẩn, người phụ trách, cập nhật gần nhất,
+          hạn / trễ cập nhật, số vấn đề, mốc tiếp theo), <b>Vấn đề, sự kiện, mốc</b> (kể cả đã đóng), <b>Cập nhật 60 ngày</b> gần nhất. Chỉ
+          có những dự án bạn được xem; giờ là giờ Việt Nam; tiêu đề cột theo ngôn ngữ đang chọn. File không có dữ liệu đã xoá.
+        </p>
         <p className="muted">Bấm vào tên dự án ở bất kỳ đâu để mở chi tiết.</p>
       </H>
 

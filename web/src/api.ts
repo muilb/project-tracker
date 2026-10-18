@@ -18,7 +18,7 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
-async function request<T>(method: string, path: string, body?: unknown, authenticated = true): Promise<T> {
+async function call(method: string, path: string, body?: unknown, authenticated = true): Promise<Response> {
   const headers: Record<string, string> = { 'accept-language': lang, ...(authenticated ? await auth.headers() : {}) };
   if (body !== undefined) headers['content-type'] = 'application/json';
   const res = await fetch(getConfig().apiUrl.replace(/\/$/, '') + path, {
@@ -26,13 +26,31 @@ async function request<T>(method: string, path: string, body?: unknown, authenti
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const json = await res.json().catch(() => ({}));
   if (res.status === 401 && authenticated) {
     auth.signOut();
     onUnauthorized();
   }
-  if (!res.ok) throw new ApiError(res.status, json.error ?? json.message ?? `${l('Lỗi', 'エラー')} ${res.status}`);
-  return json as T;
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, json.error ?? json.message ?? `${l('Lỗi', 'エラー')} ${res.status}`);
+  }
+  return res;
+}
+
+async function request<T>(method: string, path: string, body?: unknown, authenticated = true): Promise<T> {
+  const res = await call(method, path, body, authenticated);
+  return (await res.json().catch(() => ({}))) as T;
+}
+
+/** GETs a file (with the login, so not a plain link) and saves it as `filename`. */
+async function download(path: string, filename: string) {
+  const blob = await (await call('GET', path)).blob();
+  const href = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
 }
 
 export const api = {
@@ -42,6 +60,7 @@ export const api = {
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
   del: <T>(path: string) => request<T>('DELETE', path),
   getPublic: <T>(path: string) => request<T>('GET', path, undefined, false),
+  download,
 };
 
 /** Fetches `path` (null = skip) and re-fetches on `reload()` or when the path changes. */

@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useApi } from '../api';
+import { api, useApi } from '../api';
 import { Empty, ErrorBox, HealthBadge, HealthBar, Kpi, Section, TypeIcon, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft, fmtHours } from '../format';
 import { ONLY_MINE, PRIORITY_LABEL } from '../labels';
@@ -31,6 +32,19 @@ export function Dashboard() {
     setParams(next, { replace: true });
   };
   const gls = users.filter((u) => u.role === 'GL');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string>();
+  const exportExcel = async () => {
+    setExporting(true);
+    setExportError(undefined);
+    try {
+      await api.download('/export', `project-tracker-${new Date().toLocaleDateString('sv')}.xlsx`);
+    } catch (e) {
+      setExportError((e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="stack">
@@ -57,6 +71,18 @@ export function Dashboard() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="btn"
+            disabled={exporting}
+            onClick={exportExcel}
+            title={l(
+              'Tải file Excel: dự án, vấn đề / sự kiện / mốc, cập nhật 60 ngày gần nhất (những gì bạn được xem)',
+              'Excel をダウンロード：プロジェクト、課題 / イベント / マイルストーン、直近 60 日の報告（閲覧できる範囲）',
+            )}
+          >
+            ⬇ {exporting ? l('Đang xuất…', '出力中…') : l('Xuất Excel', 'Excel 出力')}
+          </button>
           {me.role !== 'OTHER' && (
             <Link className="btn btn-primary" to="/projects/new">
               ＋ {l('Tạo dự án', 'プロジェクト作成')}
@@ -64,7 +90,7 @@ export function Dashboard() {
           )}
         </div>
       </div>
-      <ErrorBox error={error} />
+      <ErrorBox error={error ?? exportError} />
       {!data ? (
         <p className="loading">{loading ? l('Đang tải…', '読み込み中…') : ''}</p>
       ) : (

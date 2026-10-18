@@ -326,6 +326,21 @@ Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `sc
 
 **Teams kiểu cũ:** kênh có URL `*.webhook.office.com` vẫn gửi, API trả `legacyWebhook: true` và web hiện cảnh báo "kiểu cũ, Microsoft đã ngừng — tạo Workflow mới".
 
+**Cảnh báo hệ thống** (CloudWatch → SNS `Alarms`, `notify/alarms.ts`, Lambda `AlarmFn` = `cron.alarm`):
+
+| Alarm (mô tả = khoá tin) | Đo gì | Ngưỡng |
+|---|---|---|
+| `api-5xx` | HTTP API trả 5xx | ≥ 5 trong 5 phút |
+| `api-errors` / `api-throttles` | Lambda API lỗi / quá thời gian, bị giới hạn | ≥ 1 trong 5 phút |
+| `cron-errors` | Lambda chạy mỗi giờ lỗi | ≥ 1 trong 1 giờ |
+| `flush-errors` | Lambda gửi hàng đợi (mỗi phút) lỗi | ≥ 3 trong 5 phút |
+| `table-throttles` / `table-errors` | DynamoDB bị giới hạn / lỗi hệ thống (Get/Put/Update/Delete/Query/Scan) | ≥ 1 trong 5 phút |
+| `alarm-errors` | Chính `AlarmFn` lỗi | ≥ 1 trong 5 phút, chỉ gửi email |
+
+- Khi alarm chuyển sang ALARM hoặc trở lại OK, `AlarmFn` gửi cho **mọi ADMIN** (sự kiện `system_alarm`): hộp thư luôn, Telegram riêng / Web Push nếu bật; không theo giờ yên lặng, không chống trùng (CloudWatch chỉ báo khi đổi trạng thái). Tin theo ngôn ngữ `NotifyPrefs.lang`; alarm lạ thì hiện tên alarm. Không có ADMIN thì chỉ ghi log.
+- Biến GitHub `ALARM_EMAILS` (không bắt buộc) thêm đăng ký email vào SNS — dùng được khi chính ứng dụng / DynamoDB hỏng. Mỗi địa chỉ phải bấm xác nhận một lần.
+- Thiếu dữ liệu (không có request) không tính là lỗi (`treatMissingData: notBreaching`).
+
 **Không lộ bí mật:** lỗi được làm sạch (`scrubError`: bỏ token bot, bỏ phần query của mọi URL, bỏ đường dẫn của URL webhook Slack) trước khi ghi vào kênh, nhật ký gửi, hàng đợi, log Lambda hay trả về.
 
 **Nhật ký, audit, người phụ trách:**

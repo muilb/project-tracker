@@ -780,6 +780,12 @@ export function HelpPage() {
             <B>Cài đặt → Nhật ký quản trị</B>: ai đổi vai trò, thêm người dùng, duyệt / từ chối tài khoản, đặt lại mật khẩu, cài key / bot, xoá dự
             án, khôi phục, tạo / sửa / xoá / chuyển người phụ trách kênh thông báo, kênh tự tắt do lỗi — lúc nào.
           </li>
+          <li>
+            <B>Cảnh báo hệ thống</B>: khi máy chủ gặp sự cố (API lỗi, gửi thông báo lỗi, cơ sở dữ liệu bị giới hạn…), mọi ADMIN nhận tin ▲
+            trong hộp thư 🔔, và qua Telegram riêng / Web Push nếu đã bật ở Thông báo của tôi — kể cả trong giờ yên lặng. Khi hết sự cố có
+            tin ✓. Người giữ repo có thể đặt thêm biến <code>ALARM_EMAILS</code> để nhận cả qua email (dùng được cả khi chính ứng dụng
+            không chạy).
+          </li>
         </ul>
       </H>
 

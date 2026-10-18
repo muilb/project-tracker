@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -16,6 +18,8 @@ import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import type { Construct } from 'constructs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -23,6 +27,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export interface TrackerStackProps extends StackProps {
   /** Roles granted on first login: `email` (PMO) or `email:ROLE`. */
   adminEmails: string[];
+  /** Also receive the CloudWatch alarms by email (SNS; each address confirms once). */
+  alarmEmails?: string[];
 }
 
 export class TrackerStack extends Stack {
@@ -174,6 +180,48 @@ export class TrackerStack extends Stack {
     // Cap traffic (the public dashboard is open to the internet).
     const stage = api.defaultStage!.node.defaultChild as apigw.CfnStage;
     stage.defaultRouteSettings = { throttlingRateLimit: 20, throttlingBurstLimit: 50 };
+
+    // --- Alarms: system administrators (inbox / Telegram / Web Push) and ALARM_EMAILS ---
+    const alarmTopic = new sns.Topic(this, 'Alarms', { displayName: 'project-tracker alarms' });
+    for (const email of props.alarmEmails ?? []) alarmTopic.addSubscription(new subscriptions.EmailSubscription(email));
+    const alarmFn = new NodejsFunction(this, 'AlarmFn', { ...lambdaProps('Alarm', 'api/src/cron.ts', 30), handler: 'alarm' });
+    table.grantReadWriteData(alarmFn);
+    alarmTopic.addSubscription(new subscriptions.LambdaSubscription(alarmFn));
+    const period = Duration.minutes(5);
+    const { GET_ITEM, PUT_ITEM, UPDATE_ITEM, DELETE_ITEM, QUERY, SCAN } = dynamodb.Operation;
+    const operations = [GET_ITEM, PUT_ITEM, UPDATE_ITEM, DELETE_ITEM, QUERY, SCAN]; // the ones the API uses
+    // The description is the key of the message in api/src/notify/alarms.ts.
+    const alarms: [key: string, metric: cloudwatch.IMetric, threshold: number][] = [
+      ['api-5xx', api.metricServerError({ period, statistic: 'Sum' }), 5],
+      ['api-errors', apiFn.metricErrors({ period }), 1],
+      ['api-throttles', apiFn.metricThrottles({ period }), 1],
+      ['cron-errors', cronFn.metricErrors({ period: Duration.hours(1) }), 1],
+      // Every minute: a few failures in 5 minutes, not a single blip.
+      ['flush-errors', flushFn.metricErrors({ period }), 3],
+      ['table-throttles', table.metricThrottledRequestsForOperations({ period, operations }), 1],
+      ['table-errors', table.metricSystemErrorsForOperations({ period, operations }), 1],
+    ];
+    for (const [key, metric, threshold] of alarms) {
+      const alarm = new cloudwatch.Alarm(this, `Alarm-${key}`, {
+        alarmDescription: key,
+        metric,
+        threshold,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      alarm.addAlarmAction(new SnsAction(alarmTopic));
+      alarm.addOkAction(new SnsAction(alarmTopic));
+    }
+    // AlarmFn's own failures reach ALARM_EMAILS only.
+    const alarmFnErrors = new cloudwatch.Alarm(this, 'Alarm-alarm-errors', {
+      alarmDescription: 'alarm-errors',
+      metric: alarmFn.metricErrors({ period }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    alarmFnErrors.addAlarmAction(new SnsAction(alarmTopic));
 
     const webDist = path.join(root, 'web/dist');
     new s3deploy.BucketDeployment(this, 'WebDeploy', {

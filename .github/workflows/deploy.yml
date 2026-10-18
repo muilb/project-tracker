@@ -48,3 +48,4 @@ jobs:
       - run: npm run deploy
         env:
           ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS }}
+          ALARM_EMAILS: ${{ vars.ALARM_EMAILS }}

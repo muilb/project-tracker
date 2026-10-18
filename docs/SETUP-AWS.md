@@ -39,6 +39,7 @@ Vào repo → **Settings → Secrets and variables → Actions → tab Variables
 | `AWS_ROLE_ARN` | Role ARN ở bước 2 |
 | `AWS_REGION` | `ap-southeast-1` |
 | `ADMIN_EMAILS` | Vai trò cấp khi **đăng nhập lần đầu**, cách nhau bằng dấu phẩy: `email` (mặc định PMO) hoặc `email:VAI_TRÒ`. Riêng `email:ADMIN` còn nâng tài khoản **đã có** lên ADMIN ở lần đăng nhập sau |
+| `ALARM_EMAILS` | (Không bắt buộc) Email nhận cảnh báo CloudWatch, cách nhau bằng dấu phẩy. Sau lần deploy đầu mỗi địa chỉ nhận thư "AWS Notification - Subscription Confirmation" và phải bấm **Confirm subscription**. ADMIN luôn nhận cảnh báo trong ứng dụng; email dùng được cả khi chính ứng dụng không chạy |
 
 Đây là **variables**, không phải secrets: không có giá trị nào là bí mật.
 

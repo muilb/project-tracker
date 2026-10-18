@@ -5,6 +5,8 @@ import { MemoryAccounts, type Accounts } from './accounts.js';
 import { claudeClient, type AiClient } from './ai/assistant.js';
 import { parseInitialRoles, requireUser, type AuthConfig } from './auth.js';
 import type { AppEnv } from './env.js';
+import { exportSheets } from './export/report.js';
+import { buildXlsx, XLSX_TYPE } from './export/xlsx.js';
 import { langFromHeader, withLang } from './i18n.js';
 import type { Sender } from './notify/sender.js';
 import { telegramClient, type TelegramClient } from './notify/telegram.js';
@@ -18,6 +20,7 @@ import { projects } from './routes/projects.js';
 import { telegramWebhook } from './routes/telegram.js';
 import { trash } from './routes/trash.js';
 import type { Store } from './store/store.js';
+import { vnDate } from './time.js';
 import { buildDashboard, buildPublic } from './views.js';
 
 export interface AppDeps {
@@ -99,6 +102,16 @@ export function createApp({
     const { scope, gl } = c.req.query();
     const snap = await store.snapshot({ now: c.get('now') });
     return c.json(buildDashboard(snap, c.get('now'), c.get('user'), { scope: scope === 'mine' ? 'mine' : 'all', gl: gl || undefined }));
+  });
+  // Excel export of what the caller may see (projects, items, recent updates).
+  app.get('/export', async (c) => {
+    const now = c.get('now');
+    const xlsx = buildXlsx(exportSheets(await store.snapshot({ now }), c.get('user'), now));
+    return c.body(new Uint8Array(xlsx), 200, {
+      'content-type': XLSX_TYPE,
+      'content-disposition': `attachment; filename="project-tracker-${vnDate(now)}.xlsx"`,
+      'cache-control': 'no-store',
+    });
   });
   app.route('/', admin);
   app.route('/', aiRoutes);

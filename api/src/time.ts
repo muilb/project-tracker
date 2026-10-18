@@ -24,3 +24,8 @@ export function addHours(iso: string, hours: number): string {
 export function isDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
 }
+
+/** "YYYY-MM-DD HH:mm" in Vietnam time, for messages and exports. */
+export function vnDateTime(iso: string): string {
+  return new Date(Date.parse(iso) + VN_OFFSET_MS).toISOString().slice(0, 16).replace('T', ' ');
+}

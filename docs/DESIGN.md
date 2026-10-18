@@ -107,6 +107,7 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET | `/public` | Dashboard public: số dự án theo mức khẩn cấp, dự án khẩn cấp / cần chú ý, mốc và sự kiện 7 ngày tới |
 | GET | `/me` | Người đang đăng nhập |
 | GET | `/dashboard?scope=all\|mine&gl=<email>` | Số liệu tổng, dự án cần chú ý, trễ cập nhật, vấn đề ưu tiên, sắp tới, thống kê theo GL |
+| GET | `/export` | File Excel (`.xlsx`, `src/export/`): sheet Dự án (mọi trạng thái), Vấn đề / sự kiện / mốc (kể cả đã đóng), Cập nhật `SNAPSHOT_UPDATE_DAYS` ngày. Chỉ dữ liệu người gọi xem được, không có dòng đã xoá; tiêu đề / nhãn theo `Accept-Language`, giờ Việt Nam, tên người thay cho email. Văn bản luôn là chuỗi (không thành công thức) |
 | GET | `/projects?scope=mine&gl=&state=active\|paused\|closed\|all` | Danh sách dự án kèm số liệu đã tính |
 | POST | `/projects` | Tạo dự án (PL trở lên). `id` tự sinh `P01, P02…` nếu không truyền |
 | GET | `/projects/:id` | Chi tiết, 10 cập nhật gần nhất (+ `nextBefore` nếu còn cũ hơn), các vấn đề / sự kiện |
@@ -326,6 +327,21 @@ Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `sc
 
 **Teams kiểu cũ:** kênh có URL `*.webhook.office.com` vẫn gửi, API trả `legacyWebhook: true` và web hiện cảnh báo "kiểu cũ, Microsoft đã ngừng — tạo Workflow mới".
 
+**Cảnh báo hệ thống** (CloudWatch → SNS `Alarms`, `notify/alarms.ts`, Lambda `AlarmFn` = `cron.alarm`):
+
+| Alarm (mô tả = khoá tin) | Đo gì | Ngưỡng |
+|---|---|---|
+| `api-5xx` | HTTP API trả 5xx | ≥ 5 trong 5 phút |
+| `api-errors` / `api-throttles` | Lambda API lỗi / quá thời gian, bị giới hạn | ≥ 1 trong 5 phút |
+| `cron-errors` | Lambda chạy mỗi giờ lỗi | ≥ 1 trong 1 giờ |
+| `flush-errors` | Lambda gửi hàng đợi (mỗi phút) lỗi | ≥ 3 trong 5 phút |
+| `table-throttles` / `table-errors` | DynamoDB bị giới hạn / lỗi hệ thống (Get/Put/Update/Delete/Query/Scan) | ≥ 1 trong 5 phút |
+| `alarm-errors` | Chính `AlarmFn` lỗi | ≥ 1 trong 5 phút, chỉ gửi email |
+
+- Khi alarm chuyển sang ALARM hoặc trở lại OK, `AlarmFn` gửi cho **mọi ADMIN** (sự kiện `system_alarm`): hộp thư luôn, Telegram riêng / Web Push nếu bật; không theo giờ yên lặng, không chống trùng (CloudWatch chỉ báo khi đổi trạng thái). Tin theo ngôn ngữ `NotifyPrefs.lang`; alarm lạ thì hiện tên alarm. Không có ADMIN thì chỉ ghi log.
+- Biến GitHub `ALARM_EMAILS` (không bắt buộc) thêm đăng ký email vào SNS — dùng được khi chính ứng dụng / DynamoDB hỏng. Mỗi địa chỉ phải bấm xác nhận một lần.
+- Thiếu dữ liệu (không có request) không tính là lỗi (`treatMissingData: notBreaching`).
+
 **Không lộ bí mật:** lỗi được làm sạch (`scrubError`: bỏ token bot, bỏ phần query của mọi URL, bỏ đường dẫn của URL webhook Slack) trước khi ghi vào kênh, nhật ký gửi, hàng đợi, log Lambda hay trả về.
 
 **Nhật ký, audit, người phụ trách:**
@@ -355,7 +371,7 @@ Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `sc
 - `can.viewProject(user, project, items?)` (`api/src/auth.ts`): mọi vai trò xem tất cả, trừ `OTHER`. `OTHER` chỉ xem dự án mình **tham gia** — là PL / GL / PMO / người hỗ trợ — **hoặc** phụ trách (`owner`) ít nhất một mục chưa xoá của dự án.
 - `visibleProjects(user, snap)` / `visibleSnapshot(user, snap)` (`api/src/views.ts`) lọc dữ liệu trước khi dựng read model.
 - Áp cho:
-  - `GET /dashboard` (KPI, danh sách, thống kê theo GL chỉ đếm dự án xem được), `GET /projects`;
+  - `GET /dashboard` (KPI, danh sách, thống kê theo GL chỉ đếm dự án xem được), `GET /projects`, `GET /export`;
   - `/projects/:id` và mọi đường con (`/updates`, `/items`, ghi cập nhật / mục, xoá): dự án không xem được trả **404** như không tồn tại;
   - AI: `/ai/ask` chỉ gửi dự án xem được; `/ai/parse` không đề xuất cho dự án không xem được (báo "không tìm thấy");
   - kênh nhóm: chỉ gửi tin của dự án mà **người tạo kênh** xem được, kiểm tra lúc gửi (`creatorSees` trong `routeChannels.ts`); tin mẫu `/channels/:id/test` cũng vậy. Lúc gửi, việc phụ trách mục được xét theo các mục đang mở của dự án (tin theo giờ, tóm tắt) hoặc mục vừa lưu (vấn đề Cao).

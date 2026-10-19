@@ -878,6 +878,15 @@ code {
 .ui-label {
   white-space: nowrap;
 }
+.help-section code {
+  overflow-wrap: anywhere;
+}
+/* Phones: a long label may wrap rather than push the page sideways. */
+@media (max-width: 480px) {
+  .ui-label {
+    white-space: normal;
+  }
+}
 .faq dt {
   font-weight: 600;
   margin-top: 0.75rem;

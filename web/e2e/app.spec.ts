@@ -86,7 +86,7 @@ function unzip(buf: Buffer): Map<string, string> {
   return files;
 }
 
-test('"Xuất Excel" downloads a workbook with three sheets', async ({ page }) => {
+test('"Xuất Excel" downloads a workbook with four sheets', async ({ page }) => {
   await signIn(page, /Lan · PMO/);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: /Xuất Excel/ }).click();
@@ -97,9 +97,10 @@ test('"Xuất Excel" downloads a workbook with three sheets', async ({ page }) =
     'xl/worksheets/sheet1.xml',
     'xl/worksheets/sheet2.xml',
     'xl/worksheets/sheet3.xml',
+    'xl/worksheets/sheet4.xml',
   ]);
   const sheetNames = [...parts.get('xl/workbook.xml')!.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]);
-  expect(sheetNames).toEqual(['Dự án', 'Vấn đề, sự kiện, mốc', 'Cập nhật 60 ngày']);
+  expect(sheetNames).toEqual(['Dự án', 'Vấn đề, sự kiện, mốc', 'Cập nhật 60 ngày', 'Lịch sử màu 12 tuần']);
   expect(parts.get('xl/worksheets/sheet1.xml')).toContain('Nâng cấp ERP');
   await expect(page.getByRole('button', { name: /Xuất Excel/ })).toBeEnabled();
 });

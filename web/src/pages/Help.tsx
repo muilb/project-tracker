@@ -199,6 +199,10 @@ export function HelpPage() {
           Trạng thái hiển thị là mức <b>xấu nhất</b> trong: trạng thái PL / GL / người hỗ trợ khai, đánh giá của PMO, và việc quá hạn (có
           mục quá hạn thì ít nhất là Vàng).
         </p>
+        <p>
+          Dự án đang chạy đã qua <b>ngày kết thúc</b> (trong thông tin dự án) hiện thêm cảnh báo <b>🏁 Quá ngày kết thúc N ngày</b> và nằm
+          trong <B>Cần chú ý</B>; màu của dự án không đổi vì việc này. Sửa ngày kết thúc hoặc đóng dự án để hết cảnh báo.
+        </p>
         <h3>Mức khẩn cấp</h3>
         <ul className="howto">
           <li>
@@ -230,10 +234,11 @@ export function HelpPage() {
         </p>
         <ul className="howto">
           <li>
-            <b>Ô số liệu</b>: số dự án đang chạy, Đỏ, Vàng, Xanh, trễ cập nhật, vấn đề ưu tiên cao, mục quá hạn.
+            <b>Ô số liệu</b>: số dự án đang chạy, Đỏ, Vàng, Xanh, trễ cập nhật, vấn đề ưu tiên cao, mục quá hạn; thêm ô{' '}
+            <b>🏁 Quá ngày kết thúc</b> khi có dự án như vậy.
           </li>
           <li>
-            <B>Cần chú ý</B>: dự án khẩn cấp / cần chú ý, xếp nặng nhất lên trên.
+            <B>Cần chú ý</B>: dự án khẩn cấp / cần chú ý hoặc đã quá ngày kết thúc, xếp nặng nhất lên trên.
           </li>
           <li>
             <B>Mốc & sự kiện … ngày tới</B>: lịch tuần này.
@@ -242,15 +247,29 @@ export function HelpPage() {
             <B>Vấn đề cần xử lý</B>: vấn đề quá hạn, ưu tiên cao hoặc sắp tới hạn.
           </li>
           <li>
+            <B>Sắp kết thúc (14 ngày tới)</B>: dự án có ngày kết thúc trong 14 ngày tới (chỉ hiện khi có).
+          </li>
+          <li>
             <B>Chưa cập nhật kịp thời – cần nhắc</B>: dự án quá hạn cập nhật, trễ bao lâu, ai cần nhắc.
+          </li>
+          <li>
+            <B>Xu hướng 12 tuần</B>: số dự án Đỏ / Vàng / Xanh / Tạm dừng của từng tuần (tuần mới nhất ở trên; mỗi tuần tính theo màu ngày
+            cuối tuần, tuần này tính đến hôm nay), và các dự án <B>Xấu đi</B> / <B>Tốt lên</B> so với cuối tuần trước. Theo cùng phạm vi và
+            bộ lọc GL như phần còn lại của trang.
           </li>
           <li>
             <B>Tình hình theo GL</B>: số dự án Đỏ / Vàng / Xanh và trễ của từng nhóm.
           </li>
         </ul>
+        <p className="muted">
+          Màu của mọi dự án đang chạy / tạm dừng được ghi lại mỗi giờ, mỗi ngày giữ lần ghi cuối cùng (dự án đã đóng thì không ghi nữa).
+          Xu hướng chỉ có từ ngày hệ thống bắt đầu ghi, không dựng lại từ dữ liệu cũ.
+        </p>
         <p>
-          <B>⬇ Xuất Excel</B>: tải file Excel gồm 3 sheet — <b>Dự án</b> (mọi trạng thái: màu, mức khẩn, người phụ trách, cập nhật gần nhất,
-          hạn / trễ cập nhật, số vấn đề, mốc tiếp theo), <b>Vấn đề, sự kiện, mốc</b> (đang mở, và đã đóng trong 60 ngày gần nhất), <b>Cập nhật 60 ngày</b> gần nhất. Chỉ
+          <B>⬇ Xuất Excel</B>: tải file Excel gồm 4 sheet — <b>Dự án</b> (mọi trạng thái: màu, mức khẩn, người phụ trách, cập nhật gần nhất,
+          hạn / trễ cập nhật, số vấn đề, số ngày quá ngày kết thúc, mốc tiếp theo), <b>Vấn đề, sự kiện, mốc</b> (đang mở, và đã đóng trong 60
+          ngày gần nhất), <b>Cập nhật 60 ngày</b> gần nhất, <b>Lịch sử màu 12 tuần</b> (mỗi dự án mỗi ngày: màu, PL/GL khai, PMO đánh giá,
+          mục quá hạn, trễ). Chỉ
           có những dự án bạn được xem; giờ là giờ Việt Nam; tiêu đề cột theo ngôn ngữ đang chọn. File không có dữ liệu đã xoá.
         </p>
         <p className="muted">Bấm vào tên dự án ở bất kỳ đâu để mở chi tiết.</p>
@@ -264,7 +283,14 @@ export function HelpPage() {
           </li>
           <li>
             Trang <b>chi tiết dự án</b> gồm: thông tin chung (khách hàng, GL, PL, người hỗ trợ, thời gian, tần suất, hạn cập nhật kế tiếp),
-            khung <B>Cập nhật tình hình</B>, <B>Vấn đề · Sự kiện · Mốc</B> và <B>Lịch sử cập nhật</B>.
+            khung <B>Xu hướng màu 12 tuần</B>, <B>Cập nhật tình hình</B>, <B>Vấn đề · Sự kiện · Mốc</B> và <B>Lịch sử cập nhật</B>.
+          </li>
+          <li>
+            <B>Xu hướng màu 12 tuần</B>: mỗi ô là một ngày (cột = tuần, hàng = thứ), có màu và ký hiệu ● Xanh / ▲ Vàng / ■ Đỏ / ‖ Tạm dừng.
+            Bấm vào một ô để xem ngày đó: màu PL/GL khai, PMO đánh giá, số mục quá hạn, trễ cập nhật. Nếu ngày kết thúc còn trong 4 tuần,
+            lịch kéo tới ngày đó (ô 🏁). Bên dưới: ngày kết thúc dự kiến (còn bao nhiêu ngày, hoặc đã quá bao nhiêu ngày) và{' '}
+            <B>Diễn biến</B> — các quãng liên tiếp cùng màu. Dự án dài hơn 12 tuần có nút <B>Xem toàn bộ</B>. Dự án đã đóng hiện tới ngày
+            đóng.
           </li>
           <li>
             Phần thông tin hiện riêng <B>Trạng thái PL/GL khai</B> và <B>PMO đánh giá</B> để biết trạng thái cuối đến từ đâu.

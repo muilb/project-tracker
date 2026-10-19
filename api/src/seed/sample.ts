@@ -2,8 +2,9 @@
 // The Excel was a snapshot at 2026-10-09 09:45 (Vietnam time); `loadSample` shifts every
 // date by whole days so the sample always looks "current".
 import type { Store } from '../store/store.js';
-import { vnDate, vnToIso } from '../time.js';
-import type { Health, ItemStatus, ItemType, Priority, Project, Role } from '../types.js';
+import { addDays, vnDate, vnToIso } from '../time.js';
+import { recordHealth } from '../trend.js';
+import type { Health, HealthMark, ItemStatus, ItemType, Priority, Project, Role } from '../types.js';
 
 export const SAMPLE_NOW_VN = '2026-10-09 09:45';
 
@@ -77,6 +78,19 @@ const ITEMS: [string, ItemType, string, Priority, string, string, ItemStatus, st
   ['P07', 'event', 'Kết thúc phân tích yêu cầu', 'medium', '2026-10-16', 'long', 'open', null, 'long'],
 ];
 
+// Colours of the days before the Excel's "now", oldest first (g / y / r; p = paused), so the trend
+// views have something to show (the Excel had no history); today's come from the data above.
+const HISTORY: Record<string, string> = {
+  P01: 'ggggggggggggggggggggggggggg',
+  P02: 'ggggggggggggggggggggyyyyyyy',
+  P03: 'yyyyyyyyyyyyyyyyyyyyyyyyyrr',
+  P04: 'ggggggggggggggggggggggggyyy',
+  P05: 'gggggpppppppggggggggggggggg',
+  P06: 'ggggggggggyyyyyyyyrrrrryyyy',
+  P07: 'ggggggggggggggggggggggggggg',
+};
+const HISTORY_HEALTH: Record<string, Health> = { g: 'green', y: 'yellow', r: 'red', p: 'green' };
+
 /** Writes the sample into `store`, shifted so that the Excel's "now" becomes the day of `now`. */
 export async function loadSample(store: Store, now: Date) {
   const shiftDays = Math.round((Date.parse(vnDate(now)) - Date.parse(SAMPLE_NOW_VN.slice(0, 10))) / 86_400_000);
@@ -141,4 +155,18 @@ export async function loadSample(store: Store, now: Date) {
       updatedAt: created,
     });
   }
+
+  const today = vnDate(now);
+  const length = HISTORY.P01.length;
+  for (let back = length; back >= 1; back--) {
+    const projects: Record<string, HealthMark> = {};
+    for (const [id, marks] of Object.entries(HISTORY)) {
+      const c = marks[length - back];
+      const health = HISTORY_HEALTH[c];
+      projects[id] = { state: c === 'p' ? 'paused' : 'active', health, declaredHealth: health, overdueItems: 0, lateHours: 0 };
+    }
+    const date = addDays(today, -back);
+    await store.putHealthDay({ date, at: vnToIso(`${date} 23:00`), projects });
+  }
+  await recordHealth(store, await store.snapshot({ now }), now);
 }

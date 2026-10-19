@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api, useApi } from '../api';
+import { DashboardTrendCard } from '../components/Trend';
 import { Empty, ErrorBox, HealthBadge, HealthBar, Kpi, Section, TypeIcon, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft, fmtHours } from '../format';
 import { ONLY_MINE, PRIORITY_LABEL } from '../labels';
@@ -77,8 +78,8 @@ export function Dashboard() {
             disabled={exporting}
             onClick={exportExcel}
             title={l(
-              'Tải file Excel: dự án, vấn đề / sự kiện / mốc, cập nhật 60 ngày gần nhất (những gì bạn được xem)',
-              'Excel をダウンロード：プロジェクト、課題 / イベント / マイルストーン、直近 60 日の報告（閲覧できる範囲）',
+              'Tải file Excel: dự án, vấn đề / sự kiện / mốc, cập nhật 60 ngày gần nhất, lịch sử màu 12 tuần (những gì bạn được xem)',
+              'Excel をダウンロード：プロジェクト、課題 / イベント / マイルストーン、直近 60 日の報告、12 週間の色の履歴（閲覧できる範囲）',
             )}
           >
             ⬇ {exporting ? l('Đang xuất…', '出力中…') : l('Xuất Excel', 'Excel 出力')}
@@ -103,6 +104,7 @@ export function Dashboard() {
             <Kpi label={l('⏰ Trễ cập nhật', '⏰ 報告遅れ')} value={data.kpis.lateUpdates} />
             <Kpi label={l('▲ Vấn đề ưu tiên cao', '▲ 優先度「高」の課題')} value={data.kpis.highIssues} />
             <Kpi label={l('⚠ Mục quá hạn', '⚠ 期限超過')} value={data.kpis.overdueItems} />
+            {data.kpis.pastEnd > 0 && <Kpi label={l('🏁 Quá ngày kết thúc', '🏁 終了日超過')} value={data.kpis.pastEnd} />}
           </div>
 
           <Section
@@ -134,7 +136,7 @@ export function Dashboard() {
                       </div>
                       {p.latestSummary && <p className="row-text">{p.latestSummary}</p>}
                       {p.needHelp && <p className="row-text help">🙋 {p.needHelp}</p>}
-                      <Warnings lateHours={p.lateHours} overdueItems={p.overdueItems} highIssues={p.highIssues} />
+                      <Warnings lateHours={p.lateHours} overdueItems={p.overdueItems} highIssues={p.highIssues} daysPastEnd={p.daysPastEnd} />
                     </div>
                     {p.nextItem && (
                       <div className="row-side">
@@ -160,6 +162,28 @@ export function Dashboard() {
               />
             </Section>
           </div>
+
+          {data.endingSoon.length > 0 && (
+            <Section title={l(`Sắp kết thúc (${data.endingSoonDays} ngày tới)`, `終了間近（今後 ${data.endingSoonDays} 日）`)}>
+              <ul className="items">
+                {data.endingSoon.map((p) => (
+                  <li key={p.id}>
+                    <span className="item-date nowrap">
+                      {fmtDay(p.endDate)}
+                      <small className="muted">{fmtDaysLeft(p.daysLeft)}</small>
+                    </span>
+                    <span aria-hidden>🏁</span>
+                    <span className="item-main">
+                      <Link to={`/projects/${p.id}`}>
+                        <b>{p.id}</b> · {p.name}
+                      </Link>
+                    </span>
+                    <HealthBadge health={p.health} />
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
           <Section title={l('Chưa cập nhật kịp thời – cần nhắc', '報告遅れ – 要リマインド')}>
             {data.lateUpdates.length === 0 ? (
@@ -202,6 +226,8 @@ export function Dashboard() {
               </div>
             )}
           </Section>
+
+          <DashboardTrendCard query={qs} />
 
           {data.byGl.length > 1 && (
             <Section title={l('Tình hình theo GL', 'GL別状況')}>

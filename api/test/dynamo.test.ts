@@ -351,3 +351,33 @@ describe('DynamoStore items', () => {
     expect(missing.calls.scan).toBe(1);
   });
 });
+
+describe('DynamoStore health days', () => {
+  const mark = (health: 'green' | 'red') => ({ state: 'active' as const, health, overdueItems: 0, lateHours: 0 });
+  const day = (date: string, health: 'green' | 'red' = 'green') => ({ date, at: `${date}T16:00:00.000Z`, projects: { P01: mark(health) } });
+
+  it('one row per day under HEALTH, read by a date range of the table (no index, no scan)', async () => {
+    const { db, calls, rows } = fakeDb([]);
+    const store = new DynamoStore('T', undefined, db);
+    for (const d of ['2026-10-07', '2026-10-08', '2026-10-09']) await store.putHealthDay(day(d));
+    await store.putHealthDay(day('2026-10-08', 'red')); // a later check the same day replaces it
+    expect(rows.map((r) => [r.pk, r.sk, r.kind])).toEqual([
+      ['HEALTH', '2026-10-07', 'HEALTH'],
+      ['HEALTH', '2026-10-08', 'HEALTH'],
+      ['HEALTH', '2026-10-09', 'HEALTH'],
+    ]);
+    const read = await store.listHealthDays('2026-10-08', '2026-10-09');
+    expect(read).toEqual([day('2026-10-08', 'red'), day('2026-10-09')]);
+    expect(calls).toMatchObject({ query: 0, tableQuery: 1, scan: 0 });
+  });
+
+  it('the snapshot leaves them out, also when it scans', async () => {
+    const all = [...rows, { pk: 'HEALTH', sk: '2026-10-08', kind: 'HEALTH', ...day('2026-10-08') }];
+    for (const indexMissing of [false, true]) {
+      const { db, calls } = fakeDb(all, { indexMissing });
+      const snap = await new DynamoStore('T', undefined, db).snapshot({ now: new Date('2026-10-09T00:00:00Z') });
+      expect(snap.projects.map((p) => p.id)).toEqual(['P01']);
+      expect(calls.kinds).not.toContain('HEALTH');
+    }
+  });
+});

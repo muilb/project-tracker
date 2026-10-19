@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import type { Health, ItemStatus, ItemType, Priority } from '../../../api/src/types';
 import { api, useApi } from '../api';
 import { WatchButton } from '../components/notify/WatchButton';
+import { ProjectTrendCard } from '../components/Trend';
 import { Empty, ErrorBox, HealthBadge, MoreLess, Section, TypeIcon, UrgencyBadge, useShowMore, Warnings } from '../components/ui';
 import { fmtDateTime, fmtDay, fmtDaysLeft, todayVN } from '../format';
 import { HEALTH_LABEL, ITEM_STATUS_LABEL, PRIORITY_LABEL, ROLE_LABEL, STATE_LABEL, TYPE_LABEL } from '../labels';
@@ -107,7 +108,7 @@ export function ProjectDetailPage() {
           </Fact>
           <Fact label={l('Hạn cập nhật', '報告期限')}>{fmtDateTime(p.dueAt)}</Fact>
         </dl>
-        <Warnings lateHours={p.lateHours} overdueItems={p.overdueItems} highIssues={p.highIssues} />
+        <Warnings lateHours={p.lateHours} overdueItems={p.overdueItems} highIssues={p.highIssues} daysPastEnd={p.daysPastEnd} />
         {p.lastOwnerUpdate?.needHelp && (
           <p className="help">
             🙋 {l('Cần hỗ trợ', '支援依頼')}: {p.lastOwnerUpdate.needHelp}
@@ -120,6 +121,8 @@ export function ProjectDetailPage() {
           </p>
         )}
       </section>
+
+      <ProjectTrendCard key={p.id} project={p} />
 
       <div className="grid-2">
         <UpdateForm projectId={p.id} defaultHealth={p.declaredHealth ?? p.health} onDone={reload} />

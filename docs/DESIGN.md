@@ -29,6 +29,7 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
   - Trang dự án và nút "Xem thêm" đọc đúng một trang cập nhật (`pageUpdates`, mới nhất trước); thêm cập nhật tính màu trước / sau từ dòng ghim. Thùng rác đọc riêng các cập nhật đã xoá (`listDeletedUpdates`). Báo cáo tuần đọc lịch sử đầy đủ chỉ cho các dự án có cập nhật trong tuần (màu của tuần trước có thể đến từ cập nhật cũ hơn 60 ngày).
 - Vấn đề / sự kiện / mốc cũng tăng mãi: `snapshot({ now })` chỉ mang **mục đang mở** và mục đã đóng (Xong / Hoãn) có thay đổi trong `SNAPSHOT_UPDATE_DAYS` (60) ngày (`keepItem`). Màu, số vấn đề, mục quá hạn, mốc kế tiếp chỉ tính mục đang mở nên không đổi; báo cáo tuần cần mục đóng trong 7 ngày. Trang dự án đọc mọi mục của dự án (`listItems`), thùng rác đọc mọi mục đã xoá.
   - Trong DynamoDB, `kind` của mục cho biết nó thuộc nhóm nào: `ITEM` (đang mở), `ITEM_CLOSED#<YYYY-MM>` (đã đóng, theo tháng của lần sửa cuối), `ITEM_DELETED` (đã xoá). `putItem` đặt `kind` mỗi lần ghi (đóng / mở lại / xoá / khôi phục). Snapshot đọc `ITEM` và các tháng từ 60 ngày trước đến nay (3 tháng), thùng rác đọc thêm `ITEM_DELETED`. Dòng cũ (trước khi tách, đều là `ITEM`) được chuyển đúng `kind` một lần khi snapshot gặp, chỉ khi dòng chưa bị sửa từ lúc đọc (`updatedAt`).
+- **Xu hướng màu** (`api/src/trend.ts`): mỗi lần chạy, job mỗi giờ (`runHourly`) ghi màu của mọi dự án đang chạy / tạm dừng vào dòng của ngày hôm đó (giờ Việt Nam): `HEALTH` / `<YYYY-MM-DD>`, một dòng cho mọi dự án (`HealthDay`: trạng thái, màu, màu PL/GL khai, màu PMO, số mục quá hạn, giờ trễ). Lần chạy sau trong ngày ghi đè, nên mỗi ngày giữ lần ghi cuối. Dự án đã đóng / đã xoá không được ghi. Ghi lỗi thì cảnh báo vẫn gửi, rồi job báo lỗi. **Không dựng lại từ dữ liệu cũ**: xu hướng bắt đầu từ ngày job chạy lần đầu (dữ liệu mẫu có sẵn 27 ngày lịch sử cho dev / test). Đọc theo khoảng ngày (query `pk = HEALTH`, `sk BETWEEN`): trang dự án 84 ngày (12 tuần, "Xem toàn bộ" tối đa 2 năm), Tổng quan từ thứ Hai của 11 tuần trước đến hôm nay (≤ 84 dòng, endpoint riêng để Tổng quan không chậm thêm). Mỗi ngày một dòng (365 dòng / năm), vài KB với khoảng 30 dự án.
 - Một bảng DynamoDB (`pk` / `sk`, chi tiết ở `api/src/store/dynamo.ts`):
 
   | `pk` | `sk` | Nội dung |
@@ -44,6 +45,7 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
   | `DELIVERY#<kênh>` | `<giờ>#<id>` | Nhật ký gửi (30 ngày) |
   | `PUSH#<email>` | `<id>` | Thiết bị Web Push |
   | `TEMP#<khoá>` | `TEMP` | Trạng thái ngắn hạn của bot Telegram (TTL) |
+  | `HEALTH` | `<YYYY-MM-DD>` | Màu của mọi dự án đang chạy / tạm dừng trong ngày (xu hướng) |
   | `CONFIG` | `SETTINGS` · `TELEGRAM` · `AI` · `PUSH` · `SEQ#…` | Cài đặt, bí mật, bộ đếm mã |
 - **Header bảo mật của web** (`infra/lib/headers.ts`, CloudFront `ResponseHeadersPolicy`, gắn cho mọi file kể cả `/sw.js`):
   - `Content-Security-Policy`: chỉ chạy script / CSS của chính site; chỉ gọi tới chính site, API Gateway và Cognito của region (`connect-src`); ảnh `data:` cho favicon; không cho nhúng vào iframe (`frame-ancestors 'none'`), không plugin, `base-uri` / `form-action` chỉ chính site.
@@ -97,6 +99,8 @@ Nhật ký quản trị (`GET /audit`, ADMIN): đổi vai trò, thêm / duyệt 
 
 **Quá hạn:** mục chưa ở trạng thái `done` / `postponed` và ngày đã qua (tính theo giờ Việt Nam).
 
+**Quá ngày kết thúc** (mới, không có trong Excel): dự án `active` có `endDate` đã qua → `daysPastEnd` = số ngày quá. Chỉ là cảnh báo (🏁 trên web, ô số liệu, cột trong Excel, đưa vào "Cần chú ý"), **không** đổi màu hay mức khẩn cấp. Dự án tạm dừng / đã đóng không bị cảnh báo.
+
 **Mức khẩn cấp:**
 - `critical`: dự án Đỏ, hoặc có vấn đề ưu tiên Cao đã quá hạn.
 - `attention`: dự án Vàng, hoặc có mục quá hạn, hoặc có mốc / sự kiện ưu tiên Cao trong ≤ 3 ngày.
@@ -113,11 +117,13 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET | `/health` | Kiểm tra API còn sống |
 | GET | `/public` | Dashboard public: số dự án theo mức khẩn cấp, dự án khẩn cấp / cần chú ý, mốc và sự kiện 7 ngày tới |
 | GET | `/me` | Người đang đăng nhập |
-| GET | `/dashboard?scope=all\|mine&gl=<email>` | Số liệu tổng, dự án cần chú ý, trễ cập nhật, vấn đề ưu tiên, sắp tới, thống kê theo GL |
-| GET | `/export` | File Excel (`.xlsx`, `src/export/`): sheet Dự án (mọi trạng thái), Vấn đề / sự kiện / mốc (đang mở và đã đóng trong `SNAPSHOT_UPDATE_DAYS` ngày), Cập nhật `SNAPSHOT_UPDATE_DAYS` ngày. Chỉ dữ liệu người gọi xem được, không có dòng đã xoá; tiêu đề / nhãn theo `Accept-Language`, giờ Việt Nam, tên người thay cho email. Văn bản luôn là chuỗi (không thành công thức) |
+| GET | `/dashboard?scope=all\|mine&gl=<email>` | Số liệu tổng (kể cả `pastEnd`), dự án cần chú ý (cả dự án quá ngày kết thúc), trễ cập nhật, vấn đề ưu tiên, sắp tới, dự án kết thúc trong `ENDING_SOON_DAYS` (14) ngày (`endingSoon`), thống kê theo GL |
+| GET | `/dashboard/trend?scope=&gl=` | Xu hướng 12 tuần của các dự án Tổng quan đang hiện (cùng bộ lọc, chỉ dự án xem được, mọi trạng thái): `weeks` (mỗi tuần thứ Hai → Chủ nhật, tuần này đến hôm nay: đếm Đỏ / Vàng / Xanh / Tạm dừng theo lần ghi cuối của tuần; bỏ các tuần trước khi có dữ liệu), `worse` / `better` (dự án đang chạy đổi màu so với cuối tuần trước) |
+| GET | `/export` | File Excel (`.xlsx`, `src/export/`): sheet Dự án (mọi trạng thái, có số ngày quá ngày kết thúc), Vấn đề / sự kiện / mốc (đang mở và đã đóng trong `SNAPSHOT_UPDATE_DAYS` ngày), Cập nhật `SNAPSHOT_UPDATE_DAYS` ngày, Lịch sử màu 12 tuần (mỗi dự án mỗi ngày đã ghi). Chỉ dữ liệu người gọi xem được, không có dòng đã xoá; tiêu đề / nhãn theo `Accept-Language`, giờ Việt Nam, tên người thay cho email. Văn bản luôn là chuỗi (không thành công thức) |
 | GET | `/projects?scope=mine&gl=&state=active\|paused\|closed\|all` | Danh sách dự án kèm số liệu đã tính |
 | POST | `/projects` | Tạo dự án (PL trở lên). `id` tự sinh `P01, P02…` nếu không truyền |
 | GET | `/projects/:id` | Chi tiết, 10 cập nhật gần nhất (+ `nextBefore` nếu còn cũ hơn), các vấn đề / sự kiện |
+| GET | `/projects/:id/trend?all=1` | Màu từng ngày đã ghi của dự án: `{ from, to, days, more }`. Mặc định 84 ngày đến hôm nay (dự án đã đóng: đến ngày sửa cuối, tức ngày đóng), `all=1` tối đa 2 năm; không trước ngày bắt đầu dự án. `more`: có thể còn ngày cũ hơn |
 | PATCH | `/projects/:id` | Sửa thông tin, `state` (`active` / `paused` / `closed`), `publicVisible`, `publicName` |
 | GET / POST | `/projects/:id/updates` | GET: trang cập nhật cũ hơn, `?before=<nextBefore>&limit=` (mặc định 20, tối đa 100) → `{ updates, nextBefore? }`. POST: ghi cập nhật `health`, `summary`, `needHelp` |
 | GET / POST | `/projects/:id/items` | Vấn đề / sự kiện / mốc: `type` = `issue` / `event` / `milestone` |
@@ -163,18 +169,19 @@ POST /projects
 | 4 | Trang nhập bằng AI (Claude API, model Haiku 5.5) | Xong |
 | 5 | Giao diện tiếng Nhật (web, lỗi API, tin thông báo theo kênh, hướng dẫn) | Xong |
 | 6 | Thông báo: cá nhân, Slack, lịch gửi, độ tin cậy, giới hạn OTHER, Web Push, bot Telegram hai chiều (`docs/plans/notifications.md`) | Xong |
+| 7 | Xu hướng màu theo ngày / tuần (trang dự án, Tổng quan, Excel), cảnh báo quá ngày kết thúc, dự án sắp kết thúc | Xong |
 
 ## Web
 
 | Trang | Ai thấy | Nội dung |
 |---|---|---|
 | `/login` | Mọi người | Đăng nhập, đăng ký, xác nhận email, quên mật khẩu (gọi thẳng Cognito) |
-| `/` Tổng quan | Đã đăng nhập | Ô số liệu, dự án cần chú ý, mốc / sự kiện sắp tới, vấn đề cần xử lý, trễ cập nhật, theo GL. PL / GL / người hỗ trợ mặc định xem "Dự án của tôi", PMO / quản lý xem "Tất cả" |
+| `/` Tổng quan | Đã đăng nhập | Ô số liệu, dự án cần chú ý, mốc / sự kiện sắp tới, vấn đề cần xử lý, dự án sắp kết thúc, trễ cập nhật, xu hướng 12 tuần (bảng theo tuần + xấu đi / tốt lên), theo GL. PL / GL / người hỗ trợ mặc định xem "Dự án của tôi", PMO / quản lý xem "Tất cả" |
 | `/ai` ✦ AI | Đã đăng nhập (tab Nhập dữ liệu: PL trở lên) | Tab **Hỏi về dữ liệu** (`?tab=ask`): hỏi đáp chỉ đọc, giữ hội thoại trong trang. Tab **Nhập dữ liệu**: viết ghi chú tự do → AI đề xuất cập nhật, thêm / sửa / đổi trạng thái mục, tạo / sửa dự án → sửa, chọn rồi ghi. Cập nhật lưu kèm nguyên văn ghi chú (`rawText`) |
 | `/help` Hướng dẫn | Mọi người (không cần đăng nhập) | Hướng dẫn sử dụng cho người mới: tài khoản, vai trò, trạng thái, cập nhật, mục, AI, dự án, thông báo, trang public, PMO, hỏi đáp. Cập nhật khi giao diện đổi |
 | `/projects` | Đã đăng nhập | Danh sách, lọc theo tình trạng / phạm vi, tìm kiếm |
 | `/projects/new`, `/projects/:id/edit` | PL trở lên / người có quyền sửa | Form dự án |
-| `/projects/:id` | Đã đăng nhập | Thông tin, form cập nhật nhanh, lịch sử, vấn đề / sự kiện / mốc (thêm, đổi trạng thái) |
+| `/projects/:id` | Đã đăng nhập | Thông tin, xu hướng màu (lịch ô theo ngày: cột = tuần, hàng = thứ; bấm ô xem chi tiết ngày; kéo tới ngày kết thúc nếu còn ≤ 4 tuần; danh sách các quãng cùng màu), form cập nhật nhanh, lịch sử, vấn đề / sự kiện / mốc (thêm, đổi trạng thái) |
 | `/users` | PMO / MNG | Thêm người dùng trước, đổi vai trò |
 | `/settings` | PMO / SUBMNG / MNG / ADMIN | Tần suất, ngưỡng, mức chi tiết tối đa của kênh nhóm; ADMIN: AI, bot Telegram, nhật ký quản trị |
 | `/trash` | PMO / quản lý | Thùng rác, khôi phục |
@@ -188,7 +195,7 @@ POST /projects
 
 **Danh sách dài:** mỗi list hiện N dòng đầu và nút **Xem thêm (còn x)** / **Thu gọn** (`useShowMore`, dữ liệu đã tải sẵn): 5 dòng ở Tổng quan và trang public, 10 ở bảng mục của dự án, 20 ở danh sách dự án, người dùng (có ô tìm), thùng rác. Lịch sử cập nhật và nhật ký quản trị tải tiếp từ máy chủ theo con trỏ `nextBefore`. Khung lịch sử cập nhật cao bằng form cập nhật bên cạnh, phần dư cuộn bên trong.
 
-Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.
+Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình. Ô của lịch xu hướng có ký hiệu bên trong (● ▲ ■, ‖ tạm dừng), có chú giải, và danh sách "Diễn biến" ghi lại bằng chữ.
 
 **Test web** (`web/test/`, vitest + jsdom + Testing Library, chạy trong `npm test`):
 - `unit/`: client API (`api.ts`: header ngôn ngữ / đăng nhập, lỗi, 401 → đăng xuất, tải file), Cognito (`auth.ts`, với Cognito giả: đăng nhập, mật khẩu tạm, làm mới token), Web Push (`push.ts`: tên thiết bị, id thiết bị giống API), định dạng ngày giờ, badge trạng thái (biểu tượng + chữ), "Xem thêm", hai bản hướng dẫn cùng mục lục.
@@ -200,7 +207,8 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 - PL cập nhật Đỏ → Tổng quan "Cần chú ý" → trang public "Khẩn cấp" (không lộ nội dung); test xoá lại cập nhật sau khi chạy.
 - Đổi ngôn ngữ tải lại trang bằng tiếng Nhật, giữ khi chuyển trang / F5, quay lại VI.
 - Điện thoại 390px: các trang chính không cuộn ngang; menu ☰ mở / đóng sau khi chuyển trang.
-- Xuất Excel trên trình duyệt thật: file `.xlsx` có 3 sheet.
+- Xuất Excel trên trình duyệt thật: file `.xlsx` có 4 sheet.
+- Xu hướng: bảng tuần và xấu đi / tốt lên ở Tổng quan; lịch ô của dự án, bấm một ngày; dự án quá ngày kết thúc được cảnh báo.
 - Bản build: header bảo mật có đủ, service worker chạy được dưới CSP; trang ít dùng chỉ tải khi mở; tab cũ sau deploy tự tải lại.
 - Chưa có: service worker / bật thông báo, hộp xác nhận xoá, kiểm tra tương phản, tự làm mới trang public.
 

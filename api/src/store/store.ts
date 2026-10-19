@@ -3,6 +3,7 @@ import type {
   AuditEntry,
   Channel,
   DeliveryLog,
+  HealthDay,
   InboxEntry,
   Item,
   NotifyPrefs,
@@ -140,6 +141,11 @@ export interface Store {
   takeTemp<T>(key: string): Promise<T | undefined>;
   /** Atomically adds 1 and returns the new count; the counter expires `ttlSeconds` after it was created. */
   bumpCounter(key: string, ttlSeconds: number): Promise<number>;
+
+  /** Adds or replaces the projects' marks of one day (trend.ts). */
+  putHealthDay(day: HealthDay): Promise<void>;
+  /** The recorded days from `from` to `to` (YYYY-MM-DD, both included), oldest first. */
+  listHealthDays(from: string, to: string): Promise<HealthDay[]>;
 
   /** Live data only, unless `includeDeleted` (the trash). `now` limits the updates (see `Snapshot.updates`). */
   snapshot(opts?: SnapshotOptions): Promise<Snapshot>;

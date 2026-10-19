@@ -1,5 +1,6 @@
 // Entry points: emit() from the routes, runHourly() from the hourly job, flushDue() every minute.
 import { withLang } from '../i18n.js';
+import { recordHealth } from '../trend.js';
 import { activeProjectViews } from '../views.js';
 import type { NotifyDeps } from './deps.js';
 import { send, type Outgoing } from './deliver.js';
@@ -33,11 +34,19 @@ export async function emit(deps: NotifyDeps, now: Date, event: NotifyEvent): Pro
 /**
  * Runs every hour: late updates, overdue items and tomorrow's events/milestones
  * (once each, batched into one message per channel), plus the 08:00 daily digest,
- * and the personal time-based messages.
+ * and the personal time-based messages. Also records today's colours (trend.ts).
  */
-export async function runHourly(deps: NotifyDeps, now: Date): Promise<{ messages: number }> {
+export async function runHourly(deps: NotifyDeps, now: Date): Promise<{ messages: number; recorded: number }> {
   const channels = (await deps.store.listChannels()).filter((c) => c.enabled);
   const snap = await deps.store.snapshot({ now });
+  // Today's colours for the trend; a failure here must not stop the alerts, so it is thrown after them.
+  let recorded = 0;
+  let recordError: unknown;
+  try {
+    recorded = Object.keys((await recordHealth(deps.store, snap, now)).projects).length;
+  } catch (e) {
+    recordError = e;
+  }
   const views = activeProjectViews(snap, now);
   const ctx = context(snap.users);
   let messages = 0;
@@ -48,5 +57,6 @@ export async function runHourly(deps: NotifyDeps, now: Date): Promise<{ messages
     for (const o of out) if (await send(deps, { ...o, channel: (await deps.store.getChannel(ch.id)) ?? ch }, now)) messages++;
   }
   for (const o of await hourlyPersonalMessages(deps, snap, views, now, ctx)) if (await send(deps, o, now)) messages++;
-  return { messages };
+  if (recordError) throw recordError;
+  return { messages, recorded };
 }

@@ -8,6 +8,7 @@ import { addUpdate, createItem, createProject, loadItem, loadProject, patchItem,
 import { buildProjectView, compareItems, toItemView } from '../rules.js';
 import { createItemSchema, createProjectSchema, createUpdateSchema, parseBody, patchItemSchema, patchProjectSchema } from '../schemas.js';
 import { updateCursor, type Store } from '../store/store.js';
+import { projectTrend } from '../trend.js';
 import { activeProjectViews, isInvolved, visibleSnapshot } from '../views.js';
 
 export const projects = new Hono<AppEnv>();
@@ -63,6 +64,14 @@ projects.get('/:id', async (c) => {
     ...page,
     items: items.map((i) => toItemView(i, now, settings)).sort(compareItems),
   });
+});
+
+// Colour per recorded day (trend.ts): 12 weeks, or the whole project with ?all=1.
+projects.get('/:id/trend', async (c) => {
+  const store = c.get('store');
+  const now = c.get('now');
+  const project = await loadProject(store, c.req.param('id'), c.get('user'), now);
+  return c.json(await projectTrend(store, project, now, c.req.query('all') === '1'));
 });
 
 projects.patch('/:id', async (c) => {

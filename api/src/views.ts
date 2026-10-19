@@ -2,6 +2,7 @@
 import { buildProjectView, compareItems, compareProjects, type ItemView, type ProjectView } from './rules.js';
 import { can, takesPart } from './auth.js';
 import type { Snapshot } from './store/store.js';
+import { daysUntil } from './time.js';
 import type { Project, User } from './types.js';
 
 /** The projects `me` may see (`can.viewProject`); every role but OTHER sees all of them. */
@@ -45,6 +46,7 @@ function summary(v: ProjectView) {
     lateHours: v.lateHours,
     overdueItems: v.overdueItems,
     highIssues: v.highIssues,
+    daysPastEnd: v.daysPastEnd,
     nextItem: v.nextItem && pickItem(v.nextItem),
   };
 }
@@ -65,6 +67,9 @@ function pickItem(i: ItemView) {
   };
 }
 
+/** The dashboard lists the projects whose end date is at most this many days ahead. */
+export const ENDING_SOON_DAYS = 14;
+
 export interface DashboardFilter {
   scope: 'all' | 'mine';
   gl?: string;
@@ -72,6 +77,13 @@ export interface DashboardFilter {
 
 export function isInvolved(v: ProjectView, userId: string): boolean {
   return takesPart(v, userId);
+}
+
+/** Every project (any state) `me` may see that the dashboard's filters keep: the trend counts these. */
+export function dashboardProjects(snap: Snapshot, me: User, filter: DashboardFilter): Project[] {
+  return visibleProjects(me, snap).filter(
+    (p) => (filter.scope === 'all' || takesPart(p, me.id)) && (!filter.gl || p.gl === filter.gl),
+  );
 }
 
 /** Only the projects `me` may see, so the KPIs and the GL statistics count those too. */
@@ -106,11 +118,19 @@ export function buildDashboard(snap: Snapshot, now: Date, me: User, filter: Dash
       lateUpdates: views.filter((v) => v.lateHours > 0).length,
       highIssues: views.reduce((n, v) => n + v.highIssues, 0),
       overdueItems: views.reduce((n, v) => n + v.overdueItems, 0),
+      pastEnd: views.filter((v) => v.daysPastEnd > 0).length,
     },
-    // Projects that need a look: not green, late, or with overdue items.
+    // Projects that need a look: not green, late, with overdue items, or running past their end date.
     attention: views
-      .filter((v) => v.urgency !== 'normal' || v.lateHours > 0 || v.health !== 'green')
+      .filter((v) => v.urgency !== 'normal' || v.lateHours > 0 || v.health !== 'green' || v.daysPastEnd > 0)
       .map(summary),
+    endingSoonDays: ENDING_SOON_DAYS,
+    endingSoon: views
+      .flatMap((v) => {
+        const daysLeft = v.endDate === undefined ? -1 : daysUntil(v.endDate, now);
+        return daysLeft >= 0 && daysLeft <= ENDING_SOON_DAYS ? [{ id: v.id, name: v.name, health: v.health, endDate: v.endDate!, daysLeft }] : [];
+      })
+      .sort((a, b) => a.daysLeft - b.daysLeft || a.id.localeCompare(b.id)),
     lateUpdates: views
       .filter((v) => v.lateHours > 0)
       .sort((a, b) => b.lateHours - a.lateHours)

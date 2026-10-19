@@ -52,3 +52,18 @@ export function fmtHours(h: number): string {
 export function todayVN(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date());
 }
+
+/** The YYYY-MM-DD `days` after `date` (before, when negative). */
+export function addDays(date: string, days: number): string {
+  return new Date(Date.parse(date) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** The Monday of the week of `date` (YYYY-MM-DD). */
+export function weekStart(date: string): string {
+  return addDays(date, -((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7));
+}
+
+/** Whole days from `from` to `to` (YYYY-MM-DD). */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
+}

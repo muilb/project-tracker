@@ -7,6 +7,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    ignore:
+      # Node types follow the runtime (Lambda / CI run Node.js 22): patches only, never a new major.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
     groups:
       # Minor and patch releases together in one PR; a major release gets a PR of its own.
       minor-and-patch:

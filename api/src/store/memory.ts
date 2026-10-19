@@ -21,6 +21,7 @@ import {
   auditCursor,
   ConflictError,
   inboxCursor,
+  keepItem,
   liveRows,
   liveSnapshot,
   outboxKey,
@@ -252,7 +253,7 @@ export class MemoryStore implements Store {
       users: [...this.users.values()],
       projects: [...this.projects.values()],
       updates,
-      items: [...this.items.values()],
+      items: since ? [...this.items.values()].filter((i) => keepItem(i, since, opts?.includeDeleted)) : [...this.items.values()],
       settings: this.settings,
     });
     return opts?.includeDeleted ? snap : liveSnapshot(snap);

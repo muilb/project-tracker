@@ -34,6 +34,8 @@ import {
   DELIVERY_LOG_DAYS,
   INBOX_DAYS,
   inboxCursor,
+  itemClosed,
+  keepItem,
   liveRows,
   liveSnapshot,
   OUTBOX_DAYS,
@@ -66,12 +68,17 @@ import {
  * Every row also has `kind`. The `byKind` index (partition `kind`, sort `sk`) lets the snapshot,
  * users and channels be read by kind, so the inbox / logs / de-dup rows are never scanned. Its sort
  * key starts with the update time for updates, so the snapshot reads only recent ones (plus PINS).
+ * Items are split by `kind` the same way (`itemKind`): open ones are `ITEM`, closed ones
+ * `ITEM_CLOSED#<month of their last change>` and deleted ones `ITEM_DELETED`, so the snapshot reads
+ * the open items and the last few months of closed ones, and only the trash reads deleted ones.
  */
 type Kind =
   | 'USER'
   | 'PROJECT'
   | 'UPDATE'
   | 'ITEM'
+  | `ITEM_CLOSED#${string}`
+  | 'ITEM_DELETED'
   | 'PINS'
   | 'CHANNEL'
   | 'SENT'
@@ -88,6 +95,24 @@ export const KIND_INDEX = 'byKind';
 
 /** A project's pinned updates; `version` guards concurrent writers. */
 type PinsRow = { updates: Update[]; version: number };
+
+/** Index partition of an item: open, closed in a month (YYYY-MM of its last change), or deleted. */
+export function itemKind(item: Item): Kind {
+  if (item.deletedAt) return 'ITEM_DELETED';
+  return itemClosed(item) ? `ITEM_CLOSED#${item.updatedAt.slice(0, 7)}` : 'ITEM';
+}
+
+/** YYYY-MM of every month from `since` to `now` (the closed-item partitions a snapshot reads). */
+export function monthsSince(since: string, now: Date): string[] {
+  const months: string[] = [];
+  const d = new Date(`${since.slice(0, 7)}-01T00:00:00Z`);
+  const end = now.toISOString().slice(0, 7);
+  for (let m = d.toISOString().slice(0, 7); m <= end; m = d.toISOString().slice(0, 7)) {
+    months.push(m);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return months;
+}
 
 const ttlAfter = (iso: string, days: number) => Math.floor(Date.parse(iso) / 1000) + days * 86_400;
 
@@ -316,7 +341,62 @@ export class DynamoStore implements Store {
     return this.get<Item>(`PROJECT#${projectId}`, `ITEM#${id}`);
   }
   putItem(item: Item) {
-    return this.put(`PROJECT#${item.projectId}`, `ITEM#${item.id}`, 'ITEM', item);
+    return this.put(`PROJECT#${item.projectId}`, `ITEM#${item.id}`, itemKind(item), item);
+  }
+
+  /**
+   * The items a snapshot carries (`keepItem`). With `since`: the open ones, the closed ones of the
+   * months since then and, for the trash, the deleted ones; without: all of them (a scan, scripts only).
+   * Undefined when the index cannot be used yet.
+   */
+  private async snapshotItems(since: string | undefined, now: Date | undefined, includeDeleted?: boolean) {
+    let rows: Record<string, unknown>[] | undefined;
+    if (since && now) {
+      const parts = await Promise.all([
+        this.byKind('ITEM'),
+        ...monthsSince(since, now).map((m) => this.byKind(`ITEM_CLOSED#${m}`)),
+        includeDeleted ? this.byKind('ITEM_DELETED') : [],
+      ]);
+      if (parts.some((p) => !p)) return undefined;
+      rows = parts.flat() as Record<string, unknown>[];
+      await this.fileOldItems(parts[0]!);
+    } else {
+      if (!(await this.byKind('ITEM'))) return undefined;
+      rows = (await this.scanAll()).filter((r) => String(r.kind).startsWith('ITEM'));
+    }
+    // An item closed or reopened while the kinds were read can come back from two of them: keep its newest copy.
+    const newest = new Map<string, Item>();
+    for (const i of rows.map((r) => strip<Item>(r))) {
+      const key = `${i.projectId}#${i.id}`;
+      if (!newest.has(key) || i.updatedAt > newest.get(key)!.updatedAt) newest.set(key, i);
+    }
+    const items = [...newest.values()];
+    return since ? items.filter((i) => keepItem(i, since, includeDeleted)) : items;
+  }
+
+  /**
+   * Rows written before items were split by kind are all `ITEM`: move the closed / deleted ones to
+   * their own kind once (only if unchanged since they were read; a newer write sets the kind itself).
+   */
+  private async fileOldItems(rows: Record<string, unknown>[]) {
+    const stale = rows.filter((r) => itemKind(r as unknown as Item) !== 'ITEM');
+    await Promise.all(
+      stale.map(async (r) => {
+        try {
+          await this.db.send(
+            new UpdateCommand({
+              TableName: this.table,
+              Key: { pk: r.pk, sk: r.sk },
+              UpdateExpression: 'SET kind = :k',
+              ConditionExpression: 'kind = :old AND updatedAt = :u',
+              ExpressionAttributeValues: { ':k': itemKind(r as unknown as Item), ':old': 'ITEM', ':u': r.updatedAt },
+            }),
+          );
+        } catch (e) {
+          if (!(e instanceof ConditionalCheckFailedException)) throw e;
+        }
+      }),
+    );
   }
   async listItems(projectId: string, opts?: ListOptions) {
     return liveRows(await this.query<Item>(`PROJECT#${projectId}`, 'ITEM#'), opts);
@@ -532,7 +612,7 @@ export class DynamoStore implements Store {
       this.byKind('USER'),
       this.byKind('PROJECT'),
       this.byKind('UPDATE', since ? { from: `UPDATE#${since}` } : {}),
-      this.byKind('ITEM'),
+      this.snapshotItems(since, opts?.now, opts?.includeDeleted),
       since ? this.byKind('PINS') : [],
     ]);
     let settingsRow: Record<string, unknown> | undefined;
@@ -540,7 +620,7 @@ export class DynamoStore implements Store {
       snap.users = users.map((r) => strip<User>(r));
       snap.projects = projects.map((r) => strip<Project>(r));
       snap.updates = updates.map((r) => strip<Update>(r));
-      snap.items = items.map((r) => strip<Item>(r));
+      snap.items = items;
       if (since) {
         // Pins saved per project; a project without them yet (older data) gets them from its history once.
         const saved = new Map(pins.map((r) => [String(r.pk).slice('PROJECT#'.length), (r as unknown as PinsRow).updates]));
@@ -554,7 +634,10 @@ export class DynamoStore implements Store {
         if (kind === 'USER') snap.users.push(strip(row));
         else if (kind === 'PROJECT') snap.projects.push(strip(row));
         else if (kind === 'UPDATE') snap.updates.push(strip(row));
-        else if (kind === 'ITEM') snap.items.push(strip(row));
+        else if (String(kind).startsWith('ITEM')) {
+          const item = strip<Item>(row);
+          if (!since || keepItem(item, since, opts?.includeDeleted)) snap.items.push(item);
+        }
         else if (row.sk === 'SETTINGS') settingsRow = strip(row);
       }
     }

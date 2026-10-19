@@ -9,7 +9,7 @@ import type { NotifyDeps } from './notify/deps.js';
 import { emit } from './notify/pipeline.js';
 import { buildProjectView } from './rules.js';
 import type { createItemSchema, createProjectSchema, createUpdateSchema, patchItemSchema, patchProjectSchema } from './schemas.js';
-import { ConflictError, type Store } from './store/store.js';
+import { ConflictError, keepItem, snapshotSince, type Store } from './store/store.js';
 import type { Item, Project, Update, User } from './types.js';
 
 /** Who makes the change, and when. */
@@ -21,9 +21,15 @@ export interface OpContext {
 }
 
 /** A project `me` may not see answers 404 like a missing one, for reads and writes alike. */
-export async function loadProject(store: Store, id: string, me: User): Promise<Project> {
+/**
+ * The project, if `me` may see it. OTHER sees it through an item they own the way the dashboards do:
+ * an open one, or one closed in the snapshot's period (`keepItem`).
+ */
+export async function loadProject(store: Store, id: string, me: User, now: Date): Promise<Project> {
   const p = await store.getProject(id.toUpperCase());
-  const visible = p && !p.deletedAt && can.viewProject(me, p, me.role === 'OTHER' ? await store.listItems(p.id) : []);
+  const since = snapshotSince(now);
+  const owned = me.role === 'OTHER' && p ? (await store.listItems(p.id)).filter((i) => keepItem(i, since)) : [];
+  const visible = p && !p.deletedAt && can.viewProject(me, p, owned);
   if (!visible) throw new HTTPException(404, { message: l(`Không tìm thấy dự án ${id}`, `プロジェクト ${id} が見つかりません`) });
   return p;
 }
@@ -85,7 +91,7 @@ export async function createProject(ctx: OpContext, body: z.infer<typeof createP
 
 export async function patchProject(ctx: OpContext, id: string, body: z.infer<typeof patchProjectSchema>): Promise<Project> {
   const { store, user: me } = ctx;
-  const project = await loadProject(store, id, me);
+  const project = await loadProject(store, id, me, ctx.now);
   ensure(
     can.editProject(me, project),
     l('Chỉ PMO, quản lý, GL hoặc PL của dự án mới được sửa', 'プロジェクトの編集は PMO・管理者・そのプロジェクトの GL / PL のみ行えます'),
@@ -98,7 +104,7 @@ export async function patchProject(ctx: OpContext, id: string, body: z.infer<typ
 
 export async function addUpdate(ctx: OpContext, id: string, body: z.infer<typeof createUpdateSchema>): Promise<Update> {
   const { store, user: me, now } = ctx;
-  const project = await loadProject(store, id, me);
+  const project = await loadProject(store, id, me, ctx.now);
   // The pinned updates give the same view as the whole history (see rules.pinUpdates).
   const [pinned, items, settings] = await Promise.all([
     store.listPinnedUpdates(project.id),
@@ -125,7 +131,7 @@ export async function addUpdate(ctx: OpContext, id: string, body: z.infer<typeof
 
 export async function createItem(ctx: OpContext, id: string, body: z.infer<typeof createItemSchema>): Promise<Item> {
   const { store, user: me } = ctx;
-  const project = await loadProject(store, id, me);
+  const project = await loadProject(store, id, me, ctx.now);
   await checkUsers(store, [body.owner]);
   const now = ctx.now.toISOString();
   const item: Item = {
@@ -143,7 +149,7 @@ export async function createItem(ctx: OpContext, id: string, body: z.infer<typeo
 
 export async function patchItem(ctx: OpContext, id: string, itemId: string, body: z.infer<typeof patchItemSchema>): Promise<Item> {
   const { store } = ctx;
-  const project = await loadProject(store, id, ctx.user);
+  const project = await loadProject(store, id, ctx.user, ctx.now);
   const item = await loadItem(store, project, itemId);
   await checkUsers(store, [body.owner]);
   const updated: Item = { ...item, ...body, updatedAt: ctx.now.toISOString() };

@@ -155,7 +155,7 @@ export function HelpPage() {
                 <td>Hỗ trợ / Khác</td>
                 <td>Thành viên hỗ trợ</td>
                 <td>
-                  Chỉ xem dự án mình tham gia: là PL / GL / PMO / "Người hỗ trợ" của dự án, hoặc phụ trách ít nhất một mục của dự án.
+                  Chỉ xem dự án mình tham gia: là PL / GL / PMO / "Người hỗ trợ" của dự án, hoặc phụ trách một mục của dự án (đang mở, hoặc đã đóng trong 60 ngày gần nhất).
                   Dự án khác không hiện ở Tổng quan, Dự án, thống kê theo GL, AI và kênh thông báo mình tạo. Cập nhật tình hình thay PL
                   / GL khi được thêm vào "Người hỗ trợ". Không tạo dự án; dùng AI chỉ để hỏi, không nhập
                 </td>
@@ -250,7 +250,7 @@ export function HelpPage() {
         </ul>
         <p>
           <B>⬇ Xuất Excel</B>: tải file Excel gồm 3 sheet — <b>Dự án</b> (mọi trạng thái: màu, mức khẩn, người phụ trách, cập nhật gần nhất,
-          hạn / trễ cập nhật, số vấn đề, mốc tiếp theo), <b>Vấn đề, sự kiện, mốc</b> (kể cả đã đóng), <b>Cập nhật 60 ngày</b> gần nhất. Chỉ
+          hạn / trễ cập nhật, số vấn đề, mốc tiếp theo), <b>Vấn đề, sự kiện, mốc</b> (đang mở, và đã đóng trong 60 ngày gần nhất), <b>Cập nhật 60 ngày</b> gần nhất. Chỉ
           có những dự án bạn được xem; giờ là giờ Việt Nam; tiêu đề cột theo ngôn ngữ đang chọn. File không có dữ liệu đã xoá.
         </p>
         <p className="muted">Bấm vào tên dự án ở bất kỳ đâu để mở chi tiết.</p>

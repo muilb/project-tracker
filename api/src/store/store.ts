@@ -24,6 +24,10 @@ export interface Snapshot {
    * (`pinUpdates`), which is all `buildProjectView` needs. Without `now`: every update.
    */
   updates: Update[];
+  /**
+   * With `now`: open items and the closed ones changed in the last SNAPSHOT_UPDATE_DAYS (`keepItem`);
+   * a project page reads all of its own items (`listItems`). Without `now`: every item.
+   */
   items: Item[];
   settings: Settings;
 }
@@ -48,8 +52,8 @@ export const outboxKey = (e: Pick<OutboxEntry, 'dueAt' | 'id'>) => `${e.dueAt}#$
 
 /**
  * Persistence boundary. Data volume is small (tens of projects, thousands of rows), so dashboards
- * load users, projects and items with `snapshot()`; update history, which grows for ever, is
- * limited to recent updates plus the pinned ones (see `pinUpdates`).
+ * load users, projects and items with `snapshot()`; what grows for ever is limited: recent updates
+ * plus the pinned ones (see `pinUpdates`), open items plus recently closed ones (see `keepItem`).
  */
 export interface Store {
   getUser(id: string): Promise<User | undefined>;
@@ -173,6 +177,18 @@ export function uniqueUpdates(updates: Update[]): Update[] {
 export const snapshotSince = (now: Date) => new Date(now.getTime() - SNAPSHOT_UPDATE_DAYS * 86_400_000).toISOString();
 
 const live = (r: { deletedAt?: string }) => !r.deletedAt;
+
+/** Done or postponed. */
+export const itemClosed = (i: Pick<Item, 'status'>) => i.status === 'done' || i.status === 'postponed';
+
+/**
+ * Whether a snapshot taken with `now` (`since` = snapshotSince(now)) carries the item: open ones always,
+ * closed ones changed since then (closed in that time, or edited after), deleted ones only for the trash.
+ */
+export function keepItem(i: Item, since: string, includeDeleted?: boolean): boolean {
+  if (i.deletedAt) return !!includeDeleted;
+  return !itemClosed(i) || i.updatedAt >= since;
+}
 
 /** Drops soft-deleted rows, and everything under a soft-deleted project. */
 export function liveSnapshot(snap: Snapshot): Snapshot {

@@ -27,6 +27,8 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
 - Lịch sử cập nhật tăng mãi nên không đọc hết mỗi lần. `snapshot({ now })` chỉ lấy cập nhật trong `SNAPSHOT_UPDATE_DAYS` (60) ngày gần nhất (khoá sắp xếp của cập nhật bắt đầu bằng thời gian, nên chỉ mục `byKind` lọc được ngay), cộng thêm **cập nhật ghim** của từng dự án (dòng `PROJECT#<id>` / `PINS`). Cập nhật ghim (`rules.pinUpdates`) là, với mỗi người viết + vai trò, cập nhật mới nhất và cập nhật có màu mới nhất. Mọi giá trị của `buildProjectView` (màu PL khai, màu PMO, nhận xét quản lý, cập nhật gần nhất của PL…) đều là "cập nhật mới nhất thoả điều kiện về người viết / vai trò / có màu", nên luôn nằm trong các dòng ghim: màu dự án tính ra giống hệt khi đọc toàn bộ lịch sử, kể cả khi đổi PL / GL / supporter. `test/history.test.ts` kiểm tra điều này với lịch sử ngẫu nhiên.
   - `putUpdate` giữ dòng ghim luôn đúng: cập nhật mới / khôi phục được gộp vào, không đọc lịch sử; xoá một cập nhật đang ghim thì đọc lại lịch sử của dự án đó (hiếm). Hai người ghi cùng lúc (điều kiện `version`) thì dòng ghim bị xoá, lần đọc sau dựng lại từ lịch sử. Dữ liệu cũ chưa có dòng ghim được dựng một lần khi `snapshot` gặp.
   - Trang dự án và nút "Xem thêm" đọc đúng một trang cập nhật (`pageUpdates`, mới nhất trước); thêm cập nhật tính màu trước / sau từ dòng ghim. Thùng rác đọc riêng các cập nhật đã xoá (`listDeletedUpdates`). Báo cáo tuần đọc lịch sử đầy đủ chỉ cho các dự án có cập nhật trong tuần (màu của tuần trước có thể đến từ cập nhật cũ hơn 60 ngày).
+- Vấn đề / sự kiện / mốc cũng tăng mãi: `snapshot({ now })` chỉ mang **mục đang mở** và mục đã đóng (Xong / Hoãn) có thay đổi trong `SNAPSHOT_UPDATE_DAYS` (60) ngày (`keepItem`). Màu, số vấn đề, mục quá hạn, mốc kế tiếp chỉ tính mục đang mở nên không đổi; báo cáo tuần cần mục đóng trong 7 ngày. Trang dự án đọc mọi mục của dự án (`listItems`), thùng rác đọc mọi mục đã xoá.
+  - Trong DynamoDB, `kind` của mục cho biết nó thuộc nhóm nào: `ITEM` (đang mở), `ITEM_CLOSED#<YYYY-MM>` (đã đóng, theo tháng của lần sửa cuối), `ITEM_DELETED` (đã xoá). `putItem` đặt `kind` mỗi lần ghi (đóng / mở lại / xoá / khôi phục). Snapshot đọc `ITEM` và các tháng từ 60 ngày trước đến nay (3 tháng), thùng rác đọc thêm `ITEM_DELETED`. Dòng cũ (trước khi tách, đều là `ITEM`) được chuyển đúng `kind` một lần khi snapshot gặp, chỉ khi dòng chưa bị sửa từ lúc đọc (`updatedAt`).
 - Một bảng DynamoDB (`pk` / `sk`, chi tiết ở `api/src/store/dynamo.ts`):
 
   | `pk` | `sk` | Nội dung |
@@ -112,7 +114,7 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET | `/public` | Dashboard public: số dự án theo mức khẩn cấp, dự án khẩn cấp / cần chú ý, mốc và sự kiện 7 ngày tới |
 | GET | `/me` | Người đang đăng nhập |
 | GET | `/dashboard?scope=all\|mine&gl=<email>` | Số liệu tổng, dự án cần chú ý, trễ cập nhật, vấn đề ưu tiên, sắp tới, thống kê theo GL |
-| GET | `/export` | File Excel (`.xlsx`, `src/export/`): sheet Dự án (mọi trạng thái), Vấn đề / sự kiện / mốc (kể cả đã đóng), Cập nhật `SNAPSHOT_UPDATE_DAYS` ngày. Chỉ dữ liệu người gọi xem được, không có dòng đã xoá; tiêu đề / nhãn theo `Accept-Language`, giờ Việt Nam, tên người thay cho email. Văn bản luôn là chuỗi (không thành công thức) |
+| GET | `/export` | File Excel (`.xlsx`, `src/export/`): sheet Dự án (mọi trạng thái), Vấn đề / sự kiện / mốc (đang mở và đã đóng trong `SNAPSHOT_UPDATE_DAYS` ngày), Cập nhật `SNAPSHOT_UPDATE_DAYS` ngày. Chỉ dữ liệu người gọi xem được, không có dòng đã xoá; tiêu đề / nhãn theo `Accept-Language`, giờ Việt Nam, tên người thay cho email. Văn bản luôn là chuỗi (không thành công thức) |
 | GET | `/projects?scope=mine&gl=&state=active\|paused\|closed\|all` | Danh sách dự án kèm số liệu đã tính |
 | POST | `/projects` | Tạo dự án (PL trở lên). `id` tự sinh `P01, P02…` nếu không truyền |
 | GET | `/projects/:id` | Chi tiết, 10 cập nhật gần nhất (+ `nextBefore` nếu còn cũ hơn), các vấn đề / sự kiện |
@@ -387,7 +389,7 @@ Mỗi kênh (và mỗi người, ở "Thông báo của tôi") có thể có `sc
 
 ### Quyền xem
 
-- `can.viewProject(user, project, items?)` (`api/src/auth.ts`): mọi vai trò xem tất cả, trừ `OTHER`. `OTHER` chỉ xem dự án mình **tham gia** — là PL / GL / PMO / người hỗ trợ — **hoặc** phụ trách (`owner`) ít nhất một mục chưa xoá của dự án.
+- `can.viewProject(user, project, items?)` (`api/src/auth.ts`): mọi vai trò xem tất cả, trừ `OTHER`. `OTHER` chỉ xem dự án mình **tham gia** — là PL / GL / PMO / người hỗ trợ — **hoặc** phụ trách (`owner`) một mục chưa xoá của dự án đang mở hoặc đóng / sửa trong `SNAPSHOT_UPDATE_DAYS` (60) ngày gần nhất (`keepItem`; trang dự án — `loadProject` — dùng cùng luật với Tổng quan).
 - `visibleProjects(user, snap)` / `visibleSnapshot(user, snap)` (`api/src/views.ts`) lọc dữ liệu trước khi dựng read model.
 - Áp cho:
   - `GET /dashboard` (KPI, danh sách, thống kê theo GL chỉ đếm dự án xem được), `GET /projects`, `GET /export`;

@@ -26,6 +26,7 @@ Cần Node.js 22.
 ```bash
 npm install
 npm test          # test quy tắc, API và web
+npm run e2e       # test E2E trên Chromium (lần đầu: cd web && npx playwright install chromium)
 npm run dev       # API ở http://localhost:3001, dữ liệu mẫu từ file Excel
 npm run dev:web   # (terminal khác) web ở http://localhost:5173
 ```

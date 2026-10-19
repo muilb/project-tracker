@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { Health, ItemType, Urgency } from '../../../api/src/types';
 import { fmtHours } from '../format';
 import { l, lang, setLang } from '../i18n';
@@ -174,4 +174,15 @@ export function MoreLess({
       )}
     </div>
   );
+}
+
+/**
+ * A link to a section (`/help#cap-nhat`) opened from outside: the browser looks for the section
+ * before React has drawn it, so scroll to it once the page is there.
+ */
+export function useScrollToHash() {
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (id) document.getElementById(id)?.scrollIntoView();
+  }, []);
 }

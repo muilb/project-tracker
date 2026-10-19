@@ -14,7 +14,8 @@
     "build": "npm run build -w web",
     "seed": "npm run seed -w api --",
     "synth": "npm run synth -w infra",
-    "deploy": "npm run deploy -w infra"
+    "deploy": "npm run deploy -w infra",
+    "e2e": "npm run build && npm run e2e -w web"
   },
   "engines": {
     "node": ">=22"

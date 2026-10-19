@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { auth } from '../auth';
-import { LangSwitch } from '../components/ui';
+import { LangSwitch, useScrollToHash } from '../components/ui';
 import { lang } from '../i18n';
 import { HelpPageJa } from './HelpJa';
 
@@ -39,6 +39,7 @@ function H({ id, children }: { id: string; children: ReactNode }) {
 const B = ({ children }: { children: ReactNode }) => <b className="ui-label">{children}</b>;
 
 export function HelpPage() {
+  useScrollToHash();
   if (lang === 'ja') return <HelpPageJa />;
   const signedIn = auth.isSignedIn();
   return (

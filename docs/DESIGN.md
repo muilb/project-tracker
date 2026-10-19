@@ -186,7 +186,15 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 **Test web** (`web/test/`, vitest + jsdom + Testing Library, chạy trong `npm test`):
 - `unit/`: client API (`api.ts`: header ngôn ngữ / đăng nhập, lỗi, 401 → đăng xuất, tải file), Cognito (`auth.ts`, với Cognito giả: đăng nhập, mật khẩu tạm, làm mới token), Web Push (`push.ts`: tên thiết bị, id thiết bị giống API), định dạng ngày giờ, badge trạng thái (biểu tượng + chữ), "Xem thêm", hai bản hướng dẫn cùng mục lục.
 - `pages/`: cả ứng dụng chạy với **API thật trong cùng tiến trình** (`harness.tsx`: `fetch('/api/…')` gọi thẳng `createApp` với `MemoryStore` + dữ liệu mẫu, giờ cố định ở "bây giờ" của dữ liệu mẫu). Kiểm tra Tổng quan (số liệu khớp API, phạm vi, lọc GL, OTHER, xuất Excel, menu theo vai trò), trang dự án (gửi / xoá cập nhật, phân trang lịch sử, thêm / đóng mục, quyền), form dự án, đăng nhập, trang public không lộ dữ liệu riêng, giao diện và lỗi API bằng tiếng Nhật.
-- Chưa có test trên trình duyệt thật (proxy Vite, service worker, bố cục điện thoại).
+
+**Test E2E** (`web/e2e/`, Playwright + Chromium, `npm run e2e`, job `e2e` trong CI): chạy bản build production (`vite build` + `vite preview`, `/config.json` của test) với API local (`api/src/local.ts`, `SAMPLE_NOW=1`: đồng hồ bắt đầu ở "bây giờ" của dữ liệu mẫu). Mỗi test hỏng nếu có lỗi console, exception hay request lỗi.
+- Bản build tải cấu hình, đăng nhập, Tổng quan có số liệu và CSS.
+- Mở thẳng đường dẫn / F5 / quay lại vẫn đúng trang và còn đăng nhập; chưa đăng nhập thì sau khi đăng nhập quay về trang đã mở; `/public`, `/help#muc` mở được (cuộn tới mục).
+- PL cập nhật Đỏ → Tổng quan "Cần chú ý" → trang public "Khẩn cấp" (không lộ nội dung); test xoá lại cập nhật sau khi chạy.
+- Đổi ngôn ngữ tải lại trang bằng tiếng Nhật, giữ khi chuyển trang / F5, quay lại VI.
+- Điện thoại 390px: các trang chính không cuộn ngang; menu ☰ mở / đóng sau khi chuyển trang.
+- Xuất Excel trên trình duyệt thật: file `.xlsx` có 3 sheet.
+- Chưa có: service worker / bật thông báo, hộp xác nhận xoá, kiểm tra tương phản, tự làm mới trang public.
 
 ## Thông báo (Teams / Telegram / Slack, cá nhân, Web Push) — `api/src/notify/`
 

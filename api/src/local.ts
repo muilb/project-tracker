@@ -10,11 +10,17 @@ import type { PushSender } from './notify/push.js';
 import { flushDue } from './notify/pipeline.js';
 import { createSender } from './notify/sender.js';
 import { telegramClient, type TelegramClient } from './notify/telegram.js';
-import { loadSample } from './seed/sample.js';
+import { loadSample, SAMPLE_NOW_VN } from './seed/sample.js';
 import { MemoryStore } from './store/memory.js';
+import { vnToIso } from './time.js';
+
+// SAMPLE_NOW=1 (end-to-end tests): the clock starts at the Excel's "now" and runs from there, so the
+// sample always shows the same lateness / urgency whatever time the tests run.
+const offset = process.env.SAMPLE_NOW ? Date.parse(vnToIso(SAMPLE_NOW_VN)) - Date.now() : 0;
+const clock = () => new Date(Date.now() + offset);
 
 const store = new MemoryStore();
-await loadSample(store, new Date());
+await loadSample(store, clock());
 
 const port = Number(process.env.PORT ?? 3001);
 // Alerts are printed instead of sent unless LOCAL_SEND=1 (then a real Teams URL / Telegram bot is needed).
@@ -26,8 +32,8 @@ const send = process.env.LOCAL_SEND
 // users added later (Users page or a new x-dev-user) show as "no login account".
 const accounts = new MemoryAccounts(
   [
-    { email: 'thao@example.com', name: 'Thảo', createdAt: new Date().toISOString() },
-    { email: 'vinh@example.com', name: 'Vinh', createdAt: new Date().toISOString() },
+    { email: 'thao@example.com', name: 'Thảo', createdAt: clock().toISOString() },
+    { email: 'vinh@example.com', name: 'Vinh', createdAt: clock().toISOString() },
   ],
   new Set((await store.listUsers()).map((u) => u.id)),
 );
@@ -89,6 +95,7 @@ if (process.env.ANTHROPIC_API_KEY) await store.putAiConfig({ apiKey: process.env
 const app = createApp({
   store,
   auth: { mode: 'dev', adminEmails: [] },
+  clock,
   publicCacheSeconds: 0,
   send,
   telegram,
@@ -98,6 +105,6 @@ const app = createApp({
   push,
 });
 // Like the FlushFn Lambda: messages held in the outbox (grouped high-priority issues, retries) go out every minute.
-setInterval(() => void flushDue({ store, send, webUrl: 'http://localhost:5173', push }, new Date()).catch((e) => console.error('outbox', e)), 60_000);
+setInterval(() => void flushDue({ store, send, webUrl: 'http://localhost:5173', push }, clock()).catch((e) => console.error('outbox', e)), 60_000);
 serve({ fetch: app.fetch, port });
 console.log(`API dev server: http://localhost:${port}  (header x-dev-user: lan@example.com)`);

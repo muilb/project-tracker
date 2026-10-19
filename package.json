@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run dev -w api",
     "dev:web": "npm run dev -w web",
-    "test": "npm test -w api",
+    "test": "npm test -w api && npm test -w web",
     "typecheck": "npm run typecheck --workspaces",
     "build": "npm run build -w web",
     "seed": "npm run seed -w api --",

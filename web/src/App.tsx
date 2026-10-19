@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type ComponentType } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { api, setUnauthorizedHandler } from './api';
 import { auth } from './auth';
@@ -6,31 +6,45 @@ import { InboxBell } from './components/InboxBell';
 import { ErrorBox, LangSwitch } from './components/ui';
 import { l } from './i18n';
 import { ROLE_LABEL } from './labels';
-import { AiEntryPage } from './pages/AiEntry';
-import { ChannelsPage } from './pages/channels/ChannelsPage';
 import { Dashboard } from './pages/Dashboard';
-import { HelpPage } from './pages/Help';
 import { Login } from './pages/Login';
-import { MyNotifyPage } from './pages/MyNotify';
 import { ProjectDetailPage } from './pages/ProjectDetail';
-import { ProjectForm } from './pages/ProjectForm';
 import { Projects } from './pages/Projects';
 import { PublicPage } from './pages/Public';
-import { SettingsPage } from './pages/Settings';
-import { TrashPage } from './pages/Trash';
-import { UsersPage } from './pages/Users';
 import { forgetPushDevice } from './push';
 import { SessionProvider, useSession } from './session';
 import type { User } from './types';
 
+// Pages that are big or seldom opened load on first visit, so the first page needs less JavaScript.
+function lazyPage<K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) {
+  return lazy(async () => {
+    const page = await load();
+    // Its file is gone after a deploy: main.tsx reloads the tab, so wait for that.
+    if (!page) return new Promise<never>(() => {});
+    return { default: page[name] };
+  });
+}
+const AiEntryPage = lazyPage(() => import('./pages/AiEntry'), 'AiEntryPage');
+const ChannelsPage = lazyPage(() => import('./pages/channels/ChannelsPage'), 'ChannelsPage');
+const HelpPage = lazyPage(() => import('./pages/Help'), 'HelpPage');
+const MyNotifyPage = lazyPage(() => import('./pages/MyNotify'), 'MyNotifyPage');
+const ProjectForm = lazyPage(() => import('./pages/ProjectForm'), 'ProjectForm');
+const SettingsPage = lazyPage(() => import('./pages/Settings'), 'SettingsPage');
+const TrashPage = lazyPage(() => import('./pages/Trash'), 'TrashPage');
+const UsersPage = lazyPage(() => import('./pages/Users'), 'UsersPage');
+
+const loading = <p className="loading">{l('Đang tải…', '読み込み中…')}</p>;
+
 export function App() {
   return (
-    <Routes>
-      <Route path="/public" element={<PublicPage />} />
-      <Route path="/help" element={<HelpPage />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="*" element={<Authenticated />} />
-    </Routes>
+    <Suspense fallback={loading}>
+      <Routes>
+        <Route path="/public" element={<PublicPage />} />
+        <Route path="/help" element={<HelpPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Authenticated />} />
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -61,7 +75,7 @@ function Authenticated() {
 
   if (!auth.isSignedIn()) return <Navigate to="/login" replace />;
   if (error) return <ErrorBox error={error} />;
-  if (!me) return <p className="loading">{l('Đang tải…', '読み込み中…')}</p>;
+  if (!me) return loading;
 
   return (
     <SessionProvider me={me}>
@@ -170,7 +184,10 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="container">{children}</main>
+      {/* Inside the layout, so the menu stays while a page loads. */}
+      <main className="container">
+        <Suspense fallback={loading}>{children}</Suspense>
+      </main>
     </>
   );
 }

@@ -1,0 +1,21 @@
+# Weekly update PRs. CI (unit + e2e) runs on each; nothing deploys until a PR is merged into main.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: / # the root package-lock.json covers api, web and infra
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Minor and patch releases together in one PR; a major release gets a PR of its own.
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ['*']

@@ -43,6 +43,11 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
   | `PUSH#<email>` | `<id>` | Thiết bị Web Push |
   | `TEMP#<khoá>` | `TEMP` | Trạng thái ngắn hạn của bot Telegram (TTL) |
   | `CONFIG` | `SETTINGS` · `TELEGRAM` · `AI` · `PUSH` · `SEQ#…` | Cài đặt, bí mật, bộ đếm mã |
+- **Header bảo mật của web** (`infra/lib/headers.ts`, CloudFront `ResponseHeadersPolicy`, gắn cho mọi file kể cả `/sw.js`):
+  - `Content-Security-Policy`: chỉ chạy script / CSS của chính site; chỉ gọi tới chính site, API Gateway và Cognito của region (`connect-src`); ảnh `data:` cho favicon; không cho nhúng vào iframe (`frame-ancestors 'none'`), không plugin, `base-uri` / `form-action` chỉ chính site.
+  - `Strict-Transport-Security` (2 năm), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (chỉ micro, cho nút 🎤).
+  - **Thêm dịch vụ bên ngoài** mà web gọi trực tiếp (font, CDN, API khác…) thì phải thêm nguồn vào CSP, không thì trình duyệt chặn. `vite preview` trong test E2E gửi cùng các header này, nên vi phạm CSP làm test hỏng trước khi deploy.
+- **Tải web theo phần:** React + router là một file riêng (ít đổi, trình duyệt giữ lại qua các lần deploy). Các trang lớn / ít mở (Hướng dẫn, AI, Kênh, Thông báo của tôi, Người dùng, Cài đặt, Thùng rác, form dự án) chỉ tải khi mở lần đầu (`lazyPage` trong `App.tsx`). Lần mở đầu tải khoảng 323 KB JS (104 KB nén) thay vì 534 KB (158 KB nén). Tab mở từ trước một lần deploy mà xin file của bản cũ (đã bị xoá) thì tự tải lại trang một lần (`vite:preloadError` trong `main.tsx`), không lặp lại trong 1 phút.
 - `GET /public` không cần đăng nhập:
   - chỉ trả về các trường được phép công khai;
   - được cache 30 giây;
@@ -194,6 +199,7 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 - Đổi ngôn ngữ tải lại trang bằng tiếng Nhật, giữ khi chuyển trang / F5, quay lại VI.
 - Điện thoại 390px: các trang chính không cuộn ngang; menu ☰ mở / đóng sau khi chuyển trang.
 - Xuất Excel trên trình duyệt thật: file `.xlsx` có 3 sheet.
+- Bản build: header bảo mật có đủ, service worker chạy được dưới CSP; trang ít dùng chỉ tải khi mở; tab cũ sau deploy tự tải lại.
 - Chưa có: service worker / bật thông báo, hộp xác nhận xoá, kiểm tra tương phản, tự làm mới trang public.
 
 ## Thông báo (Teams / Telegram / Slack, cá nhân, Web Push) — `api/src/notify/`

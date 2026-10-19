@@ -21,6 +21,7 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import type { Construct } from 'constructs';
+import { contentSecurityPolicy, HSTS_SECONDS, PERMISSIONS_POLICY } from './headers.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -82,10 +83,35 @@ export class TrackerStack extends Stack {
       autoDeleteObjects: true,
     });
     const siteOrigin = origins.S3BucketOrigin.withOriginAccessControl(site);
+
+    // Created before the CDN: the web's Content-Security-Policy names its address (routes are added below).
+    const api = new apigw.HttpApi(this, 'Api', {
+      corsPreflight: {
+        allowOrigins: ['*'],
+        allowHeaders: ['authorization', 'content-type'],
+        allowMethods: [apigw.CorsHttpMethod.ANY],
+        maxAge: Duration.hours(1),
+      },
+    });
+    // Security headers on every web response (lib/headers.ts; the e2e tests serve the same ones).
+    const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(this, 'WebHeaders', {
+      securityHeadersBehavior: {
+        contentSecurityPolicy: {
+          contentSecurityPolicy: contentSecurityPolicy([api.apiEndpoint, `https://cognito-idp.${this.region}.amazonaws.com`]),
+          override: true,
+        },
+        strictTransportSecurity: { accessControlMaxAge: Duration.seconds(HSTS_SECONDS), includeSubdomains: true, override: true },
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true },
+      },
+      customHeadersBehavior: { customHeaders: [{ header: 'Permissions-Policy', value: PERMISSIONS_POLICY, override: true }] },
+    });
     const cdn = new cloudfront.Distribution(this, 'Cdn', {
       defaultBehavior: {
         origin: siteOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        responseHeadersPolicy,
       },
       // The Web Push service worker is never cached at the edge, so a new version reaches browsers
       // on their next update check (the page registers it with updateViaCache: 'none').
@@ -94,6 +120,7 @@ export class TrackerStack extends Stack {
           origin: siteOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          responseHeadersPolicy,
         },
       },
       defaultRootObject: 'index.html',
@@ -160,14 +187,6 @@ export class TrackerStack extends Stack {
       targets: [new targets.LambdaFunction(flushFn, { retryAttempts: 0 })],
     });
 
-    const api = new apigw.HttpApi(this, 'Api', {
-      corsPreflight: {
-        allowOrigins: ['*'],
-        allowHeaders: ['authorization', 'content-type'],
-        allowMethods: [apigw.CorsHttpMethod.ANY],
-        maxAge: Duration.hours(1),
-      },
-    });
     const integration = new HttpLambdaIntegration('ApiIntegration', apiFn);
     const authorizer = new HttpUserPoolAuthorizer('Cognito', userPool, { userPoolClients: [webClient] });
     // Explicit methods (not ANY) so CORS preflight OPTIONS is answered by API Gateway without auth.

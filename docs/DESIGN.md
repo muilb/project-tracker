@@ -183,6 +183,11 @@ POST /projects
 
 Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● ▲ ■) và chữ, không dùng màu một mình.
 
+**Test web** (`web/test/`, vitest + jsdom + Testing Library, chạy trong `npm test`):
+- `unit/`: client API (`api.ts`: header ngôn ngữ / đăng nhập, lỗi, 401 → đăng xuất, tải file), Cognito (`auth.ts`, với Cognito giả: đăng nhập, mật khẩu tạm, làm mới token), Web Push (`push.ts`: tên thiết bị, id thiết bị giống API), định dạng ngày giờ, badge trạng thái (biểu tượng + chữ), "Xem thêm", hai bản hướng dẫn cùng mục lục.
+- `pages/`: cả ứng dụng chạy với **API thật trong cùng tiến trình** (`harness.tsx`: `fetch('/api/…')` gọi thẳng `createApp` với `MemoryStore` + dữ liệu mẫu, giờ cố định ở "bây giờ" của dữ liệu mẫu). Kiểm tra Tổng quan (số liệu khớp API, phạm vi, lọc GL, OTHER, xuất Excel, menu theo vai trò), trang dự án (gửi / xoá cập nhật, phân trang lịch sử, thêm / đóng mục, quyền), form dự án, đăng nhập, trang public không lộ dữ liệu riêng, giao diện và lỗi API bằng tiếng Nhật.
+- Chưa có test trên trình duyệt thật (proxy Vite, service worker, bố cục điện thoại).
+
 ## Thông báo (Teams / Telegram / Slack, cá nhân, Web Push) — `api/src/notify/`
 
 ### Kênh nhóm

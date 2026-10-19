@@ -25,7 +25,7 @@ Cần Node.js 22.
 
 ```bash
 npm install
-npm test          # test quy tắc và API
+npm test          # test quy tắc, API và web
 npm run dev       # API ở http://localhost:3001, dữ liệu mẫu từ file Excel
 npm run dev:web   # (terminal khác) web ở http://localhost:5173
 ```

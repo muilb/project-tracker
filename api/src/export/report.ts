@@ -1,4 +1,5 @@
-// "Export to Excel": the projects, items and recent updates the caller may see, as three sheets.
+// "Export to Excel": the projects, items (open and recently closed) and recent updates the caller may
+// see, as three sheets.
 // Headers and labels are in the request language; user-entered text is never translated.
 import { l } from '../i18n.js';
 import { buildProjectView, compareProjects, toItemView } from '../rules.js';

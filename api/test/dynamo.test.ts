@@ -1,20 +1,21 @@
 import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
-import { DeleteCommand, GetCommand, PutCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { describe, expect, it } from 'vitest';
-import { DynamoStore, KIND_INDEX } from '../src/store/dynamo.js';
+import { DynamoStore, itemKind, KIND_INDEX, monthsSince } from '../src/store/dynamo.js';
 import { updateCursor } from '../src/store/store.js';
-import type { Update } from '../src/types.js';
+import type { Item, Update } from '../src/types.js';
 import { activeProjectViews } from '../src/views.js';
 
 type Row = Record<string, unknown>;
 
 /**
  * A document client over rows in memory: the byKind index, table queries, scans, gets, conditional
- * puts and deletes, with DynamoDB's paging (Limit counts rows read before the filter). Counts reads.
+ * puts, deletes and the item re-filing update, with DynamoDB's paging (Limit counts rows read before
+ * the filter). Counts reads, and which kinds were queried.
  */
 function fakeDb(initial: Row[], { indexMissing = false } = {}) {
   const rows = [...initial];
-  const calls = { query: 0, tableQuery: 0, scan: 0, scannedRows: 0, pinsPut: 0 };
+  const calls = { query: 0, tableQuery: 0, scan: 0, scannedRows: 0, pinsPut: 0, kinds: [] as string[] };
   const bySk = (a: Row, b: Row) => String(a.sk).localeCompare(String(b.sk));
   const find = (pk: unknown, sk: unknown) => rows.findIndex((r) => r.pk === pk && r.sk === sk);
   const page = (matched: Row[], input: QueryCommand['input']) => {
@@ -33,6 +34,7 @@ function fakeDb(initial: Row[], { indexMissing = false } = {}) {
       calls.query++;
       if (indexMissing) throw Object.assign(new Error('The table does not have the specified index: byKind'), { name: 'ValidationException' });
       const v = cmd.input.ExpressionAttributeValues!;
+      calls.kinds.push(String(v[':k']));
       return page(rows.filter((r) => r.kind === v[':k'] && (!v[':from'] || String(r.sk) >= String(v[':from']))).sort(bySk), cmd.input);
     }
     if (cmd instanceof QueryCommand) {
@@ -70,6 +72,15 @@ function fakeDb(initial: Row[], { indexMissing = false } = {}) {
       else rows.push(item);
       return {};
     }
+    if (cmd instanceof UpdateCommand && cmd.input.UpdateExpression === 'SET kind = :k') {
+      const { pk, sk } = cmd.input.Key as { pk: string; sk: string };
+      const v = cmd.input.ExpressionAttributeValues!;
+      const r = rows[find(pk, sk)];
+      if (!r || r.kind !== v[':old'] || r.updatedAt !== v[':u'])
+        throw new ConditionalCheckFailedException({ message: 'The conditional request failed', $metadata: {} });
+      r.kind = v[':k'];
+      return {};
+    }
     if (cmd instanceof DeleteCommand) {
       const { pk, sk } = cmd.input.Key as { pk: string; sk: string };
       const i = find(pk, sk);
@@ -98,7 +109,7 @@ describe('DynamoStore reads by kind', () => {
   it('builds the snapshot, users and channels from the byKind index without scanning', async () => {
     const { db, calls } = fakeDb(rows);
     const store = new DynamoStore('T', undefined, db);
-    const snap = await store.snapshot();
+    const snap = await store.snapshot({ now: new Date('2026-10-09T00:00:00Z') });
     expect(snap.users.map((u) => u.id)).toEqual(['an@x']);
     expect(snap.projects.map((p) => p.id)).toEqual(['P01']);
     expect(snap.updates).toHaveLength(1);
@@ -223,5 +234,120 @@ describe('DynamoStore update history', () => {
   it('reads every update while the index is not there yet', async () => {
     const { db } = fakeDb([project, ...history.map(row)], { indexMissing: true });
     expect((await new DynamoStore('T', undefined, db).snapshot({ now })).updates).toHaveLength(101);
+  });
+});
+
+describe('DynamoStore items', () => {
+  const now = new Date('2026-10-09T00:00:00.000Z');
+  const ago = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+  const item = (id: string, over: Partial<Item> = {}): Item => ({
+    id,
+    projectId: 'P01',
+    type: 'issue',
+    title: id,
+    priority: 'medium',
+    date: '2026-10-01',
+    status: 'open',
+    createdBy: 'an@x',
+    createdAt: ago(500),
+    updatedAt: ago(1),
+    ...over,
+  });
+  const row = (i: Item, kind = itemKind(i)): Row => ({ ...i, pk: `PROJECT#${i.projectId}`, sk: `ITEM#${i.id}`, kind });
+  const project: Row = { pk: 'PROJECT#P01', sk: 'PROJECT', kind: 'PROJECT', id: 'P01', name: 'Kho', state: 'active', supporters: [] };
+  const items = [
+    item('open-old', { updatedAt: ago(400) }),
+    item('done-recent', { status: 'done', updatedAt: ago(10) }),
+    item('postponed-recent', { status: 'postponed', updatedAt: ago(59) }),
+    item('done-old', { status: 'done', updatedAt: ago(61) }),
+    item('done-ancient', { status: 'done', updatedAt: ago(700) }),
+    item('deleted', { status: 'done', updatedAt: ago(800), deletedAt: ago(700) }),
+  ];
+  const ids = (list: Item[]) => list.map((i) => i.id).sort();
+
+  it('files items by kind: open, closed by the month of their last change, deleted', () => {
+    expect(items.map((i) => itemKind(i))).toEqual([
+      'ITEM',
+      'ITEM_CLOSED#2026-09',
+      'ITEM_CLOSED#2026-08',
+      'ITEM_CLOSED#2026-08',
+      'ITEM_CLOSED#2024-11',
+      'ITEM_DELETED',
+    ]);
+    expect(monthsSince('2026-08-10T00:00:00Z', now)).toEqual(['2026-08', '2026-09', '2026-10']);
+    expect(monthsSince('2025-12-31T23:00:00Z', new Date('2026-02-01T00:00:00Z'))).toEqual(['2025-12', '2026-01', '2026-02']);
+  });
+
+  it('the snapshot reads open items and the closed ones of the last months only; the trash also deleted ones', async () => {
+    const { db, calls } = fakeDb([project, ...items.map((i) => row(i))]);
+    const store = new DynamoStore('T', undefined, db);
+    expect(ids((await store.snapshot({ now })).items)).toEqual(['done-recent', 'open-old', 'postponed-recent']);
+    expect(calls.kinds.filter((k) => k.startsWith('ITEM')).sort()).toEqual([
+      'ITEM',
+      'ITEM_CLOSED#2026-08',
+      'ITEM_CLOSED#2026-09',
+      'ITEM_CLOSED#2026-10',
+    ]);
+    expect(calls.scan).toBe(0);
+    const trash = await store.snapshot({ now, includeDeleted: true });
+    expect(ids(trash.items)).toEqual(['deleted', 'done-recent', 'open-old', 'postponed-recent']);
+    // A project page still has every item of its project.
+    expect(ids(await store.listItems('P01'))).toEqual(ids(items.filter((i) => !i.deletedAt)));
+  });
+
+  it('writes move an item between kinds', async () => {
+    const { db, rows } = fakeDb([project]);
+    const store = new DynamoStore('T', undefined, db);
+    const kind = () => rows.find((r) => r.sk === 'ITEM#I1')!.kind;
+    await store.putItem(item('I1'));
+    expect(kind()).toBe('ITEM');
+    await store.putItem(item('I1', { status: 'done', updatedAt: ago(0) }));
+    expect(kind()).toBe('ITEM_CLOSED#2026-10');
+    await store.putItem(item('I1', { status: 'in_progress', updatedAt: ago(0) }));
+    expect(kind()).toBe('ITEM');
+    await store.putItem(item('I1', { deletedAt: ago(0) }));
+    expect(kind()).toBe('ITEM_DELETED');
+  });
+
+  it('older rows (all ITEM) are filed once; one changed meanwhile is left to its writer', async () => {
+    const { db, rows } = fakeDb([project, ...items.map((i) => row(i, 'ITEM'))]);
+    const store = new DynamoStore('T', undefined, db);
+    // Someone edits "done-old" while the snapshot reads: its re-filing must not undo that edit.
+    const real = db as unknown as { send: (cmd: unknown) => Promise<unknown> };
+    const send = real.send;
+    real.send = async (cmd) => {
+      if (cmd instanceof UpdateCommand && (cmd.input.Key as Row).sk === 'ITEM#done-old') rows.find((r) => r.sk === 'ITEM#done-old')!.updatedAt = ago(0);
+      return send(cmd);
+    };
+    // Same answer as with filed rows.
+    expect(ids((await store.snapshot({ now })).items)).toEqual(['done-recent', 'open-old', 'postponed-recent']);
+    const kinds = Object.fromEntries(rows.filter((r) => String(r.sk).startsWith('ITEM#')).map((r) => [r.id, r.kind]));
+    expect(kinds).toEqual({
+      'open-old': 'ITEM',
+      'done-recent': 'ITEM_CLOSED#2026-09',
+      'postponed-recent': 'ITEM_CLOSED#2026-08',
+      'done-old': 'ITEM',
+      'done-ancient': 'ITEM_CLOSED#2024-11',
+      deleted: 'ITEM_DELETED',
+    });
+  });
+
+  it('an item closed while the snapshot reads comes back once, as its newest copy', async () => {
+    const open = item('I1');
+    const closed = item('I1', { status: 'done', updatedAt: ago(0) });
+    const { db } = fakeDb([project, row(open), row(closed)]);
+    expect((await new DynamoStore('T', undefined, db).snapshot({ now })).items).toEqual([closed]);
+  });
+
+  it('a snapshot without `now` (scripts) has every item; while the index is missing, a scan', async () => {
+    const all = [project, ...items.map((i) => row(i))];
+    expect(ids((await new DynamoStore('T', undefined, fakeDb(all).db).snapshot({ includeDeleted: true })).items)).toEqual(ids(items));
+    const missing = fakeDb(all, { indexMissing: true });
+    expect(ids((await new DynamoStore('T', undefined, missing.db).snapshot({ now })).items)).toEqual([
+      'done-recent',
+      'open-old',
+      'postponed-recent',
+    ]);
+    expect(missing.calls.scan).toBe(1);
   });
 });

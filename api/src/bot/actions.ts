@@ -63,7 +63,7 @@ export async function onCallback(deps: BotDeps, cb: TgCallback): Promise<void> {
       if (kind === 'c') {
         const [projectId, itemId] = rest;
         const ctx = { store: deps.store, notify: deps.notify, now: deps.now, user: asker.user };
-        const project = await loadProject(deps.store, projectId ?? '', asker.user);
+        const project = await loadProject(deps.store, projectId ?? '', asker.user, deps.now);
         const item = await loadItem(deps.store, project, itemId ?? '');
         // Pressed twice, or closed on the web meanwhile: nothing to save again.
         if (item.status === 'done' || item.status === 'postponed')

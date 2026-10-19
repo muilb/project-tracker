@@ -107,7 +107,7 @@ export function Projects() {
                     </td>
                     <td className="summary-cell">
                       {p.latestUpdate?.summary ?? <span className="muted">{l('Chưa có cập nhật', '報告なし')}</span>}
-                      <Warnings lateHours={p.lateHours} overdueItems={p.overdueItems} highIssues={p.highIssues} />
+                      <Warnings lateHours={p.lateHours} overdueItems={p.overdueItems} highIssues={p.highIssues} daysPastEnd={p.daysPastEnd} />
                     </td>
                     <td className="nowrap">
                       {p.nextItem ? (

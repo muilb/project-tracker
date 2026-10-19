@@ -21,7 +21,8 @@ import { telegramWebhook } from './routes/telegram.js';
 import { trash } from './routes/trash.js';
 import type { Store } from './store/store.js';
 import { vnDate } from './time.js';
-import { buildDashboard, buildPublic } from './views.js';
+import { dashboardTrend, dashboardTrendRange } from './trend.js';
+import { buildDashboard, buildPublic, dashboardProjects } from './views.js';
 
 export interface AppDeps {
   store: Store;
@@ -103,10 +104,21 @@ export function createApp({
     const snap = await store.snapshot({ now: c.get('now') });
     return c.json(buildDashboard(snap, c.get('now'), c.get('user'), { scope: scope === 'mine' ? 'mine' : 'all', gl: gl || undefined }));
   });
-  // Excel export of what the caller may see (projects, items, recent updates).
+  // Weekly colours of the dashboard's projects (same filters), read separately so the dashboard stays fast.
+  app.get('/dashboard/trend', async (c) => {
+    const { scope, gl } = c.req.query();
+    const now = c.get('now');
+    const { from, to } = dashboardTrendRange(vnDate(now));
+    const [snap, days] = await Promise.all([store.snapshot({ now }), store.listHealthDays(from, to)]);
+    const filter = { scope: scope === 'mine' ? 'mine' : 'all', gl: gl || undefined } as const;
+    return c.json(dashboardTrend(days, dashboardProjects(snap, c.get('user'), filter), to));
+  });
+  // Excel export of what the caller may see (projects, items, recent updates, colours of the last 12 weeks).
   app.get('/export', async (c) => {
     const now = c.get('now');
-    const xlsx = buildXlsx(exportSheets(await store.snapshot({ now }), c.get('user'), now));
+    const { from, to } = dashboardTrendRange(vnDate(now));
+    const [snap, days] = await Promise.all([store.snapshot({ now }), store.listHealthDays(from, to)]);
+    const xlsx = buildXlsx(exportSheets(snap, c.get('user'), now, days));
     return c.body(new Uint8Array(xlsx), 200, {
       'content-type': XLSX_TYPE,
       'content-disposition': `attachment; filename="project-tracker-${vnDate(now)}.xlsx"`,

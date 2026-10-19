@@ -89,6 +89,23 @@ export interface Item {
   deletedBy?: string;
 }
 
+/** One project at the end of a Vietnam day (the last hourly check of that day), for the trend views. */
+export interface HealthMark {
+  state: ProjectState; // active or paused (closed projects are no longer recorded)
+  health: Health;
+  declaredHealth?: Health;
+  pmoHealth?: Health;
+  overdueItems: number;
+  lateHours: number;
+}
+
+/** The projects that were running or paused on one Vietnam day; written by the hourly job (`trend.ts`). */
+export interface HealthDay {
+  date: string; // YYYY-MM-DD, Vietnam time
+  at: string; // ISO time of the check that wrote it
+  projects: Record<string, HealthMark>;
+}
+
 export interface Settings {
   frequencyHours: Record<Health, number>; // required update frequency by health
   soonDays: number; // "upcoming" threshold

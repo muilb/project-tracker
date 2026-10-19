@@ -1,11 +1,12 @@
-// "Export to Excel": the projects, items (open and recently closed) and recent updates the caller may
-// see, as three sheets.
+// "Export to Excel": the projects, items (open and recently closed), recent updates and the colours
+// of the last weeks (trend.ts) the caller may see, as four sheets.
 // Headers and labels are in the request language; user-entered text is never translated.
 import { l } from '../i18n.js';
 import { buildProjectView, compareProjects, toItemView } from '../rules.js';
 import { snapshotSince, SNAPSHOT_UPDATE_DAYS, type Snapshot } from '../store/store.js';
 import { vnDateTime } from '../time.js';
-import type { Health, ItemStatus, ItemType, Priority, ProjectState, Urgency, User } from '../types.js';
+import { TREND_WEEKS } from '../trend.js';
+import type { Health, HealthDay, ItemStatus, ItemType, Priority, ProjectState, Urgency, User } from '../types.js';
 import { visibleSnapshot } from '../views.js';
 import type { Sheet } from './xlsx.js';
 
@@ -18,8 +19,11 @@ const STATUS = (s: ItemStatus) =>
   ({ open: l('Mở', '未対応'), in_progress: l('Đang xử lý', '対応中'), done: l('Xong', '完了'), postponed: l('Hoãn', '保留') })[s];
 const time = (iso?: string) => iso && vnDateTime(iso);
 
-/** `snap` must be taken with `now` (recent updates only); deleted rows are already left out. */
-export function exportSheets(snapshot: Snapshot, me: User, now: Date): Sheet[] {
+/**
+ * `snap` must be taken with `now` (recent updates only); deleted rows are already left out.
+ * `days`: the recorded colours of the last TREND_WEEKS weeks (`dashboardTrendRange`).
+ */
+export function exportSheets(snapshot: Snapshot, me: User, now: Date, days: HealthDay[]): Sheet[] {
   const snap = visibleSnapshot(me, snapshot);
   const names = new Map(snap.users.map((u) => [u.id, u.name]));
   const person = (id?: string) => id && (names.get(id) ?? id);
@@ -51,6 +55,7 @@ export function exportSheets(snapshot: Snapshot, me: User, now: Date): Sheet[] {
       l('Vấn đề mở', '未解決の課題'),
       l('Vấn đề ưu tiên cao', '優先度「高」の課題'),
       l('Mục quá hạn', '期限超過'),
+      l('Quá ngày kết thúc (ngày)', '終了日超過（日）'),
       l('Sự kiện / mốc tiếp theo', '次のイベント / マイルストーン'),
       l('Ngày', '日付'),
     ],
@@ -76,6 +81,7 @@ export function exportSheets(snapshot: Snapshot, me: User, now: Date): Sheet[] {
       v.openIssues,
       v.highIssues,
       v.overdueItems,
+      v.daysPastEnd || undefined,
       v.nextItem?.title,
       v.nextItem?.date,
     ]),
@@ -146,5 +152,39 @@ export function exportSheets(snapshot: Snapshot, me: User, now: Date): Sheet[] {
       ]),
   };
 
-  return [projects, items, updates];
+  const colours: Sheet = {
+    name: l(`Lịch sử màu ${TREND_WEEKS} tuần`, `色の履歴（${TREND_WEEKS}週間）`),
+    columns: [
+      l('Ngày', '日付'),
+      l('Mã dự án', 'プロジェクトコード'),
+      l('Tên dự án', 'プロジェクト名'),
+      l('Tình trạng', '状態'),
+      l('Màu', '色'),
+      l('PL/GL khai', 'PL/GL申告'),
+      l('PMO đánh giá', 'PMO評価'),
+      l('Mục quá hạn', '期限超過'),
+      l('Trễ (giờ)', '遅れ（時間）'),
+    ],
+    // Newest day first; only the projects the caller may see.
+    rows: [...days]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .flatMap((d) =>
+        Object.entries(d.projects)
+          .filter(([id]) => projectName.has(id))
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([id, m]) => [
+            d.date,
+            id,
+            projectName.get(id),
+            STATE(m.state),
+            HEALTH(m.health),
+            HEALTH(m.declaredHealth),
+            HEALTH(m.pmoHealth),
+            m.overdueItems,
+            m.state === 'active' ? m.lateHours : undefined,
+          ]),
+      ),
+  };
+
+  return [projects, items, updates, colours];
 }

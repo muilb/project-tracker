@@ -68,9 +68,9 @@ describe('xlsx writer', () => {
 });
 
 describe('GET /export', () => {
-  it('has the projects, items and recent updates, with names instead of emails', async () => {
+  it('has the projects, items, recent updates and colours, with names instead of emails', async () => {
     const files = await download('lan'); // PMO: everything
-    expect([...files.keys()].filter((f) => f.startsWith('xl/worksheets/'))).toHaveLength(3);
+    expect([...files.keys()].filter((f) => f.startsWith('xl/worksheets/'))).toHaveLength(4);
     const workbook = files.get('xl/workbook.xml')!;
     expect(workbook).toContain('name="Dự án"');
     const projects = cells(files.get('xl/worksheets/sheet1.xml')!);
@@ -82,6 +82,14 @@ describe('GET /export', () => {
     expect(items).toContain('Giao hàng phase 1');
     expect(items).not.toContain('@example.com');
     expect(files.get('xl/worksheets/sheet3.xml')).toContain('Test tích hợp module nhập kho');
+    // Colours per recorded day, newest first: today's from the data, the sample's history before.
+    expect(workbook).toContain('name="Lịch sử màu 12 tuần"');
+    const colours = cells(files.get('xl/worksheets/sheet4.xml')!);
+    expect(colours[0].slice(0, 5)).toEqual(['Ngày', 'Mã dự án', 'Tên dự án', 'Tình trạng', 'Màu']);
+    expect(colours[1].slice(0, 5)).toEqual(['2026-10-09', 'P01', 'Hệ thống quản lý kho', 'Đang chạy', 'Xanh']);
+    expect(colours.find((r) => r[0] === '2026-10-09' && r[1] === 'P03')?.[4]).toBe('Đỏ');
+    expect(colours.filter((r) => r[1] === 'P05' && r[3] === 'Tạm dừng')).toHaveLength(7);
+    expect(colours.slice(1).every((r) => r[0] >= '2026-09-12')).toBe(true);
   });
 
   it('OTHER gets only the projects they take part in', async () => {
@@ -92,6 +100,8 @@ describe('GET /export', () => {
     expect(ids).toEqual(visible);
     const itemProjects = new Set(cells(files.get('xl/worksheets/sheet2.xml')!).slice(1).map((r) => r[0]));
     expect([...itemProjects].every((id) => visible.includes(id))).toBe(true);
+    const colourProjects = new Set(cells(files.get('xl/worksheets/sheet4.xml')!).slice(1).map((r) => r[1]));
+    expect([...colourProjects].sort()).toEqual(visible);
   });
 
   it('leaves out deleted items and writes headers in Japanese for ja', async () => {

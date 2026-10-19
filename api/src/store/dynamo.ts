@@ -15,6 +15,7 @@ import {
   type Channel,
   type ChannelKind,
   type DeliveryLog,
+  type HealthDay,
   type InboxEntry,
   type Item,
   type NotifyPrefs,
@@ -65,6 +66,7 @@ import {
  *   CONFIG            SETTINGS | TELEGRAM | AI | PUSH | SEQ#project | SEQ#item | SEQ#channel
  *   PUSH#<email>      <subscription id> (Web Push browsers / phones, track H)
  *   TEMP#<key>        TEMP              (track G: Telegram bot state and counters, expire via `ttl`)
+ *   HEALTH            <YYYY-MM-DD>      (every project's colour at the end of a Vietnam day, trend.ts)
  * Every row also has `kind`. The `byKind` index (partition `kind`, sort `sk`) lets the snapshot,
  * users and channels be read by kind, so the inbox / logs / de-dup rows are never scanned. Its sort
  * key starts with the update time for updates, so the snapshot reads only recent ones (plus PINS).
@@ -88,7 +90,8 @@ type Kind =
   | 'OUTBOX'
   | 'DELIVERY'
   | 'PUSH'
-  | 'TEMP';
+  | 'TEMP'
+  | 'HEALTH';
 
 /** Global secondary index on `kind` (see infra/lib/stack.ts). */
 export const KIND_INDEX = 'byKind';
@@ -603,6 +606,27 @@ export class DynamoStore implements Store {
       return 1;
     }
     return Number(res.Attributes?.value);
+  }
+
+  putHealthDay(day: HealthDay) {
+    return this.put('HEALTH', day.date, 'HEALTH', day);
+  }
+  async listHealthDays(from: string, to: string) {
+    const out: HealthDay[] = [];
+    let start: Record<string, unknown> | undefined;
+    do {
+      const res = await this.db.send(
+        new QueryCommand({
+          TableName: this.table,
+          KeyConditionExpression: 'pk = :pk AND sk BETWEEN :lo AND :hi',
+          ExpressionAttributeValues: { ':pk': 'HEALTH', ':lo': from, ':hi': to },
+          ExclusiveStartKey: start,
+        }),
+      );
+      out.push(...(res.Items ?? []).map((r) => strip<HealthDay>(r)));
+      start = res.LastEvaluatedKey;
+    } while (start);
+    return out;
   }
 
   async snapshot(opts?: SnapshotOptions): Promise<Snapshot> {

@@ -5,7 +5,7 @@ import { l, lang, setLang } from '../i18n';
 import { HEALTH_LABEL, TYPE_ICON, TYPE_LABEL, URGENCY_LABEL } from '../labels';
 
 // Status colors always come with a symbol and a text label, never color alone.
-const HEALTH_ICON: Record<Health, string> = { green: '●', yellow: '▲', red: '■' };
+export const HEALTH_ICON: Record<Health, string> = { green: '●', yellow: '▲', red: '■' };
 const URGENCY_ICON: Record<Urgency, string> = { critical: '■', attention: '▲', normal: '●' };
 const URGENCY_TONE: Record<Urgency, Health> = { critical: 'red', attention: 'yellow', normal: 'green' };
 
@@ -33,10 +33,22 @@ export function TypeIcon({ type }: { type: ItemType }) {
   );
 }
 
-export function Warnings({ lateHours, overdueItems, highIssues }: { lateHours: number; overdueItems: number; highIssues: number }) {
-  if (!lateHours && !overdueItems && !highIssues) return null;
+export function Warnings({
+  lateHours,
+  overdueItems,
+  highIssues,
+  daysPastEnd = 0,
+}: {
+  lateHours: number;
+  overdueItems: number;
+  highIssues: number;
+  /** Days a running project is past its end date (shown, but it does not change the colour). */
+  daysPastEnd?: number;
+}) {
+  if (!lateHours && !overdueItems && !highIssues && !daysPastEnd) return null;
   return (
     <span className="warnings">
+      {daysPastEnd > 0 && <span className="warn">🏁 {l(`Quá ngày kết thúc ${daysPastEnd} ngày`, `終了日を${daysPastEnd}日超過`)}</span>}
       {lateHours > 0 && <span className="warn">⏰ {l(`Trễ cập nhật ${fmtHours(lateHours)}`, `報告遅れ ${fmtHours(lateHours)}`)}</span>}
       {overdueItems > 0 && <span className="warn">⚠ {l(`${overdueItems} mục quá hạn`, `期限超過 ${overdueItems}件`)}</span>}
       {highIssues > 0 && <span className="warn">▲ {l(`${highIssues} vấn đề ưu tiên cao`, `優先度「高」の課題 ${highIssues}件`)}</span>}

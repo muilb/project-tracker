@@ -2,7 +2,7 @@
 import type { Health, Item, Project, Settings, Update, Urgency } from './types.js';
 import { addHours, daysUntil } from './time.js';
 
-const HEALTH_RANK: Record<Health, number> = { green: 0, yellow: 1, red: 2 };
+export const HEALTH_RANK: Record<Health, number> = { green: 0, yellow: 1, red: 2 };
 const URGENCY_RANK: Record<Urgency, number> = { normal: 0, attention: 1, critical: 2 };
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 } as const;
 
@@ -33,6 +33,8 @@ export interface ProjectView extends Project {
   highIssues: number;
   overdueItems: number;
   urgency: Urgency;
+  /** Days an active project has run past its planned end date (0 when not past it). */
+  daysPastEnd: number;
 }
 
 export function toItemView(item: Item, now: Date, settings: Settings): ItemView {
@@ -108,6 +110,8 @@ export function buildProjectView(
     .sort((a, b) => a.date.localeCompare(b.date))[0];
 
   const health = worstHealth(declaredHealth, pmoHealth, overdueItems > 0 ? 'yellow' : undefined);
+  // Shown as a warning only: running past the end date does not change the colour.
+  const daysPastEnd = project.state === 'active' && project.endDate ? Math.max(0, -daysUntil(project.endDate, now)) : 0;
 
   const nearEvent = nextItem !== undefined && nextItem.daysLeft <= settings.soonDays;
   const frequencyHours =
@@ -143,6 +147,7 @@ export function buildProjectView(
     highIssues,
     overdueItems,
     urgency,
+    daysPastEnd,
   };
 }
 

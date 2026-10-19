@@ -476,6 +476,129 @@ tr.closed td {
   gap: 0.35rem;
 }
 
+/* ---- Health trend (components/Trend.tsx) ---- */
+.trend-cal-wrap {
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+.trend-cal {
+  display: inline-flex;
+  gap: 3px;
+}
+.trend-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.trend-month {
+  height: 1rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  width: 20px;
+  overflow: visible;
+}
+.tc,
+.tc-label {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.tc-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 20px;
+}
+.trend-weekdays {
+  margin-right: 2px;
+}
+/* Status colours always come with their symbol (●▲■) inside the cell. */
+.tc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1;
+  cursor: default;
+}
+.tc[data-date] {
+  cursor: pointer;
+}
+.tc-green {
+  background: var(--good);
+  color: #fff;
+}
+.tc-yellow {
+  background: var(--warning);
+  color: #0b0b0b;
+}
+.tc-red {
+  background: var(--critical);
+  color: #fff;
+}
+.tc-paused {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.tc-none,
+.tc-future {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.tc-future {
+  opacity: 0.6;
+}
+.tc-picked {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.trend-legend {
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+.trend-legend .tc {
+  width: 14px;
+  height: 14px;
+  font-size: 8px;
+}
+.trend-pick {
+  margin: 0.6rem 0 0;
+}
+.trend-sub {
+  font-size: 0.9rem;
+  margin: 0.9rem 0 0.4rem;
+}
+.trend-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.trend-runs li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--border);
+}
+.trend-runs li:first-child {
+  border-top: 0;
+}
+.trend-changes {
+  margin-bottom: 0.5rem;
+}
+.trend-changes .trend-sub {
+  margin-top: 0;
+}
+.trend-note {
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+}
+.items li > .badge:last-child {
+  margin-left: auto;
+}
+
 /* ---- Forms ---- */
 .form {
   display: flex;

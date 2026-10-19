@@ -37,3 +37,15 @@ it('a project the person may not see: the refusal is in Japanese too', async () 
   expect(box.textContent).toMatch(/[぀-ヿ一-鿿]/);
   expect(box.textContent).not.toMatch(/[ăâđêôơư]/i);
 });
+
+it('the colour trend in Japanese', async () => {
+  const dash = await renderApp('/', 'lan');
+  expect(await screen.findByRole('heading', { name: '12週間の推移' })).toBeInTheDocument();
+  expect(await screen.findByText('今週')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '先週より悪化' })).toBeInTheDocument();
+  dash.unmount();
+  await renderApp('/projects/P03', 'lan');
+  expect(await screen.findByRole('heading', { name: '色の推移（12週間）' })).toBeInTheDocument();
+  expect(await screen.findByText('09/12からのデータです。')).toBeInTheDocument();
+  expect(screen.getByText(/^10\/07 → 10\/09$/)).toBeInTheDocument();
+});

@@ -4,6 +4,7 @@ import {
   type AuditEntry,
   type Channel,
   type DeliveryLog,
+  type HealthDay,
   type InboxEntry,
   type Item,
   type NotifyPrefs,
@@ -54,6 +55,7 @@ export class MemoryStore implements Store {
   temp = new Map<string, { value: unknown; expires: number }>(); // track G
   pushConfig?: PushConfig;
   pushSubs = new Map<string, PushSubscriptionRecord>(); // `${userId}#${id}`
+  healthDays = new Map<string, HealthDay>(); // by date
 
   async getUser(id: string) {
     return clone(this.users.get(id));
@@ -238,6 +240,16 @@ export class MemoryStore implements Store {
     const count = (live ? (row.value as number) : 0) + 1;
     this.temp.set(key, { value: count, expires: live ? row.expires : Date.now() + ttlSeconds * 1000 });
     return count;
+  }
+
+  async putHealthDay(day: HealthDay) {
+    this.healthDays.set(day.date, clone(day));
+  }
+  async listHealthDays(from: string, to: string) {
+    return [...this.healthDays.values()]
+      .filter((d) => d.date >= from && d.date <= to)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(clone);
   }
 
   async snapshot(opts?: SnapshotOptions): Promise<Snapshot> {

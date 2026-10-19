@@ -9,7 +9,7 @@
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.134.0",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.1152.0",
     "@aws-sdk/client-dynamodb": "^3.1152.0",
     "@aws-sdk/lib-dynamodb": "^3.1152.0",

@@ -3,7 +3,7 @@ import { DeleteCommand, GetCommand, PutCommand, QueryCommand, ScanCommand, Updat
 import { describe, expect, it } from 'vitest';
 import { DynamoStore, itemKind, KIND_INDEX, monthsSince } from '../src/store/dynamo.js';
 import { updateCursor } from '../src/store/store.js';
-import type { Item, Update } from '../src/types.js';
+import type { Comment, Item, Update } from '../src/types.js';
 import { activeProjectViews } from '../src/views.js';
 
 type Row = Record<string, unknown>;
@@ -379,5 +379,48 @@ describe('DynamoStore health days', () => {
       expect(snap.projects.map((p) => p.id)).toEqual(['P01']);
       expect(calls.kinds).not.toContain('HEALTH');
     }
+  });
+});
+
+describe('DynamoStore comments', () => {
+  const comment = (id: string, over: Partial<Comment> = {}): Comment => ({
+    id,
+    projectId: 'P01',
+    target: 'update',
+    targetId: 'u1',
+    updateAt: '2026-10-01T00:00:00Z',
+    at: '2026-10-02T00:00:00Z',
+    author: 'an@x',
+    authorRole: 'PL',
+    text: 'ok',
+    mentions: [],
+    ...over,
+  });
+
+  it("live ones in the project's partition, oldest first; deleted ones have their own kind for the trash", async () => {
+    const { db, calls, rows: table } = fakeDb(rows);
+    const store = new DynamoStore('T', undefined, db);
+    await store.putComment(comment('c2'));
+    await store.putComment(comment('c1'));
+    await store.putComment(comment('c3', { deletedAt: '2026-10-03T00:00:00Z', deletedBy: 'an@x' }));
+    expect(table.filter((r) => String(r.sk).startsWith('COMMENT#')).map((r) => [r.pk, r.sk, r.kind])).toEqual([
+      ['PROJECT#P01', 'COMMENT#c2', 'COMMENT'],
+      ['PROJECT#P01', 'COMMENT#c1', 'COMMENT'],
+      ['PROJECT#P01', 'COMMENT#c3', 'COMMENT_DELETED'],
+    ]);
+    expect((await store.listComments('P01')).map((c) => c.id)).toEqual(['c1', 'c2']);
+    expect((await store.listDeletedComments()).map((c) => c.id)).toEqual(['c3']);
+    expect(await store.getComment('P01', 'c2')).toEqual(comment('c2'));
+    // Restoring files it back as live; the update history does not see comments.
+    await store.putComment(comment('c3'));
+    expect((await store.listComments('P01')).map((c) => c.id)).toEqual(['c1', 'c2', 'c3']);
+    expect((await store.listUpdates('P01')).map((u) => u.id)).toEqual(['u1']);
+    expect(calls.scan).toBe(0);
+  });
+
+  it('finds an update by its time and id', async () => {
+    const store = new DynamoStore('T', undefined, fakeDb(rows).db);
+    expect((await store.getUpdate('P01', '2026-10-01T00:00:00Z', 'u1'))?.summary).toBe('ok');
+    expect(await store.getUpdate('P01', '2026-10-01T00:00:01Z', 'u1')).toBeUndefined();
   });
 });

@@ -329,6 +329,30 @@ export function HelpPage() {
           Lỡ ghi nhầm (sai dự án, gõ nhầm)? Bấm <B>Xoá</B> cạnh cập nhật trong <B>Lịch sử cập nhật</B> — người viết xoá được trong 24 giờ,
           sau đó nhờ PMO / quản lý. Cập nhật đã xoá vào Thùng rác, PMO khôi phục được.
         </p>
+        <h3>Bình luận &amp; @gọi tên</h3>
+        <ul className="howto">
+          <li>
+            Dưới mỗi cập nhật có nút <B>💬 Bình luận</B> (số trong ngoặc là số bình luận); mỗi vấn đề / sự kiện / mốc có nút 💬 ở cuối dòng.
+            Bấm để mở chuỗi trao đổi, viết vào ô rồi bấm <B>Gửi</B> (hoặc Ctrl + Enter).
+          </li>
+          <li>
+            Gõ <b>@</b> rồi vài chữ đầu của tên (không cần dấu: "@cuong" ra Cường) → chọn người trong danh sách (mũi tên + Enter, hoặc bấm).
+            Người đó nhận thông báo ngay. Nếu họ không xem được dự án, trang báo lại và họ không nhận gì — gọi tên không mở thêm quyền xem.
+          </li>
+          <li>
+            Người viết cập nhật, người tạo / phụ trách mục và những ai đã bình luận trong chuỗi cũng nhận tin khi có bình luận mới (tắt được ở{' '}
+            <B>Thông báo của tôi</B>).
+          </li>
+          <li>
+            Bình luận <b>không</b> đổi màu dự án và không tính là cập nhật (không làm hết "trễ cập nhật"); không hiện trên trang public và
+            không gửi vào kênh nhóm.
+          </li>
+          <li>
+            Người viết <B>Sửa</B> / <B>Xoá</B> được trong 24 giờ (bản đã sửa ghi "(đã sửa)"); PMO / quản lý xoá được bất cứ lúc nào. Bình luận
+            đã xoá vào Thùng rác.
+          </li>
+          <li>Bấm vào thông báo về bình luận sẽ mở đúng dự án và chuỗi bình luận đó.</li>
+        </ul>
       </H>
 
       <H id="muc">
@@ -679,7 +703,8 @@ export function HelpPage() {
             <b>GL, PMO / quản lý</b>: trễ kéo dài (trễ từ 2 lần chu kỳ báo GL, từ 4 lần báo PMO), cần hỗ trợ; GL thêm đổi trạng thái.
           </li>
           <li>
-            <b>Mọi người</b>: được giao mục, mục của tôi đến hạn (ngày mai / quá hạn), dự án theo dõi chuyển Đỏ hoặc có vấn đề Cao mới.
+            <b>Mọi người</b>: được giao mục, mục của tôi đến hạn (ngày mai / quá hạn), dự án theo dõi chuyển Đỏ hoặc có vấn đề Cao mới, có
+            người gọi tên tôi (@) trong bình luận, bình luận mới cho tôi (dưới cập nhật / mục của tôi hoặc chuỗi tôi đã tham gia).
           </li>
           <li>Không bao giờ nhận tin về việc do chính mình làm (ví dụ tự gán mục cho mình).</li>
         </ul>
@@ -769,7 +794,7 @@ export function HelpPage() {
         <ul className="howto">
           <li>
             Xoá là <b>xoá mềm</b>: dữ liệu bị ẩn khỏi mọi trang, AI và thông báo, nhưng vẫn được giữ lại. <B>Cài đặt → Thùng rác</B> liệt kê
-            dự án, cập nhật, mục đã xoá (ai xoá, lúc nào) và cho <B>Khôi phục</B>.
+            dự án, cập nhật, mục, bình luận đã xoá (ai xoá, lúc nào) và cho <B>Khôi phục</B>.
           </li>
           <li>
             Xoá dự án (PMO / quản lý): <B>Sửa dự án</B> → cuối trang <B>Xoá dự án</B>. Khôi phục dự án mang lại cả cập nhật và mục của nó.

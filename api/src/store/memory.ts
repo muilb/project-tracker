@@ -3,6 +3,7 @@ import {
   type AiConfig,
   type AuditEntry,
   type Channel,
+  type Comment,
   type DeliveryLog,
   type HealthDay,
   type InboxEntry,
@@ -56,6 +57,7 @@ export class MemoryStore implements Store {
   pushConfig?: PushConfig;
   pushSubs = new Map<string, PushSubscriptionRecord>(); // `${userId}#${id}`
   healthDays = new Map<string, HealthDay>(); // by date
+  comments = new Map<string, Comment>(); // `${projectId}#${id}`
 
   async getUser(id: string) {
     return clone(this.users.get(id));
@@ -98,6 +100,10 @@ export class MemoryStore implements Store {
   }
   async listDeletedUpdates() {
     return this.updates.filter((u) => u.deletedAt).map(clone);
+  }
+
+  async getUpdate(projectId: string, at: string, id: string) {
+    return clone(this.updates.find((u) => u.projectId === projectId && u.at === at && u.id === id));
   }
 
   async getItem(projectId: string, id: string) {
@@ -240,6 +246,22 @@ export class MemoryStore implements Store {
     const count = (live ? (row.value as number) : 0) + 1;
     this.temp.set(key, { value: count, expires: live ? row.expires : Date.now() + ttlSeconds * 1000 });
     return count;
+  }
+
+  async getComment(projectId: string, id: string) {
+    return clone(this.comments.get(`${projectId}#${id}`));
+  }
+  async putComment(comment: Comment) {
+    this.comments.set(`${comment.projectId}#${comment.id}`, clone(comment));
+  }
+  async listComments(projectId: string) {
+    return [...this.comments.values()]
+      .filter((c) => c.projectId === projectId && !c.deletedAt)
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map(clone);
+  }
+  async listDeletedComments() {
+    return [...this.comments.values()].filter((c) => c.deletedAt).map(clone);
   }
 
   async putHealthDay(day: HealthDay) {

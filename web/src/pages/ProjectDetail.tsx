@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router';
-import type { Health, ItemStatus, ItemType, Priority } from '../../../api/src/types';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
+import { Link, useLocation, useParams } from 'react-router';
+import type { Comment, Health, ItemStatus, ItemType, Priority } from '../../../api/src/types';
 import { api, useApi } from '../api';
+import { CommentThread, CommentToggle, groupComments, threadKey } from '../components/Comments';
 import { WatchButton } from '../components/notify/WatchButton';
 import { ProjectTrendCard } from '../components/Trend';
 import { Empty, ErrorBox, HealthBadge, MoreLess, Section, TypeIcon, UrgencyBadge, useShowMore, Warnings } from '../components/ui';
@@ -15,6 +16,26 @@ export function ProjectDetailPage() {
   const { id } = useParams();
   const { me, name, isAdmin } = useSession();
   const { data, error, reload } = useApi<ProjectDetail>(`/projects/${id}`);
+  const comments = useApi<{ comments: Comment[] }>(`/projects/${id}/comments`);
+  const threads = groupComments(comments.data?.comments ?? []);
+  // Open threads; a notification's link (#update-<id>, #item-<id>) opens its thread.
+  const { hash } = useLocation();
+  const focus = decodeURIComponent(hash.slice(1));
+  const [open, setOpen] = useState<Set<string>>(() => new Set(focus ? [focus] : []));
+  const toggle = (key: string) =>
+    setOpen((o) => {
+      const next = new Set(o);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  useEffect(() => {
+    if (!focus) return;
+    setOpen((o) => new Set([...o, focus]));
+  }, [focus]);
+  const ready = !!data && !!comments.data;
+  useEffect(() => {
+    if (ready && focus) document.getElementById(focus)?.scrollIntoView?.({ block: 'center' });
+  }, [ready, focus]);
   const [notice, setNotice] = useState<string>();
   const [actionError, setActionError] = useState<string>();
   // Older updates loaded with "Xem thêm"; reset whenever the page data reloads.
@@ -133,7 +154,7 @@ export function ProjectDetailPage() {
             <>
               <ul className="history">
                 {history.map((u) => (
-                  <li key={u.id}>
+                  <li key={u.id} id={threadKey('update', u.id)}>
                     <div className="history-head">
                       <span className="nowrap">{fmtDateTime(u.at)}</span>
                       <b>{name(u.author)}</b>
@@ -151,6 +172,21 @@ export function ProjectDetailPage() {
                     </div>
                     <p>{u.summary}</p>
                     {u.needHelp && <p className="help">🙋 {u.needHelp}</p>}
+                    <CommentToggle
+                      count={threads.get(threadKey('update', u.id))?.length ?? 0}
+                      open={open.has(threadKey('update', u.id))}
+                      onClick={() => toggle(threadKey('update', u.id))}
+                    />
+                    {open.has(threadKey('update', u.id)) && (
+                      <CommentThread
+                        projectId={p.id}
+                        target="update"
+                        targetId={u.id}
+                        updateAt={u.at}
+                        comments={threads.get(threadKey('update', u.id)) ?? []}
+                        onChanged={comments.reload}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -171,6 +207,11 @@ export function ProjectDetailPage() {
         onChange={reload}
         canDelete={(i) => canEdit || i.createdBy === me.id}
         onDelete={(i) => remove(`/projects/${p.id}/items/${i.id}`, `"${i.title}"`)}
+        threads={threads}
+        open={open}
+        onToggle={toggle}
+        onCommentsChanged={comments.reload}
+        focus={focus}
       />
     </div>
   );
@@ -243,15 +284,26 @@ function Items({
   onChange,
   canDelete,
   onDelete,
+  threads,
+  open,
+  onToggle,
+  onCommentsChanged,
+  focus,
 }: {
   projectId: string;
   items: ItemView[];
   onChange: () => void;
   canDelete: (item: ItemView) => boolean;
   onDelete: (item: ItemView) => void;
+  threads: Map<string, Comment[]>;
+  open: Set<string>;
+  onToggle: (key: string) => void;
+  onCommentsChanged: () => void;
+  /** A thread opened from a link: a closed item's row is shown for it. */
+  focus?: string;
 }) {
   const { users, name } = useSession();
-  const [showClosed, setShowClosed] = useState(false);
+  const [showClosed, setShowClosed] = useState(() => items.some((i) => i.closed && threadKey('item', i.id) === focus));
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string>();
   const { visible: shown, more } = useShowMore(
@@ -312,48 +364,67 @@ function Items({
               </tr>
             </thead>
             <tbody>
-              {shown.map((i) => (
-                <tr key={i.id} className={i.closed ? 'closed' : ''}>
-                  <td className="nowrap">
-                    <TypeIcon type={i.type} /> {TYPE_LABEL[i.type]}
-                  </td>
-                  <td>
-                    {i.title}
-                    {i.note && <div className="muted">{i.note}</div>}
-                  </td>
-                  <td>{PRIORITY_LABEL[i.priority]}</td>
-                  <td className="nowrap">
-                    {fmtDay(i.date)}
-                    {!i.closed && <div className={i.overdue ? 'warn-text' : 'muted'}>{fmtDaysLeft(i.daysLeft)}</div>}
-                  </td>
-                  <td>{name(i.owner)}</td>
-                  <td>
-                    <select
-                      value={i.status}
-                      onChange={(e) => patch(i, { status: e.target.value as ItemStatus })}
-                      aria-label={l('Trạng thái', 'ステータス')}
-                    >
-                      {Object.entries(ITEM_STATUS_LABEL).map(([k, v]) => (
-                        <option key={k} value={k}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    {canDelete(i) && (
-                      <button
-                        type="button"
-                        className="btn-link danger-link"
-                        aria-label={l(`Xoá "${i.title}"`, `「${i.title}」を削除`)}
-                        onClick={() => onDelete(i)}
-                      >
-                        {l('Xoá', '削除')}
-                      </button>
+              {shown.map((i) => {
+                const key = threadKey('item', i.id);
+                return (
+                  <Fragment key={i.id}>
+                    <tr id={key} className={i.closed ? 'closed' : ''}>
+                      <td className="nowrap">
+                        <TypeIcon type={i.type} /> {TYPE_LABEL[i.type]}
+                      </td>
+                      <td>
+                        {i.title}
+                        {i.note && <div className="muted">{i.note}</div>}
+                      </td>
+                      <td>{PRIORITY_LABEL[i.priority]}</td>
+                      <td className="nowrap">
+                        {fmtDay(i.date)}
+                        {!i.closed && <div className={i.overdue ? 'warn-text' : 'muted'}>{fmtDaysLeft(i.daysLeft)}</div>}
+                      </td>
+                      <td>{name(i.owner)}</td>
+                      <td>
+                        <select
+                          value={i.status}
+                          onChange={(e) => patch(i, { status: e.target.value as ItemStatus })}
+                          aria-label={l('Trạng thái', 'ステータス')}
+                        >
+                          {Object.entries(ITEM_STATUS_LABEL).map(([k, v]) => (
+                            <option key={k} value={k}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="nowrap">
+                        <CommentToggle compact count={threads.get(key)?.length ?? 0} open={open.has(key)} onClick={() => onToggle(key)} />
+                        {canDelete(i) && (
+                          <button
+                            type="button"
+                            className="btn-link danger-link"
+                            aria-label={l(`Xoá "${i.title}"`, `「${i.title}」を削除`)}
+                            onClick={() => onDelete(i)}
+                          >
+                            {l('Xoá', '削除')}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {open.has(key) && (
+                      <tr className="thread-row">
+                        <td colSpan={7}>
+                          <CommentThread
+                            projectId={projectId}
+                            target="item"
+                            targetId={i.id}
+                            comments={threads.get(key) ?? []}
+                            onChanged={onCommentsChanged}
+                          />
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
           {more}

@@ -3,12 +3,12 @@ import { can } from '../auth.js';
 import { withLang } from '../i18n.js';
 import type { ProjectView } from '../rules.js';
 import type { Snapshot } from '../store/store.js';
-import type { NotifyPrefs, PersonalEvent, Project } from '../types.js';
+import type { Item, NotifyPrefs, PersonalEvent, Project } from '../types.js';
 import type { NotifyDeps } from './deps.js';
 import type { Outgoing } from './deliver.js';
 import { collectPersonal, type NotifyEvent, type PersonalPending } from './events.js';
 import type { Message } from './message.js';
-import { allPrefs, itemMessage, remindersMessage, timing, updateMessage, watches } from './personal.js';
+import { allPrefs, commentMessage, itemMessage, remindersMessage, timing, updateMessage, watches } from './personal.js';
 import { isPaused, isQuiet, vnHour } from './policy.js';
 import { DEDUPE_DAYS } from './render.js';
 import { closeAction, reminderActions } from '../bot/actions.js';
@@ -53,6 +53,12 @@ function candidates(event: NotifyEvent, prefs: Map<string, NotifyPrefs>): Map<st
     for (const id of ids) if (id) out.set(id, [...(out.get(id) ?? []), e]);
   };
   const { project } = event;
+  if (event.type === 'comment_posted') {
+    // On any project state: a conversation goes on after a project is paused or closed.
+    add(event.mentions, 'mentioned');
+    add(event.followers, 'comment_reply');
+    return out;
+  }
   const watchers = [...prefs.values()].filter((p) => watches(p, project.id)).map((p) => p.userId);
   if (event.type === 'update_posted') {
     if (project.state !== 'active') return out;
@@ -71,19 +77,32 @@ function candidates(event: NotifyEvent, prefs: Map<string, NotifyPrefs>): Map<st
 }
 
 /** Whether `userId` may get a personal message about `project` at all. */
-function reachable(userId: string, project: Project, prefs: NotifyPrefs | undefined, now: Date, ctx: RouteContext): prefs is NotifyPrefs {
+function reachable(
+  userId: string,
+  project: Project,
+  prefs: NotifyPrefs | undefined,
+  now: Date,
+  ctx: RouteContext,
+  items?: Item[],
+): prefs is NotifyPrefs {
   const user = ctx.users.get(userId);
-  return !!user && !!prefs && can.viewProject(user, project) && !isPaused(timing(prefs), now);
+  return !!user && !!prefs && can.viewProject(user, project, items) && !isPaused(timing(prefs), now);
 }
 
 /** Personal messages for one saved change. Never to the person who made it. */
 export async function personalMessages(deps: NotifyDeps, event: NotifyEvent, now: Date, ctx: RouteContext): Promise<Outgoing[]> {
   const prefs = await allPrefs(deps.store, ctx.users.values(), now);
   const out: Outgoing[] = [];
-  const ref = event.type === 'update_posted' ? `update#${event.update.id}` : `item#${event.item.id}#${event.item.updatedAt}`;
+  const ref =
+    event.type === 'update_posted'
+      ? `update#${event.update.id}`
+      : event.type === 'comment_posted'
+        ? `comment#${event.comment.id}#${event.comment.editedAt ?? event.comment.at}`
+        : `item#${event.item.id}#${event.item.updatedAt}`;
+  const items = event.type === 'comment_posted' ? event.items : undefined;
   for (const [userId, all] of candidates(event, prefs)) {
     const p = prefs.get(userId);
-    if (userId === event.actor || !reachable(userId, event.project, p, now, ctx)) continue;
+    if (userId === event.actor || !reachable(userId, event.project, p, now, ctx, items)) continue;
     const reasons = [...new Set(all)].filter((e) => p.events.includes(e));
     if (!reasons.length) continue;
     const key = personalKey(userId, `${reasons[0]}#${ref}`);
@@ -91,7 +110,9 @@ export async function personalMessages(deps: NotifyDeps, event: NotifyEvent, now
     const message = withLang(p.lang, () =>
       event.type === 'update_posted'
         ? updateMessage(deps, event.project, event.update, event.before, event.after, reasons, ctx.name)
-        : itemMessage(deps, event.project, event.item, reasons, event.actor, ctx.name),
+        : event.type === 'comment_posted'
+          ? commentMessage(deps, event.project, event.comment, event.about, reasons, ctx.name)
+          : itemMessage(deps, event.project, event.item, reasons, event.actor, ctx.name),
     );
     if (event.type === 'item_saved' && reasons[0] === 'assigned_to_me')
       message.actions = withLang(p.lang, () => [closeAction(event.project.id, event.item.id)]);

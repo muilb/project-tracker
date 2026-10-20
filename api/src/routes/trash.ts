@@ -6,7 +6,7 @@ import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
 import { parseBody, restoreSchema } from '../schemas.js';
 
-/** Soft-deleted projects, items and updates; PMO / managers look and restore. */
+/** Soft-deleted projects, items, updates and comments; PMO / managers look and restore. */
 export const trash = new Hono<AppEnv>();
 
 const onlyAdmins = (c: { get: (k: 'user') => AppEnv['Variables']['user'] }) =>
@@ -16,9 +16,10 @@ trash.get('/', async (c) => {
   onlyAdmins(c);
   const store = c.get('store');
   // Deleted updates are read on their own: the snapshot keeps only recent updates.
-  const [snap, deletedUpdates] = await Promise.all([
+  const [snap, deletedUpdates, deletedComments] = await Promise.all([
     store.snapshot({ includeDeleted: true, now: c.get('now') }),
     store.listDeletedUpdates(),
+    store.listDeletedComments(),
   ]);
   const name = new Map(snap.projects.map((p) => [p.id, p.name]));
   const liveProject = new Set(snap.projects.filter((p) => !p.deletedAt).map((p) => p.id));
@@ -55,6 +56,21 @@ trash.get('/', async (c) => {
         deletedAt,
         deletedBy,
       })),
+    comments: deletedComments
+      .filter((x) => liveProject.has(x.projectId))
+      .sort(newestFirst)
+      .map(({ id, projectId, target, targetId, at, author, text, deletedAt, deletedBy }) => ({
+        id,
+        projectId,
+        projectName: name.get(projectId),
+        target,
+        targetId,
+        at,
+        author,
+        text,
+        deletedAt,
+        deletedBy,
+      })),
   });
 });
 
@@ -84,6 +100,10 @@ trash.post('/restore', async (c) => {
     const item = await store.getItem(projectId, id);
     if (!item?.deletedAt) throw notFound();
     await store.putItem(restore(item));
+  } else if (kind === 'comment') {
+    const comment = await store.getComment(projectId, id);
+    if (!comment?.deletedAt) throw notFound();
+    await store.putComment(restore(comment));
   } else {
     const update = (await store.listUpdates(projectId, { includeDeleted: true })).find((u) => u.id === id);
     if (!update?.deletedAt) throw notFound();

@@ -6,7 +6,17 @@ import type { AppEnv } from '../env.js';
 import { l } from '../i18n.js';
 import { addUpdate, createItem, createProject, loadItem, loadProject, patchItem, patchProject, type OpContext } from '../projectOps.js';
 import { buildProjectView, compareItems, toItemView } from '../rules.js';
-import { createItemSchema, createProjectSchema, createUpdateSchema, parseBody, patchItemSchema, patchProjectSchema } from '../schemas.js';
+import { addComment, deleteComment, editComment } from '../comments.js';
+import {
+  createCommentSchema,
+  createItemSchema,
+  createProjectSchema,
+  createUpdateSchema,
+  parseBody,
+  patchCommentSchema,
+  patchItemSchema,
+  patchProjectSchema,
+} from '../schemas.js';
 import { updateCursor, type Store } from '../store/store.js';
 import { projectTrend } from '../trend.js';
 import { activeProjectViews, isInvolved, visibleSnapshot } from '../views.js';
@@ -118,6 +128,29 @@ projects.patch('/:id/items/:itemId', async (c) => {
   const item = await loadItem(c.get('store'), project, c.req.param('itemId'));
   const body = await parseBody(c.req, patchItemSchema);
   return c.json({ item: await patchItem(op(c), project.id, item.id, body) });
+});
+
+// --- Comments under updates and items (comments.ts) ---
+
+projects.get('/:id/comments', async (c) => {
+  const store = c.get('store');
+  const project = await loadProject(store, c.req.param('id'), c.get('user'), c.get('now'));
+  return c.json({ comments: await store.listComments(project.id) });
+});
+
+projects.post('/:id/comments', async (c) => {
+  const body = await parseBody(c.req, createCommentSchema);
+  return c.json(await addComment(op(c), c.req.param('id'), body), 201);
+});
+
+projects.patch('/:id/comments/:commentId', async (c) => {
+  const { text } = await parseBody(c.req, patchCommentSchema);
+  return c.json(await editComment(op(c), c.req.param('id'), c.req.param('commentId'), text));
+});
+
+projects.delete('/:id/comments/:commentId', async (c) => {
+  await deleteComment(op(c), c.req.param('id'), c.req.param('commentId'));
+  return c.json({ ok: true });
 });
 
 // --- Soft deletes (restored from the trash by PMO / managers) ---

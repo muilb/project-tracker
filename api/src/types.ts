@@ -89,6 +89,29 @@ export interface Item {
   deletedBy?: string;
 }
 
+export const COMMENT_TARGETS = ['update', 'item'] as const;
+export type CommentTarget = (typeof COMMENT_TARGETS)[number];
+
+/**
+ * A reply under an update or an item. It never changes the colour and does not count as an update.
+ * Mentions are written into the text as `@{<user id>}` (shown as @Name).
+ */
+export interface Comment {
+  id: string; // time-ordered (see comments.ts)
+  projectId: string;
+  target: CommentTarget;
+  targetId: string; // the update's or the item's id
+  updateAt?: string; // an update's time: with targetId, its sort key
+  at: string; // ISO
+  author: string; // user id
+  authorRole: Role;
+  text: string;
+  mentions: string[]; // user ids, from the text
+  editedAt?: string;
+  deletedAt?: string; // soft delete
+  deletedBy?: string;
+}
+
 /** One project at the end of a Vietnam day (the last hourly check of that day), for the trend views. */
 export interface HealthMark {
   state: ProjectState; // active or paused (closed projects are no longer recorded)
@@ -200,12 +223,19 @@ export const PERSONAL_EVENTS = [
   'health_changed', // the aggregated health of my / a watched project changed
   'watched_red', // a watched project turned red
   'watched_high_issue', // a new high-priority issue on a watched project
+  'mentioned', // someone wrote @me in a comment
+  'comment_reply', // a new comment under my update / item, or in a thread I wrote in
 ] as const;
+/** Events added after people could save their settings, by the `eventsVersion` that brought them (switched on once). */
+export const ADDED_EVENTS: { version: number; events: PersonalEvent[] }[] = [{ version: 2, events: ['mentioned', 'comment_reply'] }];
+export const EVENTS_VERSION = 2;
 export type PersonalEvent = (typeof PERSONAL_EVENTS)[number];
 
 export interface NotifyPrefs {
   userId: string;
   events: PersonalEvent[];
+  /** The ADDED_EVENTS this person has seen (absent = 1): newer ones are switched on when read. */
+  eventsVersion?: number;
   /** Also send to the linked personal Telegram chat (the inbox always receives). */
   telegram: boolean;
   telegramChatId?: string;

@@ -23,6 +23,8 @@ const store = new MemoryStore();
 await loadSample(store, clock());
 
 const port = Number(process.env.PORT ?? 3001);
+// Links in messages point at the web: `npm run dev:web`, or the e2e tests' `vite preview` (WEB_URL).
+const webUrl = process.env.WEB_URL ?? 'http://localhost:5173';
 // Alerts are printed instead of sent unless LOCAL_SEND=1 (then a real Teams URL / Telegram bot is needed).
 const send = process.env.LOCAL_SEND
   ? createSender(store)
@@ -99,12 +101,12 @@ const app = createApp({
   publicCacheSeconds: 0,
   send,
   telegram,
-  webUrl: 'http://localhost:5173',
+  webUrl,
   accounts,
   ai,
   push,
 });
 // Like the FlushFn Lambda: messages held in the outbox (grouped high-priority issues, retries) go out every minute.
-setInterval(() => void flushDue({ store, send, webUrl: 'http://localhost:5173', push }, clock()).catch((e) => console.error('outbox', e)), 60_000);
+setInterval(() => void flushDue({ store, send, webUrl, push }, clock()).catch((e) => console.error('outbox', e)), 60_000);
 serve({ fetch: app.fetch, port });
 console.log(`API dev server: http://localhost:${port}  (header x-dev-user: lan@example.com)`);

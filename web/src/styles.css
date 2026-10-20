@@ -599,6 +599,83 @@ tr.closed td {
   margin-left: auto;
 }
 
+/* ---- Comments (components/Comments.tsx) ---- */
+.comment-toggle {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+}
+td .comment-toggle {
+  margin: 0 0.5rem 0 0;
+}
+.comments {
+  margin: 0.4rem 0 0 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border);
+}
+.comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.comments .comment-list li {
+  padding: 0.35rem 0;
+  border-top: 0;
+}
+.comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+}
+.comment-text {
+  margin: 0.15rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mention {
+  color: var(--accent);
+  font-weight: 600;
+}
+.comment-box {
+  position: relative;
+  margin-top: 0.4rem;
+}
+.comment-box textarea {
+  width: 100%;
+}
+.comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.mention-list {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  max-width: 100%;
+  min-width: 220px;
+  margin: 2px 0 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+.mention-list li {
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+.mention-list li[aria-selected='true'] {
+  background: var(--accent-soft);
+}
+.thread-row > td {
+  background: var(--surface-2);
+}
+
 /* ---- Forms ---- */
 .form {
   display: flex;

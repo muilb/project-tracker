@@ -7,6 +7,7 @@ import {
   ALERT_EVENTS,
   CHANNEL_DETAILS,
   CHANNEL_KINDS,
+  COMMENT_TARGETS,
   DIGEST_DAYS,
   HEALTHS,
   ITEM_STATUSES,
@@ -29,6 +30,8 @@ const email = z
 const date = z.string().refine(isDate, msg('Ngày phải có dạng YYYY-MM-DD', '日付は YYYY-MM-DD 形式で入力してください'));
 const text = (max: number) => z.string().trim().max(max);
 const optText = (max: number) => text(max).optional();
+/** Characters of one comment. */
+export const COMMENT_MAX = 2000;
 
 const projectFields = {
   name: text(200).min(1, msg('Tên dự án không được trống', 'プロジェクト名を入力してください')),
@@ -72,6 +75,20 @@ export const createUpdateSchema = z.object({
   rawText: optText(8000),
   at: z.iso.datetime({ offset: true }).optional(),
 });
+
+const commentText = text(COMMENT_MAX)
+  .min(1, msg('Nội dung bình luận không được trống', 'コメントを入力してください'))
+  .max(COMMENT_MAX, msg(`Bình luận tối đa ${COMMENT_MAX} ký tự`, `コメントは ${COMMENT_MAX} 文字以内です`));
+
+export const createCommentSchema = z.object({
+  target: z.enum(COMMENT_TARGETS),
+  targetId: z.string().trim().min(1).max(40),
+  /** An update is found by its time and id (its sort key): the `at` the API returned, as is. */
+  updateAt: z.string().max(40).optional(),
+  text: commentText,
+});
+
+export const patchCommentSchema = z.object({ text: commentText });
 
 const itemFields = {
   type: z.enum(ITEM_TYPES),
@@ -187,9 +204,9 @@ export const aiAskSchema = z.object({
 });
 
 export const restoreSchema = z.object({
-  kind: z.enum(['project', 'item', 'update']),
+  kind: z.enum(['project', 'item', 'update', 'comment']),
   projectId: z.string().trim().toUpperCase().min(1),
-  /** Item or update id; ignored for a project. */
+  /** Item, update or comment id; ignored for a project. */
   id: z.string().trim().default(''),
 });
 

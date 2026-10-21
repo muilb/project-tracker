@@ -4,7 +4,7 @@ import type { AppEnv } from './env.js';
 import { audit } from './audit.js';
 import type { ProjectView } from './rules.js';
 import { l } from './i18n.js';
-import { ROLES, type Item, type Project, type Role, type Update, type User } from './types.js';
+import { ROLES, type Comment, type Item, type Project, type Role, type Update, type User } from './types.js';
 
 export interface AuthConfig {
   /** `jwt`: identity from the API Gateway Cognito authorizer. `dev`: `x-dev-user: <email>` header. */
@@ -107,6 +107,11 @@ export const can = {
   /** The author within DELETE_UPDATE_HOURS (a typo, the wrong project), or PMO / managers. */
   deleteUpdate: (u: User, update: Update, now: Date) =>
     can.admin(u) || (update.author === u.id && now.getTime() - Date.parse(update.at) < DELETE_UPDATE_HOURS * 3600_000),
+  /** Comments: whoever may see the project writes them; the author edits within DELETE_UPDATE_HOURS. */
+  editComment: (u: User, comment: Comment, now: Date) =>
+    comment.author === u.id && now.getTime() - Date.parse(comment.at) < DELETE_UPDATE_HOURS * 3600_000,
+  /** The author within DELETE_UPDATE_HOURS, or PMO / managers. */
+  deleteComment: (u: User, comment: Comment, now: Date) => can.admin(u) || can.editComment(u, comment, now),
 };
 
 export const DELETE_UPDATE_HOURS = 24;

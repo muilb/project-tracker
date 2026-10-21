@@ -79,6 +79,19 @@ export const PERSONAL_EVENT_INFO: { event: PersonalEvent; label: string; when: s
     label: l('Vấn đề Cao ở dự án theo dõi', 'ウォッチ中のプロジェクトの「高」課題'),
     when: l('Dự án bạn ⭐ theo dõi có vấn đề ưu tiên Cao mới.', '⭐ ウォッチ中のプロジェクトに優先度「高」の課題が追加されたとき。'),
   },
+  {
+    event: 'mentioned',
+    label: l('Có người gọi tên tôi (@)', 'メンションされた（@）'),
+    when: l('Ai đó viết @tên bạn trong một bình luận (ở dự án bạn xem được).', '閲覧できるプロジェクトのコメントで、誰かがあなたを @ で呼んだとき。'),
+  },
+  {
+    event: 'comment_reply',
+    label: l('Bình luận mới cho tôi', '自分宛ての新しいコメント'),
+    when: l(
+      'Có bình luận mới dưới cập nhật bạn viết, mục bạn tạo / phụ trách, hoặc trong chuỗi bình luận bạn đã tham gia.',
+      '自分の報告、自分が作成 / 担当する項目、または自分がコメントしたスレッドに新しいコメントが付いたとき。',
+    ),
+  },
 ];
 
 /** PUT /me/notify replaces the whole settings, so every change starts from the current ones. */

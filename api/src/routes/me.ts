@@ -13,7 +13,7 @@ import { testPush } from './push.js';
 import { renderTelegram } from '../notify/telegram.js';
 import { inboxReadSchema, notifyPrefsSchema, parseBody } from '../schemas.js';
 import { inboxCursor } from '../store/store.js';
-import type { Channel, NotifyPrefs } from '../types.js';
+import { EVENTS_VERSION, type Channel, type NotifyPrefs } from '../types.js';
 
 export const me = new Hono<AppEnv>();
 
@@ -42,6 +42,8 @@ me.put('/notify', async (c) => {
     telegram: body.telegram && !!current.telegramChatId,
     watch: [...new Set(body.watch)],
     push: body.push ?? current.push ?? false, // track H
+    // The page shows every event, so the choice covers the added ones too.
+    eventsVersion: EVENTS_VERSION,
     userId: user.id,
     updatedAt: c.get('now').toISOString(),
   };

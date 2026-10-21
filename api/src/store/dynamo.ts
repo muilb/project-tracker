@@ -14,6 +14,7 @@ import {
   type AuditEntry,
   type Channel,
   type ChannelKind,
+  type Comment,
   type DeliveryLog,
   type HealthDay,
   type InboxEntry,
@@ -56,6 +57,7 @@ import {
  *   PROJECT#<id>      UPDATE#<iso time>#<id>
  *   PROJECT#<id>      ITEM#<id>
  *   PROJECT#<id>      PINS              (pinned updates, see rules.pinUpdates: enough for the views)
+ *   PROJECT#<id>      COMMENT#<id>      (comments under updates / items; ids are time-ordered)
  *   CHANNEL#<id>      CHANNEL
  *   SENT#<key>        SENT              (alert de-duplication, expires via the `ttl` attribute)
  *   AUDIT             <iso time>#<id>   (administrative log, expires via `ttl` after AUDIT_DAYS)
@@ -82,6 +84,8 @@ type Kind =
   | `ITEM_CLOSED#${string}`
   | 'ITEM_DELETED'
   | 'PINS'
+  | 'COMMENT'
+  | 'COMMENT_DELETED'
   | 'CHANNEL'
   | 'SENT'
   | 'AUDIT'
@@ -340,8 +344,27 @@ export class DynamoStore implements Store {
     return updates;
   }
 
+  getUpdate(projectId: string, at: string, id: string) {
+    return this.get<Update>(`PROJECT#${projectId}`, `UPDATE#${at}#${id}`);
+  }
+
   getItem(projectId: string, id: string) {
     return this.get<Item>(`PROJECT#${projectId}`, `ITEM#${id}`);
+  }
+
+  getComment(projectId: string, id: string) {
+    return this.get<Comment>(`PROJECT#${projectId}`, `COMMENT#${id}`);
+  }
+  putComment(comment: Comment) {
+    // Deleted ones have their own kind, so only the trash reads them.
+    return this.put(`PROJECT#${comment.projectId}`, `COMMENT#${comment.id}`, comment.deletedAt ? 'COMMENT_DELETED' : 'COMMENT', comment);
+  }
+  async listComments(projectId: string) {
+    return liveRows(await this.query<Comment>(`PROJECT#${projectId}`, 'COMMENT#'));
+  }
+  async listDeletedComments() {
+    const rows = (await this.byKind('COMMENT_DELETED')) ?? (await this.scanAll()).filter((r) => r.kind === 'COMMENT_DELETED');
+    return rows.map((r) => strip<Comment>(r));
   }
   putItem(item: Item) {
     return this.put(`PROJECT#${item.projectId}`, `ITEM#${item.id}`, itemKind(item), item);

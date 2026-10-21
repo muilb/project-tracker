@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import type { ItemType } from '../../../api/src/types';
+import type { CommentTarget, ItemType } from '../../../api/src/types';
+import { CommentText } from '../components/Comments';
 import { api, useApi } from '../api';
 import { Empty, ErrorBox, Section, TypeIcon, useShowMore } from '../components/ui';
 import { fmtDateTime, fmtDay } from '../format';
@@ -16,9 +17,19 @@ interface TrashData {
   projects: (Deleted & { id: string; name: string; customer?: string })[];
   items: (Deleted & { id: string; projectId: string; projectName?: string; type: ItemType; title: string; date: string })[];
   updates: (Deleted & { id: string; projectId: string; projectName?: string; at: string; author: string; summary: string })[];
+  comments: (Deleted & {
+    id: string;
+    projectId: string;
+    projectName?: string;
+    target: CommentTarget;
+    targetId: string;
+    at: string;
+    author: string;
+    text: string;
+  })[];
 }
 
-/** Soft-deleted projects, items and updates (PMO / managers): look and restore. */
+/** Soft-deleted projects, items, updates and comments (PMO / managers): look and restore. */
 const TRASH_ROWS = 20;
 
 export function TrashPage() {
@@ -29,10 +40,11 @@ export function TrashPage() {
   const projects = useShowMore(data?.projects ?? [], TRASH_ROWS);
   const items = useShowMore(data?.items ?? [], TRASH_ROWS);
   const updates = useShowMore(data?.updates ?? [], TRASH_ROWS);
+  const comments = useShowMore(data?.comments ?? [], TRASH_ROWS);
 
   if (!isAdmin) return <ErrorBox error={l('Chỉ PMO / quản lý mới xem được thùng rác', 'ごみ箱は PMO / 管理者のみ利用できます')} />;
 
-  async function restore(kind: 'project' | 'item' | 'update', projectId: string, id = '') {
+  async function restore(kind: 'project' | 'item' | 'update' | 'comment', projectId: string, id = '') {
     setNotice(undefined);
     setActionError(undefined);
     try {
@@ -67,8 +79,8 @@ export function TrashPage() {
       </div>
       <p className="muted">
         {l(
-          'Những gì đã xoá được giữ lại ở đây và có thể khôi phục. Khôi phục dự án sẽ mang lại cả cập nhật, vấn đề / sự kiện / mốc của nó.',
-          '削除したものはここに残り、復元できます。プロジェクトを復元すると、その報告・課題 / イベント / マイルストーンも戻ります。',
+          'Những gì đã xoá được giữ lại ở đây và có thể khôi phục. Khôi phục dự án sẽ mang lại cả cập nhật, vấn đề / sự kiện / mốc và bình luận của nó.',
+          '削除したものはここに残り、復元できます。プロジェクトを復元すると、その報告・課題 / イベント / マイルストーン・コメントも戻ります。',
         )}
       </p>
       {notice && <div className="info-box">{notice}</div>}
@@ -150,6 +162,33 @@ export function TrashPage() {
               </ul>
             )}
             {updates.more}
+          </Section>
+
+          <Section title={`${l('Bình luận', 'コメント')} (${data.comments.length})`}>
+            {data.comments.length === 0 ? (
+              <Empty>{l('Không có bình luận nào bị xoá', '削除されたコメントはありません')}</Empty>
+            ) : (
+              <ul className="rows">
+                {comments.visible.map((c) => (
+                  <li key={c.id} className="row">
+                    <div className="row-main">
+                      <div className="row-title">
+                        <span className="nowrap">{fmtDateTime(c.at)}</span>
+                        <b>{name(c.author)}</b>
+                        <Link to={`/projects/${c.projectId}#${c.target}-${c.targetId}`}>
+                          {c.projectId}
+                          {c.projectName ? ` · ${c.projectName}` : ''}
+                        </Link>
+                      </div>
+                      <CommentText text={c.text} />
+                      {by(c)}
+                    </div>
+                    <div className="row-side">{restoreButton(() => restore('comment', c.projectId, c.id))}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {comments.more}
           </Section>
         </>
       )}

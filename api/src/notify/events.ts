@@ -3,7 +3,7 @@ import { buildProjectView, type ProjectView } from '../rules.js';
 import { l } from '../i18n.js';
 import { vnDate } from '../time.js';
 import { uniqueUpdates, type Snapshot, type Store } from '../store/store.js';
-import type { Channel, Health, Item, PersonalEvent, Project, Update } from '../types.js';
+import type { Channel, Comment, Health, Item, PersonalEvent, Project, Update } from '../types.js';
 import type { MessageLine } from './message.js';
 import { dueSoonLine, escalationLine, itemDueLine, lateLine } from './personal.js';
 import { resolveSchedule } from './policy.js';
@@ -27,7 +27,24 @@ export type NotifyEvent =
       /** Missing for a new item. */
       previous?: Item;
       actor: string;
+    }
+  | {
+      /** A new comment, or an edit that mentions more people (comments.ts). Personal messages only. */
+      type: 'comment_posted';
+      project: Project;
+      comment: Comment;
+      about: CommentAbout;
+      /** People to tell they were mentioned (an edit: only the added ones). */
+      mentions: string[];
+      /** People following the thread (empty for an edit). */
+      followers: string[];
+      /** The project's items, so OTHER who own one count as seeing the project. */
+      items: Item[];
+      actor: string;
     };
+
+/** What a comment is under. */
+export type CommentAbout = { kind: 'update'; update: Update } | { kind: 'item'; item: Item };
 
 // ---------- Hourly scan (track D owns the time-based rules) ----------
 

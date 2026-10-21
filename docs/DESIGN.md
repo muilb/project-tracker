@@ -35,7 +35,7 @@ Lambda "api" ─ Bedrock / Claude API               (giai đoạn 4)
   | `pk` | `sk` | Nội dung |
   |---|---|---|
   | `USER#<email>` | `USER` | Người dùng, vai trò |
-  | `PROJECT#<id>` | `PROJECT` · `UPDATE#<giờ>#<id>` · `ITEM#<id>` | Dự án, cập nhật, mục |
+  | `PROJECT#<id>` | `PROJECT` · `UPDATE#<giờ>#<id>` · `ITEM#<id>` · `COMMENT#<id>` | Dự án, cập nhật, mục, bình luận (`kind` `COMMENT`, đã xoá `COMMENT_DELETED`) |
   | `CHANNEL#<id>` | `CHANNEL` | Kênh nhóm |
   | `SENT#<khoá>` | `SENT` | Chống trùng cảnh báo (TTL) |
   | `AUDIT` | `<giờ>#<id>` | Nhật ký quản trị (400 ngày) |
@@ -128,6 +128,8 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | GET / POST | `/projects/:id/updates` | GET: trang cập nhật cũ hơn, `?before=<nextBefore>&limit=` (mặc định 20, tối đa 100) → `{ updates, nextBefore? }`. POST: ghi cập nhật `health`, `summary`, `needHelp` |
 | GET / POST | `/projects/:id/items` | Vấn đề / sự kiện / mốc: `type` = `issue` / `event` / `milestone` |
 | PATCH | `/projects/:id/items/:itemId` | Sửa, đóng mục (`status: done`) |
+| GET / POST | `/projects/:id/comments` | Bình luận (`src/comments.ts`). GET: mọi bình luận chưa xoá của dự án, cũ trước (trang dự án tải một lần rồi nhóm theo chuỗi). POST: ai xem được dự án cũng viết được; body `{ target: update \| item, targetId, updateAt? (cập nhật: đúng `at` API trả), text }` (≤ 2000 ký tự; `@{email}` là gọi tên, người phải tồn tại) → 201 `{ comment, notVisible }` (`notVisible`: người được gọi tên mà không xem được dự án, họ không nhận tin). Không đổi màu, không tính là cập nhật |
+| PATCH / DELETE | `/projects/:id/comments/:commentId` | Sửa (`{ text }`, người viết trong 24 giờ, ghi `editedAt`; chỉ báo người mới được gọi tên) / xoá mềm (người viết trong 24 giờ, hoặc PMO / quản lý) |
 | GET / POST | `/users`, PATCH `/users/:email` | Người dùng; PMO tạo trước người chưa đăng nhập (chỉ tạo hồ sơ trong DynamoDB, **không** tạo tài khoản Cognito — người đó tự đăng ký bằng đúng email) |
 | GET | `/users/accounts` | PMO / MNG: trạng thái tài khoản đăng nhập của từng người dùng (đọc từ Cognito): `none` (chưa đăng ký), `pending` (chờ xác nhận), `temp` (mật khẩu tạm chưa đổi), `active` |
 | GET | `/users/pending` | PMO / MNG: các tài khoản đã đăng ký nhưng chưa xác nhận email (đọc từ Cognito) |
@@ -146,8 +148,8 @@ Thông báo lỗi trả về theo header `Accept-Language` (`ja…` → tiếng 
 | DELETE | `/projects/:id` | Xoá mềm dự án: PMO / quản lý |
 | DELETE | `/projects/:id/items/:itemId` | Xoá mềm mục: người tạo, PL / GL của dự án, PMO / quản lý |
 | DELETE | `/projects/:id/updates/:updateId` | Xoá mềm cập nhật: người viết trong 24 giờ, hoặc PMO / quản lý |
-| GET | `/trash` | PMO / quản lý: dự án, mục, cập nhật đã xoá (ai xoá, lúc nào) |
-| POST | `/trash/restore` | PMO / quản lý. Body `{ kind: project \| item \| update, projectId, id? }`. Khôi phục mục của dự án đang bị xoá thì phải khôi phục dự án trước |
+| GET | `/trash` | PMO / quản lý: dự án, mục, cập nhật, bình luận đã xoá (ai xoá, lúc nào) |
+| POST | `/trash/restore` | PMO / quản lý. Body `{ kind: project \| item \| update \| comment, projectId, id? }`. Khôi phục mục của dự án đang bị xoá thì phải khôi phục dự án trước |
 | POST | `/users/:email/reset-password` | PMO / MNG / ADMIN (không cho chính mình; tài khoản ADMIN thì chỉ ADMIN). Đặt mật khẩu tạm trong Cognito (`Permanent: false`), trả về `{ password }` một lần; lần đăng nhập sau Cognito yêu cầu `NEW_PASSWORD_REQUIRED`, web hiện bước đặt mật khẩu mới |
 | GET | `/audit` | ADMIN: 50 thao tác mới nhất mỗi trang, `?before=<nextBefore>` để xem cũ hơn |
 
@@ -170,6 +172,7 @@ POST /projects
 | 5 | Giao diện tiếng Nhật (web, lỗi API, tin thông báo theo kênh, hướng dẫn) | Xong |
 | 6 | Thông báo: cá nhân, Slack, lịch gửi, độ tin cậy, giới hạn OTHER, Web Push, bot Telegram hai chiều (`docs/plans/notifications.md`) | Xong |
 | 7 | Xu hướng màu theo ngày / tuần (trang dự án, Tổng quan, Excel), cảnh báo quá ngày kết thúc, dự án sắp kết thúc | Xong |
+| 8 | Bình luận dưới cập nhật / mục, @gọi tên, thông báo cá nhân `mentioned` / `comment_reply` | Xong (chưa có: trả lời từ Telegram, bình luận trong Excel / ngữ cảnh AI) |
 
 ## Web
 
@@ -181,7 +184,7 @@ POST /projects
 | `/help` Hướng dẫn | Mọi người (không cần đăng nhập) | Hướng dẫn sử dụng cho người mới: tài khoản, vai trò, trạng thái, cập nhật, mục, AI, dự án, thông báo, trang public, PMO, hỏi đáp. Cập nhật khi giao diện đổi |
 | `/projects` | Đã đăng nhập | Danh sách, lọc theo tình trạng / phạm vi, tìm kiếm |
 | `/projects/new`, `/projects/:id/edit` | PL trở lên / người có quyền sửa | Form dự án |
-| `/projects/:id` | Đã đăng nhập | Thông tin, xu hướng màu (lịch ô theo ngày: cột = tuần, hàng = thứ; bấm ô xem chi tiết ngày; kéo tới ngày kết thúc nếu còn ≤ 4 tuần; danh sách các quãng cùng màu), form cập nhật nhanh, lịch sử, vấn đề / sự kiện / mốc (thêm, đổi trạng thái) |
+| `/projects/:id` | Đã đăng nhập | Thông tin, bình luận dưới từng cập nhật / mục (💬, gõ `@` để gọi tên; link `#update-<id>` / `#item-<id>` mở đúng chuỗi), xu hướng màu (lịch ô theo ngày: cột = tuần, hàng = thứ; bấm ô xem chi tiết ngày; kéo tới ngày kết thúc nếu còn ≤ 4 tuần; danh sách các quãng cùng màu), form cập nhật nhanh, lịch sử, vấn đề / sự kiện / mốc (thêm, đổi trạng thái) |
 | `/users` | PMO / MNG | Thêm người dùng trước, đổi vai trò |
 | `/settings` | PMO / SUBMNG / MNG / ADMIN | Tần suất, ngưỡng, mức chi tiết tối đa của kênh nhóm; ADMIN: AI, bot Telegram, nhật ký quản trị |
 | `/trash` | PMO / quản lý | Thùng rác, khôi phục |
@@ -209,6 +212,7 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 - Điện thoại 390px: các trang chính không cuộn ngang; menu ☰ mở / đóng sau khi chuyển trang.
 - Xuất Excel trên trình duyệt thật: file `.xlsx` có 4 sheet.
 - Xu hướng: bảng tuần và xấu đi / tốt lên ở Tổng quan; lịch ô của dự án, bấm một ngày; dự án quá ngày kết thúc được cảnh báo.
+- Bình luận: PMO gọi tên GL bằng `@` dưới cập nhật của PL; GL đăng nhập, mở 🔔, bấm tin → đúng chuỗi bình luận (API local nhận `WEB_URL` của `vite preview` để link cùng nguồn).
 - Bản build: header bảo mật có đủ, service worker chạy được dưới CSP; trang ít dùng chỉ tải khi mở; tab cũ sau deploy tự tải lại.
 - Chưa có: service worker / bật thông báo, hộp xác nhận xoá, kiểm tra tương phản, tự làm mới trang public.
 
@@ -295,6 +299,10 @@ Teams lỗi không làm thất bại thao tác của người dùng, ví dụ l�
 | `health_changed` | Trạng thái tổng hợp đổi (cả hai chiều) sau một cập nhật | GL, PL, người theo dõi | GL |
 | `watched_red` | Dự án theo dõi chuyển sang Đỏ | người theo dõi (`watch`) | mọi người |
 | `watched_high_issue` | Vấn đề ưu tiên Cao mới ở dự án theo dõi | người theo dõi | mọi người |
+| `mentioned` | Bình luận có `@{email}` của mình (sửa bình luận: chỉ người mới được thêm) | người được gọi tên | mọi người |
+| `comment_reply` | Bình luận mới dưới một cập nhật / mục (mọi trạng thái dự án) | người viết cập nhật; người tạo và người phụ trách mục; những ai đã bình luận trong chuỗi | mọi người |
+
+- Hai loại tin bình luận ra đời sau khi mọi người đã lưu cài đặt, nên được **bật một lần** cho cài đặt đã lưu (`eventsVersion` < 2 → thêm `ADDED_EVENTS` khi đọc, `withAddedEvents`); lần lưu sau ở "Thông báo của tôi" ghi `eventsVersion: 2` và giữ đúng lựa chọn.
 
 - Chỉ gửi cho người có trong danh sách người dùng, **không gửi cho chính người gây ra sự kiện**, người nhận phải `can.viewProject`, và loại tin đó phải đang bật trong cài đặt.
 - Một thay đổi chỉ tạo **một tin cho mỗi người**: nếu một người nhận vì nhiều lý do (ví dụ GL vừa `health_changed` vừa `need_help`), tiêu đề theo lý do quan trọng nhất (`watched_red` > `health_changed` > `need_help`; `assigned_to_me` > `watched_high_issue`), nội dung luôn có "cần hỗ trợ" nếu có. Nhắc việc theo giờ được gộp thành một tin "🔔 Nhắc việc của bạn (n)".

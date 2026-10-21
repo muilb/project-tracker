@@ -50,7 +50,8 @@ const toChannel = (ch: Channel, event: string, message: Outgoing['message'], pro
 
 /** Immediate alerts for one saved change. */
 export function channelMessages(deps: NotifyDeps, event: NotifyEvent, channels: Channel[], now: Date, ctx: RouteContext): Outgoing[] {
-  if (event.project.state !== 'active') return [];
+  // Comments are conversations between people: never sent to group channels.
+  if (event.project.state !== 'active' || event.type === 'comment_posted') return [];
   if (event.type === 'update_posted') {
     const { after, before, update, project } = event;
     if (after.health !== 'red' || before.health === 'red') return [];

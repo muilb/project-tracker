@@ -92,7 +92,7 @@ describe('deleting projects and the trash', () => {
     expect((await call('POST', '/trash/restore', 'lan', { kind: 'item', projectId: 'P01', id: created.item.id })).status).toBe(200);
     const detail = await json(await call('GET', '/projects/P01', 'an'));
     expect(detail.body.items.map((i: { id: string }) => i.id)).toContain(created.item.id);
-    expect((await json(await call('GET', '/trash', 'lan'))).body).toEqual({ projects: [], items: [], updates: [] });
+    expect((await json(await call('GET', '/trash', 'lan'))).body).toEqual({ projects: [], items: [], updates: [], comments: [] });
   });
 
   it('restores an update, but not a row of a project that is still deleted', async () => {

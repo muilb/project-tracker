@@ -1,7 +1,20 @@
 // Personal notification settings: defaults by role, when a person may be disturbed, and the messages.
 import { l } from '../i18n.js';
 import type { ItemView, ProjectView } from '../rules.js';
-import type { Item, NotifyPrefs, PersonalEvent, Project, Update, User } from '../types.js';
+import { mentionText } from '../mentions.js';
+import { vnDateTime } from '../time.js';
+import {
+  ADDED_EVENTS,
+  EVENTS_VERSION,
+  type Comment,
+  type Item,
+  type NotifyPrefs,
+  type PersonalEvent,
+  type Project,
+  type Update,
+  type User,
+} from '../types.js';
+import type { CommentAbout } from './events.js';
 import type { NotifyDeps } from './deps.js';
 import type { Message, MessageLine } from './message.js';
 import { clip, dm, HEALTH, hours, link, message, MAX_LINES, TYPE } from './render.js';
@@ -10,7 +23,7 @@ const MANAGERS: User['role'][] = ['PMO', 'SUBMNG', 'MNG', 'ADMIN'];
 
 /** Events switched on for someone who never saved their settings. */
 export function defaultEvents(role: User['role']): PersonalEvent[] {
-  const common: PersonalEvent[] = ['assigned_to_me', 'my_item_due', 'watched_red', 'watched_high_issue'];
+  const common: PersonalEvent[] = ['assigned_to_me', 'my_item_due', 'watched_red', 'watched_high_issue', 'mentioned', 'comment_reply'];
   if (role === 'PL') return ['update_due_soon', 'late_update_mine', ...common];
   if (role === 'GL') return ['escalation', 'need_help', 'health_changed', ...common];
   if (MANAGERS.includes(role)) return ['escalation', 'need_help', ...common];
@@ -18,19 +31,38 @@ export function defaultEvents(role: User['role']): PersonalEvent[] {
 }
 
 export function defaultPrefs(user: User, now: Date): NotifyPrefs {
-  return { userId: user.id, events: defaultEvents(user.role), telegram: false, watch: [], updatedAt: now.toISOString() };
+  return {
+    userId: user.id,
+    events: defaultEvents(user.role),
+    eventsVersion: EVENTS_VERSION,
+    telegram: false,
+    watch: [],
+    updatedAt: now.toISOString(),
+  };
+}
+
+/** Settings saved before some events existed get those switched on (they are on by default); the next save keeps the choice. */
+export function withAddedEvents(prefs: NotifyPrefs): NotifyPrefs {
+  const seen = prefs.eventsVersion ?? 1;
+  if (seen >= EVENTS_VERSION) return prefs;
+  const added = ADDED_EVENTS.filter((a) => a.version > seen).flatMap((a) => a.events);
+  return { ...prefs, events: [...new Set([...prefs.events, ...added])], eventsVersion: EVENTS_VERSION };
 }
 
 /** Saved settings, or the role defaults. */
 export async function prefsOf(store: { getNotifyPrefs(id: string): Promise<NotifyPrefs | undefined> }, user: User, now: Date) {
-  return (await store.getNotifyPrefs(user.id)) ?? defaultPrefs(user, now);
+  const saved = await store.getNotifyPrefs(user.id);
+  return saved ? withAddedEvents(saved) : defaultPrefs(user, now);
 }
 
 /** Everyone's settings (saved or defaults), by user id. */
 export async function allPrefs(store: { listNotifyPrefs(): Promise<NotifyPrefs[]> }, users: Iterable<User>, now: Date) {
   const saved = new Map((await store.listNotifyPrefs()).map((p) => [p.userId, p]));
   const out = new Map<string, NotifyPrefs>();
-  for (const u of users) out.set(u.id, saved.get(u.id) ?? defaultPrefs(u, now));
+  for (const u of users) {
+    const p = saved.get(u.id);
+    out.set(u.id, p ? withAddedEvents(p) : defaultPrefs(u, now));
+  }
   return out;
 }
 
@@ -124,6 +156,34 @@ export function itemMessage(
       ...(item.note ? [{ text: clip(item.note, 300), subtle: true }] : []),
     ],
     link: openProject(deps, project.id),
+  });
+}
+
+/** A comment, for someone it mentions or who follows its thread; the link opens the thread. */
+export function commentMessage(
+  deps: NotifyDeps,
+  project: Project,
+  comment: Comment,
+  about: CommentAbout,
+  reasons: PersonalEvent[],
+  name: (id?: string) => string,
+): Message {
+  const p = `${project.id} · ${project.name}`;
+  const who = name(comment.author);
+  const on =
+    about.kind === 'update'
+      ? l(
+          `Về cập nhật của ${name(about.update.author)} (${vnDateTime(about.update.at)}): "${clip(about.update.summary, 120)}"`,
+          `${name(about.update.author)} さんの報告（${vnDateTime(about.update.at)}）について：「${clip(about.update.summary, 120)}」`,
+        )
+      : l(`Về ${TYPE(about.item.type)} "${about.item.title}"`, `${TYPE(about.item.type)}「${about.item.title}」について`);
+  return message({
+    title:
+      reasons[0] === 'mentioned'
+        ? l(`💬 ${who} nhắc đến bạn – ${p}`, `💬 ${who} さんがあなたをメンションしました – ${p}`)
+        : l(`💬 ${who} bình luận – ${p}`, `💬 ${who} さんがコメントしました – ${p}`),
+    lines: [{ text: clip(mentionText(comment.text, name), 600) }, { text: on, subtle: true }],
+    link: link(deps, `/projects/${project.id}#${comment.target}-${comment.targetId}`, l('Mở bình luận', 'コメントを開く')),
   });
 }
 

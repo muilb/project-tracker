@@ -28,7 +28,7 @@ export default defineConfig({
     {
       command: 'npx tsx src/local.ts',
       cwd: '../api',
-      env: { PORT: String(API_PORT), SAMPLE_NOW: '1' },
+      env: { PORT: String(API_PORT), SAMPLE_NOW: '1', WEB_URL: `http://localhost:${WEB_PORT}` },
       url: `http://localhost:${API_PORT}/health`,
       reuseExistingServer: false,
     },

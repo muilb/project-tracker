@@ -2,6 +2,7 @@ import type {
   AiConfig,
   AuditEntry,
   Channel,
+  Comment,
   DeliveryLog,
   HealthDay,
   InboxEntry,
@@ -78,6 +79,9 @@ export interface Store {
   /** Soft-deleted updates of every project (the trash). */
   listDeletedUpdates(): Promise<Update[]>;
 
+  /** One update by its time and id (the sort key); soft-deleted ones too. */
+  getUpdate(projectId: string, at: string, id: string): Promise<Update | undefined>;
+
   /** Returns soft-deleted items too (callers check `deletedAt`). */
   getItem(projectId: string, id: string): Promise<Item | undefined>;
   putItem(item: Item): Promise<void>;
@@ -141,6 +145,14 @@ export interface Store {
   takeTemp<T>(key: string): Promise<T | undefined>;
   /** Atomically adds 1 and returns the new count; the counter expires `ttlSeconds` after it was created. */
   bumpCounter(key: string, ttlSeconds: number): Promise<number>;
+
+  /** Comments under updates and items (comments.ts). Returns soft-deleted ones too. */
+  getComment(projectId: string, id: string): Promise<Comment | undefined>;
+  putComment(comment: Comment): Promise<void>;
+  /** The project's live comments, oldest first. */
+  listComments(projectId: string): Promise<Comment[]>;
+  /** Soft-deleted comments of every project (the trash). */
+  listDeletedComments(): Promise<Comment[]>;
 
   /** Adds or replaces the projects' marks of one day (trend.ts). */
   putHealthDay(day: HealthDay): Promise<void>;

@@ -350,8 +350,8 @@ function Items({
       {shown.length === 0 ? (
         <Empty>{l('Không có mục nào', '項目はありません')}</Empty>
       ) : (
-        <div className="table-wrap">
-          <table>
+        <div className="table-wrap items-wrap">
+          <table className="items-table">
             <thead>
               <tr>
                 <th>{l('Loại', '種類')}</th>
@@ -369,20 +369,24 @@ function Items({
                 return (
                   <Fragment key={i.id}>
                     <tr id={key} className={i.closed ? 'closed' : ''}>
-                      <td className="nowrap">
+                      <td className="nowrap it-type">
                         <TypeIcon type={i.type} /> {TYPE_LABEL[i.type]}
                       </td>
-                      <td>
+                      <td className="it-title">
                         {i.title}
                         {i.note && <div className="muted">{i.note}</div>}
                       </td>
-                      <td>{PRIORITY_LABEL[i.priority]}</td>
-                      <td className="nowrap">
+                      <td className="it-priority" data-label={l('Ưu tiên', '優先度')}>
+                        {PRIORITY_LABEL[i.priority]}
+                      </td>
+                      <td className="nowrap it-date">
                         {fmtDay(i.date)}
                         {!i.closed && <div className={i.overdue ? 'warn-text' : 'muted'}>{fmtDaysLeft(i.daysLeft)}</div>}
                       </td>
-                      <td>{name(i.owner)}</td>
-                      <td>
+                      <td className="it-owner" data-label={l('Phụ trách', '担当者')}>
+                        {name(i.owner)}
+                      </td>
+                      <td className="it-status">
                         <select
                           value={i.status}
                           onChange={(e) => patch(i, { status: e.target.value as ItemStatus })}
@@ -395,7 +399,7 @@ function Items({
                           ))}
                         </select>
                       </td>
-                      <td className="nowrap">
+                      <td className="nowrap it-actions">
                         <CommentToggle compact count={threads.get(key)?.length ?? 0} open={open.has(key)} onClick={() => onToggle(key)} />
                         {canDelete(i) && (
                           <button

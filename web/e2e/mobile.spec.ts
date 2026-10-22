@@ -50,3 +50,28 @@ test('the menu folds behind ☰ and closes after navigating', async ({ page }) =
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(projects).toBeHidden();
 });
+
+test('comments fit the screen: an item is a card, names are suggested above the box', async ({ page }) => {
+  await signIn(page, /Lan · PMO/);
+  await page.goto('/projects/P01');
+  const row = page.locator('tr[id^="item-"]').first();
+  const toggle = row.getByRole('button', { name: 'Bình luận' });
+  const width = page.viewportSize()!.width;
+  // Not past the right edge, where only scrolling the table sideways would reach it.
+  await row.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 100)); // down only
+  const button = (await toggle.boundingBox())!;
+  expect(button.x + button.width).toBeLessThanOrEqual(width);
+  await toggle.click();
+  const thread = page.locator('.thread-row').first();
+  const box = thread.getByRole('combobox', { name: 'Bình luận' });
+  const rect = (await box.boundingBox())!;
+  expect(rect.x + rect.width).toBeLessThanOrEqual(width);
+  // 16px or more: iOS does not zoom in when the box is tapped.
+  expect(await box.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+  await box.pressSequentially('@');
+  const list = thread.getByRole('listbox', { name: 'Gọi tên' });
+  await expect(list).toBeVisible();
+  const names = (await list.boundingBox())!;
+  expect(names.y + names.height).toBeLessThanOrEqual(rect.y + 1);
+  await noSideScroll(page);
+});

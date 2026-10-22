@@ -209,7 +209,7 @@ Màu trạng thái (Xanh / Vàng / Đỏ) luôn đi kèm biểu tượng (● �
 - Mở thẳng đường dẫn / F5 / quay lại vẫn đúng trang và còn đăng nhập; chưa đăng nhập thì sau khi đăng nhập quay về trang đã mở; `/public`, `/help#muc` mở được (cuộn tới mục).
 - PL cập nhật Đỏ → Tổng quan "Cần chú ý" → trang public "Khẩn cấp" (không lộ nội dung); test xoá lại cập nhật sau khi chạy.
 - Đổi ngôn ngữ tải lại trang bằng tiếng Nhật, giữ khi chuyển trang / F5, quay lại VI.
-- Điện thoại 390px: các trang chính không cuộn ngang; menu ☰ mở / đóng sau khi chuyển trang.
+- Điện thoại 390px: các trang chính không cuộn ngang; menu ☰ mở / đóng sau khi chuyển trang; bảng vấn đề / sự kiện / mốc thành thẻ, nút 💬 và ô bình luận nằm trong màn hình, ô chữ ≥ 16px (iOS không tự phóng to), danh sách @ hiện phía trên ô.
 - Xuất Excel trên trình duyệt thật: file `.xlsx` có 4 sheet.
 - Xu hướng: bảng tuần và xấu đi / tốt lên ở Tổng quan; lịch ô của dự án, bấm một ngày; dự án quá ngày kết thúc được cảnh báo.
 - Bình luận: PMO gọi tên GL bằng `@` dưới cập nhật của PL; GL đăng nhập, mở 🔔, bấm tin → đúng chuỗi bình luận (API local nhận `WEB_URL` của `vite preview` để link cùng nguồn).

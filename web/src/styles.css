@@ -676,6 +676,135 @@ td .comment-toggle {
   background: var(--surface-2);
 }
 
+/* Phones: the item table becomes one card per item, so a row's 💬 and its thread fit the screen
+   instead of sitting in a table wider than it. */
+@media (max-width: 640px) {
+  .items-table,
+  .items-table tbody {
+    display: block;
+  }
+  /* Nothing to scroll sideways any more, and the names suggested above a box must not be cut off. */
+  .items-wrap {
+    overflow: visible;
+  }
+  .items-table thead {
+    display: none;
+  }
+  .items-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .items-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .table-wrap .items-table td:first-child {
+    min-width: 0;
+  }
+  .items-table td:empty {
+    display: none;
+  }
+  /* Type and date on the first line, then the title, then the rest. */
+  .items-table td {
+    order: 3;
+  }
+  .items-table .it-date {
+    order: 1;
+  }
+  .items-table .it-title {
+    order: 2;
+  }
+  .items-table .it-type {
+    order: 0;
+    flex: 1 1 auto;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .items-table .it-date {
+    text-align: right;
+    font-size: 0.85rem;
+  }
+  .items-table .it-date div {
+    display: inline;
+    margin-left: 0.4rem;
+  }
+  .items-table .it-title {
+    flex: 1 1 100%;
+    font-weight: 500;
+  }
+  .items-table .it-title .muted {
+    font-weight: 400;
+  }
+  .items-table .it-priority,
+  .items-table .it-owner {
+    font-size: 0.85rem;
+  }
+  .items-table [data-label]::before {
+    content: attr(data-label) ': ';
+    color: var(--muted);
+  }
+  /* The status and the buttons always start a line of their own. */
+  .items-table tr:not(.thread-row)::before {
+    content: '';
+    order: 4;
+    flex-basis: 100%;
+  }
+  .items-table .it-status,
+  .items-table .it-actions {
+    order: 5;
+  }
+  .items-table .it-status {
+    flex: 1 1 auto;
+  }
+  .items-table .it-status select {
+    max-width: 14rem;
+  }
+  .items-table .it-actions {
+    margin-left: auto;
+  }
+  .items-table .thread-row {
+    display: block;
+    padding: 0 0 0.6rem;
+  }
+  .items-table .thread-row > td {
+    padding: 0.25rem 0.5rem 0.5rem;
+    border-radius: 8px;
+  }
+  .comments {
+    margin-left: 0.25rem;
+    padding-left: 0.6rem;
+  }
+  /* Taps rather than clicks: bigger targets. */
+  .comment-toggle,
+  .comment-head .btn-link,
+  .items-table .it-actions .btn-link {
+    min-height: 2.25rem;
+    padding: 0 0.4rem;
+  }
+  .comment-toggle {
+    margin-left: -0.4rem;
+  }
+  /* The on-screen keyboard covers what is below the box: suggest names above it. */
+  .mention-list {
+    top: auto;
+    bottom: 100%;
+    margin: 0 0 2px;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+}
+/* No keyboard shortcut to show on touch screens. */
+@media (hover: none) {
+  .comment-hint {
+    display: none;
+  }
+}
+
 /* ---- Forms ---- */
 .form {
   display: flex;
@@ -756,6 +885,14 @@ input[type='radio'] {
 }
 textarea {
   resize: vertical;
+}
+/* Phones: text boxes at 16px, or iOS zooms the page in when one is tapped. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 input:focus,
 select:focus,
@@ -1252,6 +1389,13 @@ html {
   .history-card .history {
     flex: 1 1 0;
     min-height: 0;
+    max-height: none;
+  }
+}
+/* Phones: no box scrolling inside the page (a comment box and its keyboard do not fit in one). */
+@media (max-width: 640px) {
+  .history-card .history {
+    overflow-y: visible;
     max-height: none;
   }
 }

@@ -317,7 +317,7 @@ function CommentBox({
             {l('Huỷ', 'キャンセル')}
           </button>
         )}
-        <small className="muted">{l('Ctrl + Enter để gửi', 'Ctrl + Enter で送信')}</small>
+        <small className="muted comment-hint">{l('Ctrl + Enter để gửi', 'Ctrl + Enter で送信')}</small>
       </div>
     </div>
   );

@@ -336,6 +336,10 @@ export function HelpPage() {
             Bấm để mở chuỗi trao đổi, viết vào ô rồi bấm <B>Gửi</B> (hoặc Ctrl + Enter).
           </li>
           <li>
+            Trên điện thoại mỗi vấn đề / sự kiện / mốc là một thẻ (loại và ngày ở dòng trên, trạng thái và nút 💬 ở dòng dưới), chuỗi bình luận
+            mở ngay dưới thẻ; danh sách tên khi gõ @ hiện phía trên ô để bàn phím không che.
+          </li>
+          <li>
             Gõ <b>@</b> rồi vài chữ đầu của tên (không cần dấu: "@cuong" ra Cường) → chọn người trong danh sách (mũi tên + Enter, hoặc bấm).
             Người đó nhận thông báo ngay. Nếu họ không xem được dự án, trang báo lại và họ không nhận gì — gọi tên không mở thêm quyền xem.
           </li>
